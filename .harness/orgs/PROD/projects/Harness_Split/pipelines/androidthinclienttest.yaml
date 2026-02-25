@@ -1,0 +1,38 @@
+pipeline:
+  name: android-thin-client-test
+  identifier: androidthinclienttest
+  projectIdentifier: Harness_Split
+  orgIdentifier: PROD
+  tags: {}
+  properties:
+    ci:
+      codebase:
+        repoName: android-thin-client
+        build: <+input>
+  stages:
+    - stage:
+        name: Build
+        identifier: Build
+        description: ""
+        type: CI
+        spec:
+          cloneCodebase: true
+          caching:
+            enabled: true
+            override: true
+          platform:
+            os: Linux
+            arch: Arm64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Test
+                  name: Unit tests
+                  identifier: Unit_tests
+                  spec:
+                    shell: Sh
+                    command: ./gradlew test
+                    intelligenceMode: true
