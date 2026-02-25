@@ -29,6 +29,24 @@ pipeline:
           execution:
             steps:
               - step:
+                  type: Run
+                  name: Setup Java 17
+                  identifier: Setup_Java_17
+                  spec:
+                    shell: Sh
+                    command: |
+                      # Install Java 17
+                      apt-get update
+                      apt-get install -y openjdk-17-jdk
+
+                      # Set JAVA_HOME
+                      export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-arm64
+                      export PATH=$JAVA_HOME/bin:$PATH
+
+                      # Verify Java version
+                      java -version
+                      javac -version
+              - step:
                   type: Test
                   name: Unit tests
                   identifier: Unit_tests
