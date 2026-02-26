@@ -22,7 +22,7 @@ pipeline:
             override: true
           platform:
             os: Linux
-            arch: Arm64
+            arch: Amd64
           runtime:
             type: Cloud
             spec: {}
@@ -95,5 +95,54 @@ pipeline:
                       ls -la build/reports/jacoco/jacocoAggregateUnitTestReport/jacocoAggregateUnitTestReport.xml || true
                       echo "JaCoCo HTML report:"
                       ls -la build/reports/jacoco/jacocoAggregateUnitTestReport/html/index.html || true
+                  when:
+                    stageStatus: Success
+              - step:
+                  type: Run
+                  name: Install and Run SonarQube Scanner
+                  identifier: install_sonarqube_scanner
+                  spec:
+                    connectorRef: account.harnessImage
+                    image: sonarsource/sonar-scanner-cli
+                    shell: Bash
+                    command: |
+                      set -euo pipefail
+
+                      # Run scanner from repository root if present.
+                      if [ -d "/harness/<+codebase.repoName>" ]; then
+                        cd "/harness/<+codebase.repoName>"
+                      fi
+
+                      COMMON_ARGS="
+                        -Dsonar.host.url=https://sonar.harness.io
+                        -Dsonar.projectKey=android-thin-client
+                        -Dsonar.token=$SONAR_TOKEN
+                        -Dsonar.scanner.skipJreProvisioning=true
+                        -Dsonar.scanner.skipSystemTruststore=true
+                        -Dsonar.sources=.
+                        -Dsonar.tests=.
+                        -Dsonar.test.inclusions=**/src/test/**,**/src/androidTest/**
+                        -Dsonar.exclusions=**/build/**,**/src/test/**,**/src/androidTest/**
+                        -Dsonar.coverage.exclusions=**/src/test/**,**/src/androidTest/**,**/*Test.kt,**/*Test.java
+                        -Dsonar.coverage.jacoco.xmlReportPaths=build/reports/jacoco/jacocoAggregateUnitTestReport/jacocoAggregateUnitTestReport.xml
+                        -Dsonar.junit.reportPaths=**/build/test-results/**/*.xml
+                      "
+
+                      if [ "<+codebase.prNumber>" != "" ] && [ "<+codebase.prNumber>" != "null" ]; then
+                        echo "Pull Request Analysis"
+                        sonar-scanner \
+                          $COMMON_ARGS \
+                          -Dsonar.pullrequest.key=<+codebase.prNumber> \
+                          -Dsonar.pullrequest.branch=<+codebase.sourceBranch> \
+                          -Dsonar.pullrequest.base=<+codebase.targetBranch>
+                      else
+                        echo "Branch Analysis"
+                        sonar-scanner \
+                          $COMMON_ARGS \
+                          -Dsonar.branch.name=<+codebase.branch>
+                      fi
+                    envVariables:
+                      SONAR_TOKEN: <+secrets.getValue("sonarqube-token")>
+                  timeout: 10m
                   when:
                     stageStatus: Success
