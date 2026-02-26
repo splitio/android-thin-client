@@ -1,0 +1,14 @@
+inputSet:
+  name: android-thin-client
+  identifier: androidthinclient
+  orgIdentifier: PROD
+  projectIdentifier: Harness_Split
+  pipeline:
+    identifier: androidthinclienttest
+    properties:
+      ci:
+        codebase:
+          build:
+            type: PR
+            spec:
+              number: <+trigger.prNumber>

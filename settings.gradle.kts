@@ -18,3 +18,4 @@ dependencyResolutionManagement {
 rootProject.name = "android-thin-client"
 
 include(":android-thin-client")
+include(":api")

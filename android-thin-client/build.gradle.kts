@@ -12,8 +12,8 @@ androidFusedLibrary {
         version = release(21)
     }
 }
-
-val fusedIncludedProjects = listOf<Project>(
+val fusedIncludedProjects = listOf(
+    project(":api")
 )
 
 dependencies {

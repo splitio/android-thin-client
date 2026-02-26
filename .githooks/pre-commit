@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+THRESHOLD="${COVERAGE_THRESHOLD:-80}"
+ROOT_DIR="$(git rev-parse --show-toplevel)"
+cd "$ROOT_DIR"
+
+echo "Running unit-test coverage gate (line coverage >= ${THRESHOLD}%)..."
+./gradlew -q jacocoAggregateUnitTestReport
+
+XML_REPORT="build/reports/jacoco/jacocoAggregateUnitTestReport/jacocoAggregateUnitTestReport.xml"
+if [[ ! -f "$XML_REPORT" ]]; then
+  echo "ERROR: Coverage report not found at: $XML_REPORT"
+  exit 1
+fi
+
+python3 - "$XML_REPORT" "$THRESHOLD" <<'PY'
+import sys
+import xml.etree.ElementTree as ET
+
+xml_path = sys.argv[1]
+threshold = float(sys.argv[2])
+
+root = ET.parse(xml_path).getroot()
+line_counter = None
+for counter in root.findall("counter"):
+    if counter.attrib.get("type") == "LINE":
+        line_counter = counter
+        break
+
+if line_counter is None:
+    print("ERROR: LINE counter not found in JaCoCo XML report.")
+    sys.exit(1)
+
+missed = int(line_counter.attrib.get("missed", "0"))
+covered = int(line_counter.attrib.get("covered", "0"))
+total = missed + covered
+coverage = (covered / total * 100.0) if total else 0.0
+
+print(f"Line coverage: {coverage:.2f}% (threshold: {threshold:.2f}%)")
+if coverage < threshold:
+    print("Coverage gate failed. Commit blocked.")
+    sys.exit(1)
+
+print("Coverage gate passed.")
+PY
