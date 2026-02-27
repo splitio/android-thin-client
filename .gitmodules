@@ -1,0 +1,3 @@
+[submodule "android-client"]
+	path = android-client
+	url = https://github.com/splitio/android-client.git

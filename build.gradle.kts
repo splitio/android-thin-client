@@ -80,6 +80,8 @@ tasks.register<JacocoReport>("jacocoAggregateUnitTestReport") {
                 "**/build/**/*.exec",
                 "**/build/**/*.ec"
             )
+            // android-client is a git submodule; exclude any of its coverage artifacts from this repo's report.
+            exclude("android-client/**")
         }
     )
 

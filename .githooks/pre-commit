@@ -14,12 +14,24 @@ if [[ ! -f "$XML_REPORT" ]]; then
   exit 1
 fi
 
-python3 - "$XML_REPORT" "$THRESHOLD" <<'PY'
+STAGED_SOURCES_FILE="$(mktemp)"
+trap 'rm -f "$STAGED_SOURCES_FILE"' EXIT
+
+git diff --cached --name-only --diff-filter=ACMR \
+  | grep -E '\.(kt|java)$' \
+  | grep -Ev '^(android-client/)' \
+  | grep -Ev '(^|/)(src/(test|androidTest|testFixtures)/)' \
+  | grep -Ev '(^|/)[^/]+Test(s)?\.(kt|java)$' \
+  > "$STAGED_SOURCES_FILE" || true
+
+python3 - "$XML_REPORT" "$THRESHOLD" "$STAGED_SOURCES_FILE" <<'PY'
 import sys
 import xml.etree.ElementTree as ET
+import re
 
 xml_path = sys.argv[1]
 threshold = float(sys.argv[2])
+staged_sources_path = sys.argv[3]
 
 root = ET.parse(xml_path).getroot()
 line_counter = None
@@ -43,4 +55,47 @@ if coverage < threshold:
     sys.exit(1)
 
 print("Coverage gate passed.")
+
+with open(staged_sources_path, "r", encoding="utf-8") as f:
+    staged_sources = [line.strip() for line in f if line.strip()]
+
+if not staged_sources:
+    print("No staged non-test Kotlin/Java files detected; skipping per-file coverage presence check.")
+    sys.exit(0)
+
+covered_source_keys = set()
+for pkg in root.findall("package"):
+    pkg_name = pkg.attrib.get("name", "")  # uses '/' separators
+    for sf in pkg.findall("sourcefile"):
+        sf_name = sf.attrib.get("name")
+        if not sf_name:
+            continue
+        key = f"{pkg_name}/{sf_name}" if pkg_name else sf_name
+        covered_source_keys.add(key)
+
+def staged_path_to_jacoco_key(path: str) -> str | None:
+    path = path.lstrip("./")
+    m = re.search(r"/src/main/(?:java|kotlin)/(.+)$", path)
+    return m.group(1) if m else None
+
+missing = []
+for path in staged_sources:
+    if path.startswith("android-client/"):
+        # android-client is a git submodule; we don't enforce coverage presence for it in this repo.
+        continue
+    key = staged_path_to_jacoco_key(path)
+    if key is None:
+        # If it isn't under src/main/java|kotlin, this hook doesn't enforce coverage presence for it.
+        continue
+    if key not in covered_source_keys:
+        missing.append(path)
+
+if missing:
+    print("ERROR: The following staged non-test Kotlin/Java source files were not found in the JaCoCo report:")
+    for p in missing:
+        print(f" - {p}")
+    print("Commit blocked.")
+    sys.exit(1)
+
+print("Per-file coverage presence check passed for staged sources.")
 PY

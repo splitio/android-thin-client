@@ -34,6 +34,20 @@ pipeline:
             steps:
               - step:
                   type: Run
+                  name: Checkout submodules
+                  identifier: checkout_submodules
+                  spec:
+                    shell: Sh
+                    command: |
+                      set -eu
+                      # Ensure public GitHub submodules clone over HTTPS (CI doesn't have SSH keys)
+                      git config --global url."https://github.com/".insteadOf git@github.com:
+                      git config --global url."https://github.com/".insteadOf ssh://git@github.com/
+                      git submodule sync --recursive
+                      git submodule update --init --recursive
+                      git submodule status --recursive
+              - step:
+                  type: Run
                   name: Install Dependencies
                   identifier: install_dependencies
                   spec:
@@ -122,8 +136,9 @@ pipeline:
                         -Dsonar.sources=.
                         -Dsonar.tests=.
                         -Dsonar.test.inclusions=**/src/test/**,**/src/androidTest/**
-                        -Dsonar.exclusions=**/build/**,**/src/test/**,**/src/androidTest/**
-                        -Dsonar.coverage.exclusions=**/src/test/**,**/src/androidTest/**,**/*Test.kt,**/*Test.java
+                        -Dsonar.exclusions=**/build/**,**/src/test/**,**/src/androidTest/**,android-client/**
+                        -Dsonar.test.exclusions=android-client/**
+                        -Dsonar.coverage.exclusions=**/src/test/**,**/src/androidTest/**,**/*Test.kt,**/*Test.java,android-client/**
                         -Dsonar.coverage.jacoco.xmlReportPaths=build/reports/jacoco/jacocoAggregateUnitTestReport/jacocoAggregateUnitTestReport.xml
                         -Dsonar.junit.reportPaths=**/build/test-results/**/*.xml
                       "
