@@ -34,68 +34,61 @@ threshold = float(sys.argv[2])
 staged_sources_path = sys.argv[3]
 
 root = ET.parse(xml_path).getroot()
-line_counter = None
-for counter in root.findall("counter"):
-    if counter.attrib.get("type") == "LINE":
-        line_counter = counter
-        break
-
-if line_counter is None:
-    print("ERROR: LINE counter not found in JaCoCo XML report.")
-    sys.exit(1)
-
-missed = int(line_counter.attrib.get("missed", "0"))
-covered = int(line_counter.attrib.get("covered", "0"))
-total = missed + covered
-coverage = (covered / total * 100.0) if total else 0.0
-
-print(f"Line coverage: {coverage:.2f}% (threshold: {threshold:.2f}%)")
-if coverage < threshold:
-    print("Coverage gate failed. Commit blocked.")
-    sys.exit(1)
-
-print("Coverage gate passed.")
 
 with open(staged_sources_path, "r", encoding="utf-8") as f:
     staged_sources = [line.strip() for line in f if line.strip()]
 
 if not staged_sources:
-    print("No staged non-test Kotlin/Java files detected; skipping per-file coverage presence check.")
+    print("No staged non-test Kotlin/Java files detected; skipping coverage gate.")
     sys.exit(0)
 
-covered_source_keys = set()
+# Build per-sourcefile LINE coverage map: "pkg/ClassName.kt" -> float percent
+file_coverage: dict[str, float] = {}
 for pkg in root.findall("package"):
-    pkg_name = pkg.attrib.get("name", "")  # uses '/' separators
+    pkg_name = pkg.attrib.get("name", "")
     for sf in pkg.findall("sourcefile"):
-        sf_name = sf.attrib.get("name")
+        sf_name = sf.attrib.get("name", "")
         if not sf_name:
             continue
         key = f"{pkg_name}/{sf_name}" if pkg_name else sf_name
-        covered_source_keys.add(key)
+        for counter in sf.findall("counter"):
+            if counter.attrib.get("type") == "LINE":
+                missed = int(counter.attrib.get("missed", "0"))
+                covered = int(counter.attrib.get("covered", "0"))
+                total = missed + covered
+                file_coverage[key] = (covered / total * 100.0) if total else 0.0
+                break
 
 def staged_path_to_jacoco_key(path: str) -> str | None:
     path = path.lstrip("./")
     m = re.search(r"/src/main/(?:java|kotlin)/(.+)$", path)
     return m.group(1) if m else None
 
-missing = []
+failing: list[tuple[str, float | None]] = []
 for path in staged_sources:
     if path.startswith("android-client/"):
-        # android-client is a git submodule; we don't enforce coverage presence for it in this repo.
+        # android-client is a git submodule; coverage is not enforced here.
         continue
     key = staged_path_to_jacoco_key(path)
     if key is None:
-        # If it isn't under src/main/java|kotlin, this hook doesn't enforce coverage presence for it.
+        # Not under src/main/java|kotlin; nothing to enforce.
         continue
-    if key not in covered_source_keys:
-        missing.append(path)
+    if key not in file_coverage:
+        failing.append((path, None))  # absent from report = no coverage at all
+    else:
+        pct = file_coverage[key]
+        if pct < threshold:
+            failing.append((path, pct))
 
-if missing:
-    print("ERROR: The following staged non-test Kotlin/Java source files were not found in the JaCoCo report:")
-    for p in missing:
-        print(f" - {p}")
+if failing:
+    print(f"Coverage gate failed (threshold: {threshold:.0f}%). Staged files below threshold:")
+    for path, pct in failing:
+        if pct is None:
+            print(f"    n/a  {path}  (not found in coverage report)")
+        else:
+            print(f"  {pct:5.1f}%  {path}")
     print("Commit blocked.")
     sys.exit(1)
 
-print("Per-file coverage presence check passed for staged sources.")
+print(f"Coverage gate passed. All staged source files meet the {threshold:.0f}% line coverage threshold.")
 PY

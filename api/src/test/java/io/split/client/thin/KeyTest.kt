@@ -1,8 +1,9 @@
 package io.split.client.thin
 
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Test
-
-import org.junit.Assert.*
 
 class KeyTest {
 
@@ -69,12 +70,12 @@ class KeyTest {
     @Test
     fun `matching key getter`() {
         val key = Key(matchingKey = "key1")
-        assertEquals("Matching key should be equal", key.matchingKey, "key1")
+        assertEquals("Matching key should be equal", "key1", key.matchingKey)
     }
 
     @Test
     fun `bucketing key getter`() {
         val key = Key(matchingKey = "key1", bucketingKey = "bkey1")
-        assertEquals("Bucketing key should be equal", key.bucketingKey, "bkey1")
+        assertEquals("Bucketing key should be equal", "bkey1", key.bucketingKey)
     }
 }
