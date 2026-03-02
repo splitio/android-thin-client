@@ -6,6 +6,6 @@ package io.split.client.thin
 data class Key @JvmOverloads constructor(
     /** Stable key used for matching/evaluation. */
     val matchingKey: String,
-    /** Optional key used for rollout bucketing. */
+    /** Optional key used for bucketing. */
     val bucketingKey: String? = null
 )

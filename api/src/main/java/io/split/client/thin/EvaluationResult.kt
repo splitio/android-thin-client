@@ -6,12 +6,12 @@ package io.split.client.thin
 data class EvaluationResult(
     /** Evaluated flag name. */
     val flag: String,
-    /** Returned treatment value. */
+    /** Treatment value. */
     val treatment: String,
-    /** Configurations **/
+    /** Configurations. **/
     val config: String? = null,
-    /** Optional backend label associated with the evaluation. */
+    /** Label associated with the evaluation. */
     val label: String? = null,
-    /** Optional change number associated with this result. */
+    /** Change number associated with this result. */
     val changeNumber: Long? = null,
 )

@@ -10,7 +10,7 @@ class TargetTest {
 
     @Test
     fun `target constructor with only matching key`() {
-        val target = Target(Key("test-target"))
+        val target = Target(key = Key("test-target", bucketingKey = null))
         assertEquals("test-target", target.key.matchingKey)
         assertNull(target.key.bucketingKey)
         assertNull(target.trafficType)
@@ -32,13 +32,13 @@ class TargetTest {
         val target = Target(
             key = Key("test-target", "test-bucketing-key"),
             attributes = attributes,
-            trafficType = "user",
+            trafficType = "account",
         )
 
         assertEquals("test-target", target.key.matchingKey)
         assertEquals("test-bucketing-key", target.key.bucketingKey)
         assertEquals(attributes, target.attributes)
-        assertEquals("user", target.trafficType)
+        assertEquals("account", target.trafficType)
     }
 
     @Test
@@ -46,12 +46,12 @@ class TargetTest {
         val target1 = Target(
             key = Key("test-target", "test-bucketing-key"),
             attributes = mapOf("country" to "ar"),
-            trafficType = "user",
+            trafficType = "account",
         )
         val target2 = Target(
             key = Key("test-target", "test-bucketing-key"),
             attributes = mapOf("country" to "ar"),
-            trafficType = "user",
+            trafficType = "account",
         )
 
         assertEquals(target1, target2)
