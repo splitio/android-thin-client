@@ -96,9 +96,7 @@ private class FakeClientManager : ClientManager {
         @Deprecated("Use suspend setTarget()", level = DeprecationLevel.ERROR)
         override fun setTargetAsync(target: Target, callback: SplitVoidCallback) = throw UnsupportedOperationException()
         override fun addEventListener(listener: io.split.client.thin.SplitEventListener) = throw UnsupportedOperationException()
-        override suspend fun track(trafficType: String, eventType: String, value: Double?, properties: Map<String, Any?>?) = Unit
-        @Deprecated("Use suspend track()", level = DeprecationLevel.ERROR)
-        override fun trackAsync(trafficType: String, eventType: String, value: Double?, properties: Map<String, Any?>?, callback: SplitVoidCallback) = throw UnsupportedOperationException()
+        override     fun track(trafficType: String, eventType: String, value: Double?, properties: Map<String, Any?>?) = Unit
         override suspend fun destroy() = Unit
         @Deprecated("Use suspend destroy()", level = DeprecationLevel.ERROR)
         override fun destroyAsync(callback: SplitVoidCallback) = throw UnsupportedOperationException()

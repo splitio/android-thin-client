@@ -47,20 +47,11 @@ interface SplitClient {
      * Tracks an event for the current client context.
      */
     @JvmSynthetic
-    suspend fun track(
+    fun track(
         trafficType: String,
         eventType: String,
         value: Double? = null,
         properties: Map<String, Any?>? = null,
-    )
-
-    @Deprecated("Use suspend track()", level = DeprecationLevel.ERROR)
-    fun trackAsync(
-        trafficType: String,
-        eventType: String,
-        value: Double? = null,
-        properties: Map<String, Any?>? = null,
-        callback: SplitVoidCallback,
     )
 
     /**
