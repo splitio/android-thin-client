@@ -46,7 +46,6 @@ interface SplitClient {
     /**
      * Tracks an event for the current client context.
      */
-    @JvmSynthetic
     fun track(
         trafficType: String,
         eventType: String,
