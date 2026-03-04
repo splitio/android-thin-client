@@ -148,6 +148,40 @@ class DefaultClientManagerTest {
         // No exception thrown; nothing to assert beyond reaching here
     }
 
+    @Test
+    fun `pending setTarget is skipped after destroy key and recreate same key`() =
+        testScope.runTest {
+            manager.getOrCreate(target1)
+            manager.getOrCreate(target1v2) // schedules setTarget(target1v2) on first client
+
+            manager.destroy(key1)
+            manager.getOrCreate(target1v2) // creates second client for same key
+
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(2, createdClients.size)
+            assertEquals(1, createdClients[0].destroyCallCount)
+            assertEquals(0, createdClients[0].setTargetCallCount)
+            assertEquals(0, createdClients[1].setTargetCallCount)
+        }
+
+    @Test
+    fun `pending setTarget is skipped after destroyAll and recreate same key`() =
+        testScope.runTest {
+            manager.getOrCreate(target1)
+            manager.getOrCreate(target1v2) // schedules setTarget(target1v2) on first client
+
+            manager.destroyAll()
+            manager.getOrCreate(target1v2) // creates second client for same key
+
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(2, createdClients.size)
+            assertEquals(1, createdClients[0].destroyCallCount)
+            assertEquals(0, createdClients[0].setTargetCallCount)
+            assertEquals(0, createdClients[1].setTargetCallCount)
+        }
+
     // --- Ordering-race regression tests ---
 
     @Test

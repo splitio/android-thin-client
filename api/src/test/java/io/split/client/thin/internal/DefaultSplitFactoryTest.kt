@@ -11,6 +11,7 @@ import io.split.client.thin.SplitVoidCallback
 import io.split.client.thin.Target
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -36,7 +37,6 @@ class DefaultSplitFactoryTest {
             defaultTarget = defaultTarget,
             config = null,
             asyncBridge = fakeAsyncBridge,
-            clientFactory = { error("not used") },
             clientManager = fakeClientManager,
         )
     }
@@ -78,21 +78,28 @@ class DefaultSplitFactoryTest {
         assertTrue(fakeAsyncBridge.closeCalled)
     }
 
-    @Test(expected = NotImplementedError::class)
-    fun `getManager throws NotImplementedError`() {
-        factory.getManager()
+    @Test
+    fun `getManager returns default manager with hardcoded names`() {
+        val manager = factory.getManager()
+
+        assertEquals(listOf("hardcoded-flag-1", "hardcoded-flag-2"), manager.flagNames)
     }
 
     @Test
     fun `getClient null with default manager creates client via clientFactory for defaultTarget`() {
         val stubClient = StubSplitClient()
+        val testScope = TestScope()
+        val customManager = DefaultClientManager(
+            scope = testScope,
+            clientFactory = { stubClient },
+        )
         val factoryWithDefaultManager = DefaultSplitFactory(
             sdkKey = sdkKey,
             defaultTarget = defaultTarget,
             config = null,
             asyncBridge = fakeAsyncBridge,
-            clientFactory = { stubClient },
-            scope = TestScope(),
+            scope = testScope,
+            clientManager = customManager,
         )
 
         val client = factoryWithDefaultManager.getClient(null)
@@ -102,20 +109,29 @@ class DefaultSplitFactoryTest {
 
     @Test
     fun `getClient with default manager returns same instance for same target key`() {
-        val stubClient = StubSplitClient()
+        var factoryCallCount = 0
+        val testScope = TestScope()
+        val customManager = DefaultClientManager(
+            scope = testScope,
+            clientFactory = {
+                factoryCallCount++
+                StubSplitClient()
+            },
+        )
         val factoryWithDefaultManager = DefaultSplitFactory(
             sdkKey = sdkKey,
             defaultTarget = defaultTarget,
             config = null,
             asyncBridge = fakeAsyncBridge,
-            clientFactory = { stubClient },
-            scope = TestScope(),
+            scope = testScope,
+            clientManager = customManager,
         )
 
         val first = factoryWithDefaultManager.getClient(defaultTarget)
         val second = factoryWithDefaultManager.getClient(defaultTarget)
 
         assertSame(first, second)
+        assertEquals(1, factoryCallCount)
     }
 
     @Test
@@ -126,7 +142,6 @@ class DefaultSplitFactoryTest {
             defaultTarget = defaultTarget,
             config = null,
             asyncBridge = fakeAsyncBridge,
-            clientFactory = { StubSplitClient() },
             scope = testScope,
         )
 

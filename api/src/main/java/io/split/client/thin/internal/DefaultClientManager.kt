@@ -7,8 +7,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 internal class DefaultClientManager(
-    private val clientFactory: (Target) -> SplitClient,
     private val scope: CoroutineScope,
+    private val clientFactory: (Target) -> SplitClient = DefaultClientFactory(),
 ) : ClientManager {
 
     private val clients = HashMap<Key, SplitClient>()
@@ -31,7 +31,9 @@ internal class DefaultClientManager(
         }
         if (targetChanged) scope.launch {
             // Skip the call if stale.
-            val stillCurrent = synchronized(lock) { lastTargets[target.key] == target }
+            val stillCurrent = synchronized(lock) {
+                lastTargets[target.key] == target && clients[target.key] === client
+            }
             if (stillCurrent) {
                 runCatching {
                     client.setTarget(target)

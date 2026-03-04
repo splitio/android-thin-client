@@ -17,9 +17,9 @@ internal class DefaultSplitFactory(
     private val defaultTarget: Target,
     private val config: SplitClientConfig?,
     private val asyncBridge: AsyncBridgeLike,
-    private val clientFactory: (Target) -> SplitClient,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
-    private val clientManager: ClientManager = DefaultClientManager(clientFactory, scope),
+    private val clientManager: ClientManager = DefaultClientManager(scope),
+    private val splitManager: SplitManager = DefaultSplitManager(),
 ) : SplitFactory {
 
     override fun getClient(target: Target?): SplitClient {
@@ -27,7 +27,7 @@ internal class DefaultSplitFactory(
     }
 
     override fun getManager(): SplitManager {
-        TODO("Not yet implemented")
+        return splitManager
     }
 
     override suspend fun destroy() {
