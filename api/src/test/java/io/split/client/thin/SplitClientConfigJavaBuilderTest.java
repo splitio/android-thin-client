@@ -2,6 +2,7 @@ package io.split.client.thin;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -17,7 +18,6 @@ public class SplitClientConfigJavaBuilderTest {
 
         assertNull(config.getFallbackTreatments());
         assertEquals(SplitClientConfig.LogLevel.NONE, config.getLogLevel());
-        assertEquals(-1, config.getTimeout());
         assertEquals(SplitClientConfig.ImpressionsMode.DEFAULT, config.getImpressionsMode());
         assertFalse(config.getDynamicConfig());
         assertEquals(SplitClientConfig.SyncMode.STREAMING, config.getSync().getMode());
@@ -25,6 +25,7 @@ public class SplitClientConfigJavaBuilderTest {
         assertEquals(1800, config.getSync().getPushRate());
         assertNull(config.getSync().getServiceEndpoints());
         assertNull(config.getStorage().getPrefix());
+        assertEquals(-1, config.getStorage().getTimeout());
     }
 
     @Test
@@ -34,15 +35,6 @@ public class SplitClientConfigJavaBuilderTest {
                 .build();
 
         assertEquals(SplitClientConfig.LogLevel.DEBUG, config.getLogLevel());
-    }
-
-    @Test
-    public void builderCanSetTimeout() {
-        SplitClientConfig config = new SplitClientConfig.Builder()
-                .timeout(30)
-                .build();
-
-        assertEquals(30, config.getTimeout());
     }
 
     @Test
@@ -135,21 +127,122 @@ public class SplitClientConfigJavaBuilderTest {
     }
 
     @Test
+    public void builderCanSetStorageTimeout() {
+        SplitClientConfig config = new SplitClientConfig.Builder()
+                .storage(new SplitClientConfig.StorageConfig.Builder()
+                        .timeout(30)
+                        .build())
+                .build();
+
+        assertEquals(30, config.getStorage().getTimeout());
+    }
+
+    @Test
     public void builderFallsBackInvalidValuesToDefaults() {
         SplitClientConfig config = new SplitClientConfig.Builder()
-                .timeout(-2)
                 .sync(new SplitClientConfig.SyncConfig.Builder()
                         .evaluationRefreshRate(1)
                         .pushRate(1)
                         .build())
                 .storage(new SplitClientConfig.StorageConfig.Builder()
                         .prefix("!!!invalid!!!")
+                        .timeout(-2)
                         .build())
                 .build();
 
-        assertEquals(-1, config.getTimeout());
         assertEquals(3600, config.getSync().getEvaluationRefreshRate());
         assertEquals(1800, config.getSync().getPushRate());
         assertNull(config.getStorage().getPrefix());
+        assertEquals(-1, config.getStorage().getTimeout());
+    }
+
+    @Test
+    public void builderAcceptsEvaluationRefreshRateAtMinimumBoundary() {
+        SplitClientConfig config = new SplitClientConfig.Builder()
+                .sync(new SplitClientConfig.SyncConfig.Builder()
+                        .evaluationRefreshRate(60)
+                        .build())
+                .build();
+
+        assertEquals(60, config.getSync().getEvaluationRefreshRate());
+    }
+
+    @Test
+    public void builderAcceptsPushRateAtMinimumBoundary() {
+        SplitClientConfig config = new SplitClientConfig.Builder()
+                .sync(new SplitClientConfig.SyncConfig.Builder()
+                        .pushRate(30)
+                        .build())
+                .build();
+
+        assertEquals(30, config.getSync().getPushRate());
+    }
+
+    @Test
+    public void builderAcceptsStorageTimeoutOfZero() {
+        SplitClientConfig config = new SplitClientConfig.Builder()
+                .storage(new SplitClientConfig.StorageConfig.Builder()
+                        .timeout(0)
+                        .build())
+                .build();
+
+        assertEquals(0, config.getStorage().getTimeout());
+    }
+
+    @Test
+    public void builderAcceptsPrefixAtMaxLengthBoundary() {
+        String prefix = "a".repeat(80);
+        SplitClientConfig config = new SplitClientConfig.Builder()
+                .storage(new SplitClientConfig.StorageConfig.Builder()
+                        .prefix(prefix)
+                        .build())
+                .build();
+
+        assertEquals(prefix, config.getStorage().getPrefix());
+    }
+
+    @Test
+    public void builderFallsBackPrefixWhenExceedingMaxLength() {
+        SplitClientConfig config = new SplitClientConfig.Builder()
+                .storage(new SplitClientConfig.StorageConfig.Builder()
+                        .prefix("a".repeat(81))
+                        .build())
+                .build();
+
+        assertNull(config.getStorage().getPrefix());
+    }
+
+    @Test
+    public void builderFallsBackPrefixWhenEmptyString() {
+        SplitClientConfig config = new SplitClientConfig.Builder()
+                .storage(new SplitClientConfig.StorageConfig.Builder()
+                        .prefix("")
+                        .build())
+                .build();
+
+        assertNull(config.getStorage().getPrefix());
+    }
+
+    @Test
+    public void builderCanSetSyncModeSingleSync() {
+        SplitClientConfig config = new SplitClientConfig.Builder()
+                .sync(new SplitClientConfig.SyncConfig.Builder()
+                        .mode(SplitClientConfig.SyncMode.SINGLE_SYNC)
+                        .build())
+                .build();
+
+        assertEquals(SplitClientConfig.SyncMode.SINGLE_SYNC, config.getSync().getMode());
+    }
+
+    @Test
+    public void differentConfigsHaveDifferentHashCodes() {
+        SplitClientConfig a = new SplitClientConfig.Builder()
+                .logLevel(SplitClientConfig.LogLevel.DEBUG)
+                .build();
+        SplitClientConfig b = new SplitClientConfig.Builder()
+                .logLevel(SplitClientConfig.LogLevel.VERBOSE)
+                .build();
+
+        assertNotEquals(a.hashCode(), b.hashCode());
     }
 }

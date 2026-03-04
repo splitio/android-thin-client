@@ -11,13 +11,13 @@ import io.split.android.client.utils.logger.SplitLogLevel
  * ```kotlin
  * val config = splitClientConfig {
  *     logLevel = SplitClientConfig.LogLevel.DEBUG
- *     timeout  = 10
  *     sync {
  *         mode                 = SplitClientConfig.SyncMode.POLLING
  *         evaluationRefreshRate = 120
  *     }
  *     storage {
- *         prefix = "my_app"
+ *         prefix  = "my_app"
+ *         timeout = 10
  *     }
  * }
  * ```
@@ -26,13 +26,13 @@ import io.split.android.client.utils.logger.SplitLogLevel
  * ```java
  * SplitClientConfig config = new SplitClientConfig.Builder()
  *     .logLevel(SplitClientConfig.LogLevel.DEBUG)
- *     .timeout(10)
  *     .sync(new SplitClientConfig.SyncConfig.Builder()
  *         .mode(SplitClientConfig.SyncMode.POLLING)
  *         .evaluationRefreshRate(120)
  *         .build())
  *     .storage(new SplitClientConfig.StorageConfig.Builder()
  *         .prefix("my_app")
+ *         .timeout(10)
  *         .build())
  *     .build();
  * ```
@@ -48,11 +48,6 @@ class SplitClientConfig private constructor(
     val fallbackTreatments: FallbackTreatmentsConfiguration?,
     /** Logging level. Default: [LogLevel.NONE]. */
     val logLevel: LogLevel,
-    /**
-     * Seconds before [SplitEvent.sdkTimeout] is emitted.
-     * `-1` means no timeout. Default: `-1`.
-     */
-    val timeout: Int,
     /** Impressions mode reported to the Remote Evaluator. Default: [ImpressionsMode.DEFAULT]. */
     val impressionsMode: ImpressionsMode,
     /**
@@ -62,7 +57,7 @@ class SplitClientConfig private constructor(
     val dynamicConfig: Boolean,
     /** Sync-related options (mode, rates, endpoints). */
     val sync: SyncConfig,
-    /** Persistent storage options. */
+    /** Persistent storage options (prefix, timeout). */
     val storage: StorageConfig,
 ) {
     override fun equals(other: Any?): Boolean {
@@ -71,7 +66,6 @@ class SplitClientConfig private constructor(
 
         return fallbackTreatments == other.fallbackTreatments &&
             logLevel == other.logLevel &&
-            timeout == other.timeout &&
             impressionsMode == other.impressionsMode &&
             dynamicConfig == other.dynamicConfig &&
             sync == other.sync &&
@@ -81,7 +75,6 @@ class SplitClientConfig private constructor(
     override fun hashCode(): Int {
         var result = fallbackTreatments?.hashCode() ?: 0
         result = 31 * result + logLevel.hashCode()
-        result = 31 * result + timeout
         result = 31 * result + impressionsMode.hashCode()
         result = 31 * result + dynamicConfig.hashCode()
         result = 31 * result + sync.hashCode()
@@ -93,7 +86,6 @@ class SplitClientConfig private constructor(
         "SplitClientConfig(" +
             "fallbackTreatments=$fallbackTreatments, " +
             "logLevel=$logLevel, " +
-            "timeout=$timeout, " +
             "impressionsMode=$impressionsMode, " +
             "dynamicConfig=$dynamicConfig, " +
             "sync=$sync, " +
@@ -121,7 +113,6 @@ class SplitClientConfig private constructor(
         internal fun createNormalized(
             fallbackTreatments: FallbackTreatmentsConfiguration?,
             logLevel: LogLevel,
-            timeout: Int,
             impressionsMode: ImpressionsMode,
             dynamicConfig: Boolean,
             sync: SyncConfig,
@@ -132,23 +123,11 @@ class SplitClientConfig private constructor(
             return SplitClientConfig(
                 fallbackTreatments = fallbackTreatments,
                 logLevel = logLevel,
-                timeout = normalizeTimeout(timeout),
                 impressionsMode = impressionsMode,
                 dynamicConfig = dynamicConfig,
                 sync = normalizeSync(sync),
                 storage = normalizeStorage(storage),
             )
-        }
-
-        internal fun normalizeTimeout(timeout: Int): Int {
-            if (timeout < -1) {
-                Logger.w(
-                    "SplitClientConfig validation failed: timeout must be >= -1. " +
-                        "Received: $timeout. Falling back to default: $DEFAULT_TIMEOUT"
-                )
-                return DEFAULT_TIMEOUT
-            }
-            return timeout
         }
 
         internal fun normalizeSync(sync: SyncConfig): SyncConfig {
@@ -184,15 +163,30 @@ class SplitClientConfig private constructor(
         }
 
         internal fun normalizeStorage(storage: StorageConfig): StorageConfig {
-            val prefix = storage.prefix ?: return storage
-            if (!PREFIX_REGEX.matches(prefix)) {
+            var prefix = storage.prefix
+            var timeout = storage.timeout
+
+            if (prefix != null && !PREFIX_REGEX.matches(prefix)) {
                 Logger.w(
                     "SplitClientConfig validation failed: storage.prefix must match ^[a-zA-Z0-9_]{1,80}$. " +
                         "Received: $prefix. Falling back to default: null"
                 )
-                return StorageConfig(prefix = null)
+                prefix = null
             }
-            return storage
+
+            if (timeout < -1) {
+                Logger.w(
+                    "SplitClientConfig validation failed: storage.timeout must be >= -1. " +
+                        "Received: $timeout. Falling back to default: $DEFAULT_TIMEOUT"
+                )
+                timeout = DEFAULT_TIMEOUT
+            }
+
+            return if (prefix == storage.prefix && timeout == storage.timeout) {
+                storage
+            } else {
+                StorageConfig(prefix = prefix, timeout = timeout)
+            }
         }
     }
 
@@ -246,25 +240,29 @@ class SplitClientConfig private constructor(
     /**
      * Persistent-storage-related configuration.
      *
-     * @property prefix Prefix appended to the persistent storage identifier (DB name, key prefix).
+     * @property prefix   Prefix appended to the persistent storage identifier (DB name, key prefix).
      *   Must conform to `^[a-zA-Z0-9_]{1,80}$`. Default: `null` (no prefix).
+     * @property timeout  Seconds before [SplitEvent.sdkTimeout] is emitted.
+     *   `-1` means no timeout. Default: `-1`. Min value: `-1`.
      */
     data class StorageConfig(
         val prefix: String?,
+        val timeout: Int,
     ) {
         class Builder {
             private var prefix: String? = null
+            private var timeout: Int = -1
 
             fun prefix(value: String) = apply { prefix = value }
+            fun timeout(value: Int) = apply { timeout = value }
 
-            fun build() = StorageConfig(prefix = prefix)
+            fun build() = StorageConfig(prefix = prefix, timeout = timeout)
         }
     }
 
     class Builder {
         private var fallbackTreatments: FallbackTreatmentsConfiguration? = null
         private var logLevel: LogLevel = LogLevel.NONE
-        private var timeout: Int = -1
         private var impressionsMode: ImpressionsMode = ImpressionsMode.DEFAULT
         private var dynamicConfig: Boolean = false
         private var sync: SyncConfig = SyncConfig.Builder().build()
@@ -272,7 +270,6 @@ class SplitClientConfig private constructor(
 
         fun fallbackTreatments(value: FallbackTreatmentsConfiguration) = apply { fallbackTreatments = value }
         fun logLevel(value: LogLevel) = apply { logLevel = value }
-        fun timeout(value: Int) = apply { timeout = value }
         fun impressionsMode(value: ImpressionsMode) = apply { impressionsMode = value }
         fun dynamicConfig(value: Boolean) = apply { dynamicConfig = value }
         fun sync(value: SyncConfig) = apply { sync = value }
@@ -282,7 +279,6 @@ class SplitClientConfig private constructor(
             createNormalized(
                 fallbackTreatments = fallbackTreatments,
                 logLevel = logLevel,
-                timeout = timeout,
                 impressionsMode = impressionsMode,
                 dynamicConfig = dynamicConfig,
                 sync = sync,
@@ -309,15 +305,15 @@ class SyncConfigDsl {
 /** DSL scope for [SplitClientConfig.StorageConfig]. */
 class StorageConfigDsl {
     var prefix: String? = null
+    var timeout: Int = -1
 
-    internal fun build() = SplitClientConfig.StorageConfig(prefix = prefix)
+    internal fun build() = SplitClientConfig.StorageConfig(prefix = prefix, timeout = timeout)
 }
 
 /** DSL scope for [SplitClientConfig]. */
 class SplitClientConfigDsl {
     var fallbackTreatments: FallbackTreatmentsConfiguration? = null
     var logLevel: SplitClientConfig.LogLevel = SplitClientConfig.LogLevel.NONE
-    var timeout: Int = -1
     var impressionsMode: SplitClientConfig.ImpressionsMode = SplitClientConfig.ImpressionsMode.DEFAULT
     var dynamicConfig: Boolean = false
 
@@ -335,7 +331,6 @@ class SplitClientConfigDsl {
     internal fun build() = SplitClientConfig.createNormalized(
         fallbackTreatments = fallbackTreatments,
         logLevel = logLevel,
-        timeout = timeout,
         impressionsMode = impressionsMode,
         dynamicConfig = dynamicConfig,
         sync = syncDsl.build(),
@@ -378,6 +373,9 @@ fun SplitClientConfigDsl.fallbackTreatments(
  *     logLevel = SplitClientConfig.LogLevel.DEBUG
  *     sync {
  *         evaluationRefreshRate = 120
+ *     }
+ *     storage {
+ *         timeout = 10
  *     }
  * }
  * ```
