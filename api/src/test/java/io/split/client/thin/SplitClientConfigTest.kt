@@ -8,6 +8,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.lang.reflect.Modifier
 
 class SplitClientConfigTest {
 
@@ -69,6 +70,21 @@ class SplitClientConfigTest {
     fun `default storage config has null prefix`() {
         val config = defaultConfig()
         assertNull(config.storage.prefix)
+    }
+
+    @Test
+    fun `split client config has no public user constructor`() {
+        val constructors = SplitClientConfig::class.java.declaredConstructors
+        assertTrue(constructors.isNotEmpty())
+        assertTrue(constructors.any { Modifier.isPrivate(it.modifiers) })
+
+        // Kotlin can generate a synthetic public bridge constructor with
+        // DefaultConstructorMarker for private-primary-constructor access.
+        val hasPublicUserConstructor = constructors.any { ctor ->
+            Modifier.isPublic(ctor.modifiers) &&
+                ctor.parameterTypes.none { it.name == "kotlin.jvm.internal.DefaultConstructorMarker" }
+        }
+        assertFalse(hasPublicUserConstructor)
     }
 
     @Test

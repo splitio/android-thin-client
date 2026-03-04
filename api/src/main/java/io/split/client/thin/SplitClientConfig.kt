@@ -37,7 +37,7 @@ import io.split.android.client.utils.logger.SplitLogLevel
  *     .build();
  * ```
  */
-data class SplitClientConfig(
+class SplitClientConfig private constructor(
     /**
      * Fallback treatments per flag name.
      *
@@ -65,6 +65,41 @@ data class SplitClientConfig(
     /** Persistent storage options. */
     val storage: StorageConfig,
 ) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is SplitClientConfig) return false
+
+        return fallbackTreatments == other.fallbackTreatments &&
+            logLevel == other.logLevel &&
+            timeout == other.timeout &&
+            impressionsMode == other.impressionsMode &&
+            dynamicConfig == other.dynamicConfig &&
+            sync == other.sync &&
+            storage == other.storage
+    }
+
+    override fun hashCode(): Int {
+        var result = fallbackTreatments?.hashCode() ?: 0
+        result = 31 * result + logLevel.hashCode()
+        result = 31 * result + timeout
+        result = 31 * result + impressionsMode.hashCode()
+        result = 31 * result + dynamicConfig.hashCode()
+        result = 31 * result + sync.hashCode()
+        result = 31 * result + storage.hashCode()
+        return result
+    }
+
+    override fun toString(): String =
+        "SplitClientConfig(" +
+            "fallbackTreatments=$fallbackTreatments, " +
+            "logLevel=$logLevel, " +
+            "timeout=$timeout, " +
+            "impressionsMode=$impressionsMode, " +
+            "dynamicConfig=$dynamicConfig, " +
+            "sync=$sync, " +
+            "storage=$storage" +
+            ")"
+
     companion object {
         private val PREFIX_REGEX = Regex("^[a-zA-Z0-9_]{1,80}$")
         private const val DEFAULT_TIMEOUT = -1
@@ -81,6 +116,28 @@ data class SplitClientConfig(
                 LogLevel.VERBOSE -> SplitLogLevel.VERBOSE
             }
             Logger.instance().setLevel(loggerLevel)
+        }
+
+        internal fun createNormalized(
+            fallbackTreatments: FallbackTreatmentsConfiguration?,
+            logLevel: LogLevel,
+            timeout: Int,
+            impressionsMode: ImpressionsMode,
+            dynamicConfig: Boolean,
+            sync: SyncConfig,
+            storage: StorageConfig,
+        ): SplitClientConfig {
+            // Apply level before normalization so validation logs are visible.
+            applyLogLevel(logLevel)
+            return SplitClientConfig(
+                fallbackTreatments = fallbackTreatments,
+                logLevel = logLevel,
+                timeout = normalizeTimeout(timeout),
+                impressionsMode = impressionsMode,
+                dynamicConfig = dynamicConfig,
+                sync = normalizeSync(sync),
+                storage = normalizeStorage(storage),
+            )
         }
 
         internal fun normalizeTimeout(timeout: Int): Int {
@@ -221,19 +278,16 @@ data class SplitClientConfig(
         fun sync(value: SyncConfig) = apply { sync = value }
         fun storage(value: StorageConfig) = apply { storage = value }
 
-        fun build(): SplitClientConfig {
-            // Apply level before normalization so validation logs are visible.
-            applyLogLevel(logLevel)
-            return SplitClientConfig(
+        fun build(): SplitClientConfig =
+            createNormalized(
                 fallbackTreatments = fallbackTreatments,
                 logLevel = logLevel,
-                timeout = normalizeTimeout(timeout),
+                timeout = timeout,
                 impressionsMode = impressionsMode,
                 dynamicConfig = dynamicConfig,
-                sync = normalizeSync(sync),
-                storage = normalizeStorage(storage),
+                sync = sync,
+                storage = storage,
             )
-        }
     }
 }
 
@@ -278,14 +332,14 @@ class SplitClientConfigDsl {
         storageDsl = StorageConfigDsl().apply(block)
     }
 
-    internal fun build() = SplitClientConfig(
+    internal fun build() = SplitClientConfig.createNormalized(
         fallbackTreatments = fallbackTreatments,
         logLevel = logLevel,
-        timeout = SplitClientConfig.run { normalizeTimeout(timeout) },
+        timeout = timeout,
         impressionsMode = impressionsMode,
         dynamicConfig = dynamicConfig,
-        sync = SplitClientConfig.run { normalizeSync(syncDsl.build()) },
-        storage = SplitClientConfig.run { normalizeStorage(storageDsl.build()) },
+        sync = syncDsl.build(),
+        storage = storageDsl.build(),
     )
 }
 
