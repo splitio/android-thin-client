@@ -211,7 +211,7 @@ class SplitClientConfig private constructor(
      * @property pushRate      POST interval in seconds for events and telemetry. Default: `1800`. Min value: `30`.
      * @property serviceEndpoints Custom endpoints. Default: `null` (use SDK defaults).
      */
-    data class SyncConfig(
+    data class SyncConfig internal constructor(
         val mode: SyncMode,
         val evaluationRefreshRate: Int,
         val pushRate: Int,
@@ -245,7 +245,7 @@ class SplitClientConfig private constructor(
      * @property timeout  Seconds before [SplitEvent.sdkTimeout] is emitted.
      *   `-1` means no timeout. Default: `-1`. Min value: `-1`.
      */
-    data class StorageConfig(
+    data class StorageConfig internal constructor(
         val prefix: String?,
         val timeout: Int,
     ) {
