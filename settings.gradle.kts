@@ -24,6 +24,6 @@ rootProject.name = "android-thin-client"
 
 include(":android-thin-client")
 include(":api")
-include(":sdk")
+// include(":sdk")
 include(":android-client:fallback")
 include(":android-client:logger")
