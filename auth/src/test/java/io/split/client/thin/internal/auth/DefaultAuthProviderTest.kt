@@ -1,7 +1,12 @@
 package io.split.client.thin.internal.auth
 
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
@@ -84,6 +89,34 @@ class DefaultAuthProviderTest {
 
         results.forEach { assertEquals(validCredential, it) }
         verify(fetcher, times(1)).fetchCredential(target)
+    }
+
+    @Test
+    fun `credential starts a new fetch after prior in-flight fetch is cancelled`() = runTest {
+        var attempts = 0
+        // Ensure cancellation happens after the first fetch has actually started.
+        val firstFetchStarted = CompletableDeferred<Unit>()
+        val cancelThenSucceedFetcher = CredentialFetcher<String> {
+            attempts++
+            if (attempts == 1) {
+                firstFetchStarted.complete(Unit)
+                awaitCancellation()
+            } else {
+                validCredential
+            }
+        }
+        authProvider = DefaultAuthProvider(cancelThenSucceedFetcher, storage)
+        `when`(storage.getCredential(target)).thenReturn(null)
+
+        // Use an independent Job so cancelling this fetch does not cancel the test scope.
+        val first = launch(Job()) { authProvider.credential(target) }
+        firstFetchStarted.await()
+        first.cancelAndJoin()
+
+        val second = authProvider.credential(target)
+
+        assertEquals(validCredential, second)
+        assertEquals(2, attempts)
     }
 
     @Test
