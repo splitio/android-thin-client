@@ -7,6 +7,7 @@ plugins {
     id("com.android.library") version "9.0.0" apply false
     id("com.android.fused-library") version "9.0.0" apply false
     id("org.jetbrains.kotlin.android") version "1.8.10" apply false
+    id("org.jetbrains.kotlin.plugin.serialization") version "1.8.10" apply false
     id("com.vanniktech.maven.publish") version "0.34.0" apply false
 }
 

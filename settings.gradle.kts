@@ -24,6 +24,7 @@ rootProject.name = "android-thin-client"
 
 include(":android-thin-client")
 include(":api")
+include(":auth")
 include(":retryable-http-client")
 // include(":sdk")
 
