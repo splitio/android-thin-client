@@ -14,8 +14,8 @@ androidFusedLibrary {
 }
 val fusedIncludedProjects = listOf(
     project(":api"),
-    project(":android-client:fallback"),
-    project(":android-client:logger"),
+    project(":fallback"),
+    project(":logger"),
 )
 
 dependencies {

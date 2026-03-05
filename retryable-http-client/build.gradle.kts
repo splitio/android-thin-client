@@ -30,8 +30,8 @@ android {
 }
 
 dependencies {
-    api(project(":android-client:http"))
-    implementation(project(":android-client:backoff"))
+    api(project(":http"))
+    implementation(project(":backoff"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
     testImplementation("junit:junit:4.13.2")
