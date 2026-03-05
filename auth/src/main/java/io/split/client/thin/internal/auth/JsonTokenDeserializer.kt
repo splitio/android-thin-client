@@ -21,7 +21,7 @@ internal class JsonTokenDeserializer : TokenDeserializer {
 }
 
 @Serializable
-internal data class AuthResponse(
+private data class AuthResponse(
     @SerialName("token") val token: String,
     @SerialName("expiresAt") val expiresAt: Long,
     @SerialName("pushEnabled") val pushEnabled: Boolean,
