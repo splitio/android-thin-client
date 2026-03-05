@@ -61,8 +61,6 @@ class DefaultRetryableHttpClientTest {
         )
     }
 
-    // --- Scenario 1: First-attempt success ---
-
     @Test
     fun `returns response immediately on first-attempt success`() = runTest {
         `when`(httpRequest.execute()).thenReturn(successResponse)
@@ -72,8 +70,6 @@ class DefaultRetryableHttpClientTest {
         assertSame(successResponse, result)
         verify(httpRequest, times(1)).execute()
     }
-
-    // --- Scenario 2: Retries on failure, succeeds on second attempt ---
 
     @Test
     fun `retries on failure and returns response on subsequent success`() = runTest {
@@ -87,8 +83,6 @@ class DefaultRetryableHttpClientTest {
         verify(httpRequest, times(2)).execute()
     }
 
-    // --- Scenario 3: Exhausts retries and returns last response ---
-
     @Test
     fun `returns last response when maxAttempts exhausted`() = runTest {
         `when`(httpRequest.execute()).thenReturn(failureResponse)
@@ -98,8 +92,6 @@ class DefaultRetryableHttpClientTest {
         assertSame(failureResponse, result)
         verify(httpRequest, times(3)).execute()
     }
-
-    // --- Scenario 4: Status-specific null policy means no retry ---
 
     @Test
     fun `does not retry when status-specific policy is null`() = runTest {
@@ -120,8 +112,6 @@ class DefaultRetryableHttpClientTest {
         verify(httpRequest, times(1)).execute()
     }
 
-    // --- Scenario 5: Calls BackoffCounter between retries ---
-
     @Test
     fun `calls backoff counter getNextRetryTime between retries`() = runTest {
         `when`(httpRequest.execute())
@@ -132,8 +122,6 @@ class DefaultRetryableHttpClientTest {
 
         verify(backoffCounter, times(1)).nextRetryTime
     }
-
-    // --- Scenario 6: Rethrows HttpException with status 9009 (SSL) ---
 
     @Test(expected = HttpException::class)
     fun `rethrows HttpException with SSL status code without retrying`() = runTest {
@@ -156,8 +144,6 @@ class DefaultRetryableHttpClientTest {
         verify(httpRequest, times(1)).execute()
     }
 
-    // --- Scenario 7: Retries on non-SSL HttpException, rethrows when exhausted ---
-
     @Test
     fun `retries on non-SSL HttpException and succeeds`() = runTest {
         `when`(httpRequest.execute())
@@ -177,14 +163,15 @@ class DefaultRetryableHttpClientTest {
         client.execute(descriptor, RequestCategory.EVALUATIONS)
     }
 
-    // --- Scenario 8: Throws IllegalStateException for unconfigured category ---
+    @Test
+    fun `executes once and returns response for unconfigured category`() = runTest {
+        `when`(httpRequest.execute()).thenReturn(failureResponse)
 
-    @Test(expected = IllegalStateException::class)
-    fun `throws IllegalStateException when category has no configured policies`() = runTest {
-        client.execute(descriptor, RequestCategory.AUTH)
+        val result = client.execute(descriptor, RequestCategory.AUTH)
+
+        assertSame(failureResponse, result)
+        verify(httpRequest, times(1)).execute()
     }
-
-    // --- Scenario 9: Respects coroutine cancellation ---
 
     @OptIn(ExperimentalCoroutinesApi::class)
     @Test
@@ -208,8 +195,6 @@ class DefaultRetryableHttpClientTest {
         assert(job.isCancelled)
     }
 
-    // --- Scenario 10: Network error without status code uses default policy ---
-
     @Test
     fun `retries on HttpException without status code using default policy`() = runTest {
         `when`(httpRequest.execute())
@@ -228,8 +213,6 @@ class DefaultRetryableHttpClientTest {
 
         client.execute(descriptor, RequestCategory.EVALUATIONS)
     }
-
-    // --- Scenario 11: HttpException with status mapped to null in byStatus does not retry ---
 
     @Test
     fun `does not retry when HttpException status is explicitly mapped to null in byStatus`() = runTest {
@@ -250,8 +233,6 @@ class DefaultRetryableHttpClientTest {
 
         verify(httpRequest, times(1)).execute()
     }
-
-    // --- Scenario 12: Status-specific policy backoff base is used when retrying ---
 
     @Test
     fun `uses status-specific backoff base when a status-specific policy is in effect`() = runTest {
@@ -290,8 +271,6 @@ class DefaultRetryableHttpClientTest {
         }
     }
 
-    // --- Scenario 13: Request with body and headers ---
-
     @Test
     fun `uses body and headers from descriptor`() = runTest {
         val descriptorWithBody = HttpRequestDescriptor(
@@ -314,8 +293,6 @@ class DefaultRetryableHttpClientTest {
             descriptorWithBody.headers,
         )
     }
-
-    // --- Scenario 14: HttpException with status mapped to a specific non-null policy ---
 
     @Test
     fun `retries on HttpException when status has a specific non-null policy override`() = runTest {
@@ -350,8 +327,6 @@ class DefaultRetryableHttpClientTest {
         client.execute(descriptor, RequestCategory.EVALUATIONS)
     }
 
-    // --- Scenario 15: Request with headers but no body ---
-
     @Test
     fun `uses four-arg request overload when headers are present but body is null`() = runTest {
         val descriptorWithHeaders = HttpRequestDescriptor(
@@ -375,8 +350,6 @@ class DefaultRetryableHttpClientTest {
         )
     }
 
-    // --- Scenario 16: Non-HttpException propagates without retry ---
-
     @Test
     fun `propagates non-HttpException immediately without retrying`() = runTest {
         val cause = RuntimeException("unexpected failure")
@@ -391,8 +364,6 @@ class DefaultRetryableHttpClientTest {
 
         verify(httpRequest, times(1)).execute()
     }
-
-    // --- Scenario 17: Cancellation stops further attempts ---
 
     @Test
     fun `does not start next attempt when coroutine is cancelled after execute returns`() = runTest {

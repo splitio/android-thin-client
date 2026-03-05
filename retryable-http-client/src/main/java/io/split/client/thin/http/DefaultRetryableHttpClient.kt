@@ -18,8 +18,7 @@ internal class DefaultRetryableHttpClient(
         request: HttpRequestDescriptor,
         category: RequestCategory,
     ): HttpResponse {
-        val policies = policiesByCategory[category]
-            ?: throw IllegalStateException("No retry policies configured for category: $category")
+        val policies = policiesByCategory[category] ?: NO_RETRY_POLICIES
 
         val backoffByBase = mutableMapOf<Int, BackoffCounter>()
         var attempt = 0
@@ -85,7 +84,10 @@ internal class DefaultRetryableHttpClient(
         }
 
     companion object {
-        private const val SSL_ERROR_STATUS_CODE = 9009
+        private const val SSL_ERROR_STATUS_CODE = 9009 // 9009 = NON_RETRYABLE_STATUS_CODE from HttpRequestImpl
         private const val MILLIS_PER_SECOND = 1000L
+
+        private val NO_RETRY_POLICY = RetryPolicy(maxAttempts = 1, backoffBaseSeconds = 0)
+        private val NO_RETRY_POLICIES = CategoryRetryPolicies(default = NO_RETRY_POLICY)
     }
 }
