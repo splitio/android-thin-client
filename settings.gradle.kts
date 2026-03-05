@@ -25,5 +25,13 @@ rootProject.name = "android-thin-client"
 include(":android-thin-client")
 include(":api")
 // include(":sdk")
-include(":android-client:fallback")
-include(":android-client:logger")
+
+listOf<String>(
+    "fallback",
+    "logger",
+    "http",
+    "http-api",
+    "backoff"
+).forEach {
+    include(":android-client:$it")
+}
