@@ -26,6 +26,8 @@ class EvaluationResultTest {
             treatment = "test-treatment",
             changeNumber = 1234567890L
         )
+        assertEquals("test-flag", evaluationResult.flag)
+        assertEquals("test-treatment", evaluationResult.treatment)
         assertNull(evaluationResult.config)
         assertNull(evaluationResult.label)
         assertEquals(1234567890L, evaluationResult.changeNumber)
@@ -40,6 +42,8 @@ class EvaluationResultTest {
             label = "test-label",
             changeNumber = 1234567890L,
         )
+        assertEquals("test-flag", evaluationResult.flag)
+        assertEquals("test-treatment", evaluationResult.treatment)
         assertEquals("test-config", evaluationResult.config)
         assertEquals("test-label", evaluationResult.label)
         assertEquals(1234567890L, evaluationResult.changeNumber)
@@ -52,6 +56,8 @@ class EvaluationResultTest {
             treatment = "test-treatment",
             label = "test-label"
         )
+        assertEquals("test-flag", evaluationResult.flag)
+        assertEquals("test-treatment", evaluationResult.treatment)
         assertNull(evaluationResult.config)
         assertEquals("test-label", evaluationResult.label)
         assertNull(evaluationResult.changeNumber)
