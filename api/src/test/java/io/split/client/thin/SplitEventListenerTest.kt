@@ -23,19 +23,11 @@ class SplitEventListenerTest {
 
         override fun addEventListener(listener: SplitEventListener) = Unit
 
-        override suspend fun track(
+        override fun track(
             trafficType: String,
             eventType: String,
             value: Double?,
             properties: Map<String, Any?>?,
-        ) = Unit
-
-        override fun trackAsync(
-            trafficType: String,
-            eventType: String,
-            value: Double?,
-            properties: Map<String, Any?>?,
-            callback: SplitVoidCallback,
         ) = Unit
 
         override suspend fun destroy() = Unit
