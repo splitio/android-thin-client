@@ -7,13 +7,15 @@ plugins {
 }
 
 androidFusedLibrary {
-    namespace = "io.split.thin"
+    namespace = "io.split.client.thin"
     minSdk {
         version = release(21)
     }
 }
 val fusedIncludedProjects = listOf(
-    project(":api")
+    project(":api"),
+    project(":android-client:fallback"),
+    project(":android-client:logger"),
 )
 
 dependencies {
@@ -39,6 +41,23 @@ val fusedSourcesJar = tasks.register("fusedSourcesJar", Jar::class.java) {
 mavenPublishing {
     coordinates("io.split.client", "android-thin-client", project.version.toString())
     publishToMavenCentral(false)
+}
+
+tasks.register("buildAndPublishToMavenLocal") {
+    group = "publishing"
+    description = "Builds the fused library and then publishes it to Maven Local."
+    dependsOn(
+        tasks.matching {
+            it.name == "build" || it.name == "bundle" || it.name == "assemble"
+        }
+    )
+    finalizedBy("publishToMavenLocal")
+}
+
+tasks.configureEach {
+    if (name == "build" || name == "bundle" || name == "assemble") {
+        finalizedBy("publishToMavenLocal")
+    }
 }
 
 afterEvaluate {
