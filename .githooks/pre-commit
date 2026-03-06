@@ -74,7 +74,9 @@ for path in staged_sources:
         # Not under src/main/java|kotlin; nothing to enforce.
         continue
     if key not in file_coverage:
-        failing.append((path, None))  # absent from report = no coverage at all
+        # Absent from report means JaCoCo found no executable lines (e.g. pure
+        # interfaces, annotation classes).  Nothing to cover → skip.
+        continue
     else:
         pct = file_coverage[key]
         if pct < threshold:

@@ -1,9 +1,10 @@
 plugins {
     id("com.android.library")
+    id("org.jetbrains.kotlin.plugin.serialization")
 }
 
 android {
-    namespace = "io.split.client.thin.http"
+    namespace = "io.split.client.thin.auth"
     compileSdk {
         version = release(36)
     }
@@ -30,8 +31,8 @@ android {
 }
 
 dependencies {
-    api(project(":http"))
-    implementation(project(":backoff"))
+    implementation(project(":retryable-http-client"))
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.5.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
     testImplementation("junit:junit:4.13.2")
