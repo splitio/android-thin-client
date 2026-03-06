@@ -1,12 +1,17 @@
 package io.split.client.thin.internal
 
+import io.split.client.thin.EvaluationOptions
+import io.split.client.thin.EvaluationResult
 import io.split.client.thin.Key
 import io.split.client.thin.SdkKey
 import io.split.client.thin.SplitCallback
 import io.split.client.thin.SplitClient
+import io.split.client.thin.SplitEventListener
 import io.split.client.thin.SplitVoidCallback
 import io.split.client.thin.Target
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -67,17 +72,82 @@ class DefaultSplitFactoryTest {
 
         assertNotNull(fakeAsyncBridge.capturedVoidBlock)
 
-        // Execute the captured block to verify the full destroy chain fires
         fakeAsyncBridge.capturedVoidBlock!!.invoke()
 
         assertTrue(fakeClientManager.destroyAllCalled)
         assertTrue(fakeAsyncBridge.closeCalled)
     }
 
-    // 5. getManager — not yet implemented, TODO state
-    @Test(expected = NotImplementedError::class)
-    fun `getManager throws NotImplementedError`() {
-        factory.getManager()
+    @Test
+    fun `getManager returns default manager with hardcoded names`() {
+        val manager = factory.getManager()
+
+        assertEquals(listOf("hardcoded-flag-1", "hardcoded-flag-2"), manager.flagNames)
+    }
+
+    @Test
+    fun `getClient null with default manager creates client via clientFactory for defaultTarget`() {
+        val stubClient = StubSplitClient()
+        val testScope = TestScope()
+        val customManager = DefaultClientManager(
+            scope = testScope,
+            clientFactory = { stubClient },
+        )
+        val factoryWithDefaultManager = DefaultSplitFactory(
+            sdkKey = sdkKey,
+            defaultTarget = defaultTarget,
+            config = null,
+            asyncBridge = fakeAsyncBridge,
+            scope = testScope,
+            clientManager = customManager,
+        )
+
+        val client = factoryWithDefaultManager.getClient(null)
+
+        assertSame(stubClient, client)
+    }
+
+    @Test
+    fun `getClient with default manager returns same instance for same target key`() {
+        var factoryCallCount = 0
+        val testScope = TestScope()
+        val customManager = DefaultClientManager(
+            scope = testScope,
+            clientFactory = {
+                factoryCallCount++
+                StubSplitClient()
+            },
+        )
+        val factoryWithDefaultManager = DefaultSplitFactory(
+            sdkKey = sdkKey,
+            defaultTarget = defaultTarget,
+            config = null,
+            asyncBridge = fakeAsyncBridge,
+            scope = testScope,
+            clientManager = customManager,
+        )
+
+        val first = factoryWithDefaultManager.getClient(defaultTarget)
+        val second = factoryWithDefaultManager.getClient(defaultTarget)
+
+        assertSame(first, second)
+        assertEquals(1, factoryCallCount)
+    }
+
+    @Test
+    fun `destroy with default manager cancels scope`() = runTest {
+        val testScope = TestScope()
+        val factoryWithDefaultManager = DefaultSplitFactory(
+            sdkKey = sdkKey,
+            defaultTarget = defaultTarget,
+            config = null,
+            asyncBridge = fakeAsyncBridge,
+            scope = testScope,
+        )
+
+        factoryWithDefaultManager.destroy()
+
+        assertTrue(testScope.coroutineContext[kotlinx.coroutines.Job]!!.isCancelled)
     }
 }
 
@@ -85,25 +155,7 @@ private class FakeClientManager : ClientManager {
 
     var lastGetOrCreateTarget: Target? = null
     var destroyAllCalled = false
-    val lastClient = object : SplitClient {
-        override fun getTreatment(flag: String, evaluationOptions: io.split.client.thin.EvaluationOptions?) =
-            throw UnsupportedOperationException()
-        override fun getTreatments(flags: List<String>, evaluationOptions: io.split.client.thin.EvaluationOptions?) =
-            throw UnsupportedOperationException()
-        override fun getTreatmentsByFlagSets(flagSets: List<String>, evaluationOptions: io.split.client.thin.EvaluationOptions?) =
-            throw UnsupportedOperationException()
-        override suspend fun setTarget(target: Target) = throw UnsupportedOperationException()
-        @Deprecated("Use suspend setTarget()", level = DeprecationLevel.ERROR)
-        override fun setTargetAsync(target: Target, callback: SplitVoidCallback) = throw UnsupportedOperationException()
-        override fun addEventListener(listener: io.split.client.thin.SplitEventListener) = throw UnsupportedOperationException()
-        override     fun track(trafficType: String, eventType: String, value: Double?, properties: Map<String, Any?>?) = Unit
-        override suspend fun destroy() = Unit
-        @Deprecated("Use suspend destroy()", level = DeprecationLevel.ERROR)
-        override fun destroyAsync(callback: SplitVoidCallback) = throw UnsupportedOperationException()
-        override suspend fun flush() = Unit
-        @Deprecated("Use suspend flush()", level = DeprecationLevel.ERROR)
-        override fun flushAsync(callback: SplitVoidCallback) = throw UnsupportedOperationException()
-    }
+    val lastClient = StubSplitClient()
 
     override fun getOrCreate(target: Target): SplitClient {
         lastGetOrCreateTarget = target
@@ -131,4 +183,39 @@ private class FakeAsyncBridge : AsyncBridgeLike {
     override fun close() {
         closeCalled = true
     }
+}
+
+private class StubSplitClient : SplitClient {
+    override fun getTreatment(flag: String, evaluationOptions: EvaluationOptions?): EvaluationResult =
+        throw UnsupportedOperationException()
+
+    override fun getTreatments(flags: List<String>, evaluationOptions: EvaluationOptions?): List<EvaluationResult> =
+        throw UnsupportedOperationException()
+
+    override fun getTreatmentsByFlagSets(flagSets: List<String>, evaluationOptions: EvaluationOptions?): List<EvaluationResult> =
+        throw UnsupportedOperationException()
+
+    override suspend fun setTarget(target: Target) = Unit
+
+    @Deprecated("Use suspend setTarget()", level = DeprecationLevel.ERROR)
+    override fun setTargetAsync(target: Target, callback: SplitVoidCallback): Unit =
+        throw UnsupportedOperationException()
+
+    override fun addEventListener(listener: SplitEventListener): Unit =
+        throw UnsupportedOperationException()
+
+    override fun track(trafficType: String, eventType: String, value: Double?, properties: Map<String, Any?>?) =
+        throw UnsupportedOperationException()
+
+    override suspend fun destroy() = Unit
+
+    @Deprecated("Use suspend destroy()", level = DeprecationLevel.ERROR)
+    override fun destroyAsync(callback: SplitVoidCallback): Unit =
+        throw UnsupportedOperationException()
+
+    override suspend fun flush(): Unit = throw UnsupportedOperationException()
+
+    @Deprecated("Use suspend flush()", level = DeprecationLevel.ERROR)
+    override fun flushAsync(callback: SplitVoidCallback): Unit =
+        throw UnsupportedOperationException()
 }
