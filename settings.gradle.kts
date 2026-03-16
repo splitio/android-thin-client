@@ -35,7 +35,7 @@ listOf<String>(
     "http",
     "http-api",
     "backoff",
-    "tracker"
+    "tracker",
 ).forEach {
     include(":$it")
     project(":$it").projectDir = file("android-client/$it")
