@@ -26,7 +26,7 @@ include(":android-thin-client")
 include(":api")
 include(":auth")
 include(":retryable-http-client")
-include(":consumer-androidtest")
+include(":e2e")
 // include(":sdk")
 
 listOf<String>(
