@@ -47,10 +47,13 @@ android {
 dependencies {
     api(project(":fallback"))
     implementation(project(":logger"))
+    implementation(project(":events-tracking"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
+    testImplementation("org.mockito:mockito-core:4.8.0")
+    testImplementation("org.mockito:mockito-inline:4.8.0")
 }
 
 jacoco {

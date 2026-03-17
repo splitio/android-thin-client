@@ -16,6 +16,13 @@ val fusedIncludedProjects = listOf(
     project(":api"),
     project(":fallback"),
     project(":logger"),
+    project(":backoff"),
+    project(":http"),
+    project(":http-api"),
+    project(":retryable-http-client"),
+    project(":tracker"),
+    project(":events-tracking"),
+    project(":auth"),
 )
 
 dependencies {
