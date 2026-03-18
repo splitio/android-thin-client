@@ -96,7 +96,7 @@ internal class DefaultSecureHttpClient(
         val params = mutableListOf<String>()
         params.add("user=${encode(target.matchingKey)}")
         target.bucketingKey?.let { params.add("bucketingKey=${encode(it)}") }
-        params.add("changeNumber=${filters?.changeNumber ?: -1}")
+        params.add("since=${filters?.changeNumber ?: -1}")
         filters?.flagNames?.forEach { params.add("flags=${encode(it)}") }
         filters?.flagSets?.forEach { params.add("sets=${encode(it)}") }
         filters?.withDynamicConfig?.let { params.add("withDynamicConfig=$it") }

@@ -110,7 +110,7 @@ class DefaultSecureHttpClientFetchEvaluationsTest {
 
         client.fetchEvaluations(testDefaultTarget, filters)
 
-        assertTrue(http.lastRequest?.uri?.query?.contains("changeNumber=42") == true)
+        assertTrue(http.lastRequest?.uri?.query?.contains("since=42") == true)
     }
 
     @Test
@@ -119,7 +119,7 @@ class DefaultSecureHttpClientFetchEvaluationsTest {
 
         client.fetchEvaluations(testDefaultTarget, null)
 
-        assertTrue(http.lastRequest?.uri?.query?.contains("changeNumber=-1") == true)
+        assertTrue(http.lastRequest?.uri?.query?.contains("since=-1") == true)
     }
 
     @Test
