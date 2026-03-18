@@ -143,23 +143,61 @@ class DefaultSecureHttpClientFetchEvaluationsTest {
     }
 
     @Test
-    fun `withConfig sent as query param when set`() = runTest {
-        val filters = EvaluationFilters(flagNames = null, flagSets = null, withConfig = true)
+    fun `withDynamicConfig sent as query param when set`() = runTest {
+        val filters = EvaluationFilters(flagNames = null, flagSets = null, withDynamicConfig = true)
         val (client, _, http) = makeClient()
 
         client.fetchEvaluations(testDefaultTarget, filters)
 
-        assertTrue(http.lastRequest?.uri?.query?.contains("withConfig=true") == true)
+        assertTrue(http.lastRequest?.uri?.query?.contains("withDynamicConfig=true") == true)
     }
 
     @Test
-    fun `withConfig not sent when null`() = runTest {
-        val filters = EvaluationFilters(flagNames = null, flagSets = null, withConfig = null)
+    fun `withDynamicConfig not sent when null`() = runTest {
+        val filters = EvaluationFilters(flagNames = null, flagSets = null, withDynamicConfig = null)
         val (client, _, http) = makeClient()
 
         client.fetchEvaluations(testDefaultTarget, filters)
 
-        assertFalse(http.lastRequest?.uri?.query?.contains("withConfig") == true)
+        assertFalse(http.lastRequest?.uri?.query?.contains("withDynamicConfig") == true)
+    }
+
+    @Test
+    fun `bucketingKey sent as query param when non-null`() = runTest {
+        val target = EvaluationTarget(matchingKey = "user-1", bucketingKey = "bucket-key", attributes = null)
+        val (client, _, http) = makeClient()
+
+        client.fetchEvaluations(target, testDefaultFilters)
+
+        assertTrue(http.lastRequest?.uri?.query?.contains("bucketingKey=bucket-key") == true)
+    }
+
+    @Test
+    fun `bucketingKey not sent when null`() = runTest {
+        val target = EvaluationTarget(matchingKey = "user-1", bucketingKey = null, attributes = null)
+        val (client, _, http) = makeClient()
+
+        client.fetchEvaluations(target, testDefaultFilters)
+
+        assertFalse(http.lastRequest?.uri?.query?.contains("bucketingKey") == true)
+    }
+
+    @Test
+    fun `X-Harness-FME-SDK-Thin-Version header sent on evaluations`() = runTest {
+        val (client, _, http) = makeClient(sdkVersion = "test-version")
+
+        client.fetchEvaluations(testDefaultTarget, testDefaultFilters)
+
+        assertEquals("android-thin-test-version", http.lastRequest?.headers?.get("X-Harness-FME-SDK-Thin-Version"))
+    }
+
+    @Test
+    fun `X-Harness-FME-SDK-Thin-Spec header sent on evaluations`() = runTest {
+        val (client, _, http) = makeClient()
+
+        client.fetchEvaluations(testDefaultTarget, testDefaultFilters)
+
+        assertEquals(SDK_SPEC_VERSION, http.lastRequest?.headers?.get("X-Harness-FME-SDK-Thin-Spec"))
     }
 
     @Test

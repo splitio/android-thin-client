@@ -4,6 +4,7 @@ import io.split.client.thin.http.RequestCategory
 import io.split.client.thin.internal.auth.JwtCredential
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class DefaultSecureHttpClientPostEventsTest {
@@ -54,6 +55,16 @@ class DefaultSecureHttpClientPostEventsTest {
         client.postEvents("payload")
 
         assertEquals("Bearer events-token", http.lastRequest?.headers?.get("Authorization"))
+    }
+
+    @Test
+    fun `SDK version headers not sent on events`() = runTest {
+        val (client, _, http) = makeClient()
+
+        client.postEvents("payload")
+
+        assertNull(http.lastRequest?.headers?.get("X-Harness-FME-SDK-Thin-Version"))
+        assertNull(http.lastRequest?.headers?.get("X-Harness-FME-SDK-Thin-Spec"))
     }
 
     @Test

@@ -27,6 +27,7 @@ internal fun makeClient(
     authProvider: FakeAuthProvider = FakeAuthProvider(),
     httpClient: FakeRetryableHttpClient = FakeRetryableHttpClient(),
     impressionsMode: Int? = null,
+    sdkVersion: String = "test-version",
 ): Triple<DefaultSecureHttpClient, FakeAuthProvider, FakeRetryableHttpClient> = Triple(
     DefaultSecureHttpClient(
         authProvider = authProvider,
@@ -36,6 +37,7 @@ internal fun makeClient(
         eventsUrl = testEventsUrl,
         telemetryUrl = testTelemetryUrl,
         impressionsMode = impressionsMode,
+        sdkVersion = sdkVersion,
     ),
     authProvider,
     httpClient,

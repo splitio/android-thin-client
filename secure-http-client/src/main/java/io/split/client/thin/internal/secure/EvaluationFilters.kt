@@ -4,5 +4,5 @@ internal data class EvaluationFilters(
     val flagNames: Set<String>?,
     val flagSets: Set<String>?,
     val changeNumber: Long = -1,
-    val withConfig: Boolean? = null,
+    val withDynamicConfig: Boolean? = null,
 )

@@ -17,12 +17,22 @@ internal class DefaultSecureHttpClient(
     private val eventsUrl: String,
     private val telemetryUrl: String,
     private val impressionsMode: Int? = null,
+    private val sdkVersion: String = SDK_VERSION,
 ) : SecureHttpClient {
 
     override suspend fun fetchEvaluations(target: EvaluationTarget, filters: EvaluationFilters?): HttpResponse {
         val uri = buildEvaluationsUri(target, filters)
         val body = buildEvaluationsBody(target)
-        return executeAuthenticated(target, uri, HttpMethod.POST, body, RequestCategory.EVALUATIONS)
+        val token = authProvider.credential(target).token
+        val request = buildEvaluationsRequest(uri, body, token)
+        val response = retryableHttpClient.execute(request, RequestCategory.EVALUATIONS)
+        if (response.getHttpStatus() == HTTP_UNAUTHORIZED) {
+            authProvider.invalidate(target)
+            val freshToken = authProvider.credential(target).token
+            val retryRequest = buildEvaluationsRequest(uri, body, freshToken)
+            return retryableHttpClient.execute(retryRequest, RequestCategory.EVALUATIONS)
+        }
+        return response
     }
 
     override suspend fun postEvents(payload: String): HttpResponse {
@@ -69,13 +79,27 @@ internal class DefaultSecureHttpClient(
         )
     }
 
+    private fun buildEvaluationsRequest(uri: URI, body: String, token: String): HttpRequestDescriptor {
+        return HttpRequestDescriptor(
+            uri = uri,
+            method = HttpMethod.POST,
+            body = body,
+            headers = mapOf(
+                "Authorization" to "Bearer $token",
+                "X-Harness-FME-SDK-Thin-Version" to "android-thin-$sdkVersion",
+                "X-Harness-FME-SDK-Thin-Spec" to SDK_SPEC_VERSION,
+            ),
+        )
+    }
+
     private fun buildEvaluationsUri(target: EvaluationTarget, filters: EvaluationFilters?): URI {
         val params = mutableListOf<String>()
         params.add("user=${encode(target.matchingKey)}")
+        target.bucketingKey?.let { params.add("bucketingKey=${encode(it)}") }
         params.add("changeNumber=${filters?.changeNumber ?: -1}")
         filters?.flagNames?.forEach { params.add("flags=${encode(it)}") }
         filters?.flagSets?.forEach { params.add("sets=${encode(it)}") }
-        filters?.withConfig?.let { params.add("withConfig=$it") }
+        filters?.withDynamicConfig?.let { params.add("withDynamicConfig=$it") }
         impressionsMode?.let { params.add("impressionsMode=$it") }
         return URI("$evaluationsUrl?${params.joinToString("&")}")
     }
