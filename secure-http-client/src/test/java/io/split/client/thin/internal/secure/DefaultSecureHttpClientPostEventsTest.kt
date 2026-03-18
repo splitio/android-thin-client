@@ -1,7 +1,6 @@
 package io.split.client.thin.internal.secure
 
 import io.split.client.thin.http.RequestCategory
-import io.split.client.thin.internal.auth.JwtCredential
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -37,24 +36,22 @@ class DefaultSecureHttpClientPostEventsTest {
     }
 
     @Test
-    fun `uses default target for JWT`() = runTest {
+    fun `injects SDK key as Authorization Bearer header`() = runTest {
+        val (client, _, http) = makeClient(sdkKey = "my-sdk-key")
+
+        client.postEvents("payload")
+
+        assertEquals("Bearer my-sdk-key", http.lastRequest?.headers?.get("Authorization"))
+    }
+
+    @Test
+    fun `does not call auth provider`() = runTest {
         val auth = FakeAuthProvider()
         val (client, _, _) = makeClient(auth)
 
         client.postEvents("payload")
 
-        assertEquals(testDefaultTarget, auth.lastCredentialTarget)
-    }
-
-    @Test
-    fun `injects Authorization Bearer header`() = runTest {
-        val jwt = JwtCredential("events-token", 9999999L, false)
-        val auth = FakeAuthProvider(credential = jwt)
-        val (client, _, http) = makeClient(auth)
-
-        client.postEvents("payload")
-
-        assertEquals("Bearer events-token", http.lastRequest?.headers?.get("Authorization"))
+        assertNull(auth.lastCredentialTarget)
     }
 
     @Test
@@ -67,18 +64,4 @@ class DefaultSecureHttpClientPostEventsTest {
         assertNull(http.lastRequest?.headers?.get("X-Harness-FME-SDK-Thin-Spec"))
     }
 
-    @Test
-    fun `on 401 invalidates and retries once`() = runTest {
-        val auth = FakeAuthProvider(credentialSequence = listOf(
-            JwtCredential("t1", 9999999L, false),
-            JwtCredential("t2", 9999999L, false),
-        ))
-        val http = FakeRetryableHttpClient(statusCodeSequence = listOf(401, 200))
-        val (client, _, _) = makeClient(auth, http)
-
-        client.postEvents("payload")
-
-        assertEquals(1, auth.invalidateCallCount)
-        assertEquals(2, http.executeCallCount)
-    }
 }

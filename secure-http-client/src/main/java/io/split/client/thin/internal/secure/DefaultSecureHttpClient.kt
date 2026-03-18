@@ -16,6 +16,7 @@ internal class DefaultSecureHttpClient(
     private val evaluationsUrl: String,
     private val eventsUrl: String,
     private val telemetryUrl: String,
+    private val sdkKey: String,
     private val impressionsMode: Int? = null,
     private val sdkVersion: String = SDK_VERSION,
 ) : SecureHttpClient {
@@ -36,7 +37,8 @@ internal class DefaultSecureHttpClient(
     }
 
     override suspend fun postEvents(payload: String): HttpResponse {
-        return executeAuthenticated(defaultTarget, URI(eventsUrl), HttpMethod.POST, payload, RequestCategory.EVENTS)
+        val request = buildRequest(URI(eventsUrl), HttpMethod.POST, payload, sdkKey)
+        return retryableHttpClient.execute(request, RequestCategory.EVENTS)
     }
 
     override suspend fun postTelemetry(payload: String): HttpResponse {
