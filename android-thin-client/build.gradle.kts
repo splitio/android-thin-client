@@ -13,6 +13,7 @@ androidFusedLibrary {
     }
 }
 val fusedIncludedProjects = listOf(
+    project(":models"),
     project(":api"),
     project(":fallback"),
     project(":logger"),
@@ -24,6 +25,7 @@ val fusedIncludedProjects = listOf(
     project(":events-tracking"),
     project(":auth"),
     project(":secure-http-client"),
+    project(":evaluation"),
 )
 
 dependencies {

@@ -45,6 +45,7 @@ android {
 }
 
 dependencies {
+    api(project(":models"))
     api(project(":fallback"))
     implementation(project(":logger"))
     implementation(project(":events-tracking"))

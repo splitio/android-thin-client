@@ -23,11 +23,13 @@ dependencyResolutionManagement {
 rootProject.name = "android-thin-client"
 
 include(":android-thin-client")
+include(":models")
 include(":api")
 include(":auth")
 include(":retryable-http-client")
 include(":secure-http-client")
 include(":events-tracking")
+include(":evaluation")
 include(":e2e")
 // include(":sdk")
 
