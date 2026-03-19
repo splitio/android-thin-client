@@ -192,7 +192,7 @@ class DefaultSplitClientTest {
 
     @Test
     fun `addEventListener registers all event handlers with events manager`() {
-        val listener = mock(SplitEventListener::class.java)
+        val listener = object : SplitEventListener() {}
 
         client.addEventListener(listener)
 
