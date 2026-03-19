@@ -15,7 +15,7 @@ internal class DefaultCredentialFetcher<T : AuthParamsProvider>(
 
     override suspend fun fetchCredential(target: T): JwtCredential {
         val request = HttpRequestDescriptor(
-            uri = URI.create("$serviceUrl/v1/auth?users=${target.getUsers()}"),
+            uri = URI.create("$serviceUrl/?users=${target.getUsers()}"),
             method = HttpMethod.GET,
             headers = mapOf("Authorization" to "Bearer $sdkKey"),
         )

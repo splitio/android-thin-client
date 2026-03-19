@@ -29,7 +29,7 @@ class DefaultCredentialFetcherTest {
 
         fetcher.fetchCredential(target)
 
-        assertEquals("$serviceUrl/v1/auth?users=user-1", fakeClient.lastRequest?.uri?.toString())
+        assertEquals("$serviceUrl/?users=user-1", fakeClient.lastRequest?.uri?.toString())
     }
 
     @Test
