@@ -189,6 +189,18 @@ class DefaultSplitClientTest {
         assertEquals("flag_a", results[0].flag)
         assertEquals("on", results[0].treatment)
     }
+
+    @Test
+    fun `addEventListener registers all event handlers with events manager`() {
+        val listener = mock(SplitEventListener::class.java)
+
+        client.addEventListener(listener)
+
+        verify(eventsManager).register(eq(SplitEvent.SDK_READY), any())
+        verify(eventsManager).register(eq(SplitEvent.SDK_READY_FROM_CACHE), any())
+        verify(eventsManager).register(eq(SplitEvent.SDK_READY_TIMEOUT), any())
+        verify(eventsManager).register(eq(SplitEvent.SDK_UPDATE), any())
+    }
 }
 
 // Test fakes
@@ -226,14 +238,5 @@ class FakeEvaluationRepository : EvaluationRepository {
 
     override suspend fun setTarget(target: Target, filters: EvaluationFilters?) {
         setTargetCalls.add(target to filters)
-    fun `addEventListener registers all event handlers with events manager`() {
-        val listener = mock(SplitEventListener::class.java)
-
-        client.addEventListener(listener)
-
-        verify(eventsManager).register(eq(SplitEvent.SDK_READY), any())
-        verify(eventsManager).register(eq(SplitEvent.SDK_READY_FROM_CACHE), any())
-        verify(eventsManager).register(eq(SplitEvent.SDK_READY_TIMEOUT), any())
-        verify(eventsManager).register(eq(SplitEvent.SDK_UPDATE), any())
     }
 }

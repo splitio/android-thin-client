@@ -31,7 +31,14 @@ class DefaultClientFactoryTest {
     @Test
     fun `invoke registers one Observer with composite observer`() {
         val compositeObserver = FakeCompositeObserver()
-        val factory = DefaultClientFactory(compositeObserver, TestScope())
+        val factory = DefaultClientFactory(
+            compositeObserver,
+            TestScope(),
+            readStorage = FakeEvaluationReadStorage(),
+            evaluationRepository = FakeEvaluationRepository(),
+            filters = null,
+            fallbackCalculator = null,
+        )
 
         factory(Target(Key("user-1")))
 
