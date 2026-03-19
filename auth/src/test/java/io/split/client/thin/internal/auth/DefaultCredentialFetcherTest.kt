@@ -14,13 +14,13 @@ class DefaultCredentialFetcherTest {
 
     private val sdkKey = "my-sdk-key"
     private val serviceUrl = "https://auth.split.io"
-    private val target = "user-1"
+    private val target = TestTarget("user-1")
     private val stubbedCredential = JwtCredential("token", 9999999L, false)
     private val fakeDeserializer = TokenDeserializer { stubbedCredential }
 
-    private fun makeFetcher(responseJson: String = "{}"): Pair<DefaultCredentialFetcher<String>, FakeHttpClient> {
+    private fun makeFetcher(responseJson: String = "{}"): Pair<DefaultCredentialFetcher<TestTarget>, FakeHttpClient> {
         val fakeClient = FakeHttpClient(responseJson)
-        return DefaultCredentialFetcher<String>(fakeClient, sdkKey, serviceUrl, fakeDeserializer) to fakeClient
+        return DefaultCredentialFetcher<TestTarget>(fakeClient, sdkKey, serviceUrl, fakeDeserializer) to fakeClient
     }
 
     @Test
@@ -29,7 +29,7 @@ class DefaultCredentialFetcherTest {
 
         fetcher.fetchCredential(target)
 
-        assertEquals("$serviceUrl/v1/auth", fakeClient.lastRequest?.uri?.toString())
+        assertEquals("$serviceUrl/v1/auth?users=user-1", fakeClient.lastRequest?.uri?.toString())
     }
 
     @Test

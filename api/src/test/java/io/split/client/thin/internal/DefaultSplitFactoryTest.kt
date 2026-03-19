@@ -15,6 +15,8 @@ import io.split.client.thin.internal.evaluation.EvaluationKey
 import io.split.client.thin.internal.evaluation.EvaluationProvider
 import io.split.client.thin.internal.evaluation.EvaluationWriteStorage
 import io.split.client.thin.internal.evaluation.FetchReason
+import io.split.client.thin.internal.evaluation.StoredEvaluation
+import io.split.client.thin.internal.evaluation.toEvaluationKey
 import io.split.client.thin.SplitClientConfig
 import io.split.client.thin.internal.observer.DefaultCompositeObserver
 import io.split.client.thin.internal.observer.ObservableEvent
@@ -98,10 +100,28 @@ class DefaultSplitFactoryTest {
     }
 
     @Test
-    fun `getManager returns default manager with hardcoded names`() {
-        val manager = factory.getManager()
+    fun `getManager returns flag names from storage for default target`() {
+        val storage = FakeEvaluationReadStorage()
+        val defaultEvalKey = defaultTarget.toEvaluationKey()
+        storage.store("flag-a", defaultEvalKey, StoredEvaluation(EvaluationResult("flag-a", "on"), emptySet()))
+        storage.store("flag-b", defaultEvalKey, StoredEvaluation(EvaluationResult("flag-b", "off"), emptySet()))
 
-        assertEquals(listOf("hardcoded-flag-1", "hardcoded-flag-2"), manager.flagNames)
+        val testFactory = DefaultSplitFactory(
+            defaultTarget = defaultTarget,
+            config = null,
+            asyncBridge = fakeAsyncBridge,
+            evaluationRepository = FakeEvaluationRepository(),
+            filters = null,
+            readStorage = storage,
+            clientManager = fakeClientManager,
+        )
+
+        assertEquals(setOf("flag-a", "flag-b"), testFactory.getManager().flagNames.toSet())
+    }
+
+    @Test
+    fun `getManager returns empty list when no flags are stored`() {
+        assertEquals(emptyList<String>(), factory.getManager().flagNames)
     }
 
     @Test

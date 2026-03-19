@@ -7,7 +7,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
 
-internal class DefaultAuthProvider<T : Any>(
+internal class DefaultAuthProvider<T : AuthParamsProvider>(
     private val credentialFetcher: CredentialFetcher<T>,
     private val credentialStorage: CredentialStorage<T>,
 ) : AuthProvider<T> {

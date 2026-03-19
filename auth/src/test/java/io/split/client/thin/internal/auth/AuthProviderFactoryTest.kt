@@ -12,7 +12,7 @@ class AuthProviderFactoryTest {
     fun `createAuthProvider returns an AuthProvider`() {
         val retryableHttpClient = mock(RetryableHttpClient::class.java)
 
-        val result = createAuthProvider<Any>(
+        val result = createAuthProvider<TestTarget>(
             retryableHttpClient = retryableHttpClient,
             sdkKey = "test-sdk-key",
             authUrl = "https://auth.example.com",
