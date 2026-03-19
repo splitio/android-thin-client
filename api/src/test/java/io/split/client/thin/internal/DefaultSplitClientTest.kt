@@ -7,14 +7,18 @@ import io.split.client.thin.Key
 import io.split.client.thin.SplitEvent
 import io.split.client.thin.SplitEventListener
 import io.split.client.thin.Target
+import io.split.client.thin.internal.evaluation.EvaluationFetchCoordinator
 import io.split.client.thin.internal.evaluation.EvaluationKey
+import io.split.client.thin.internal.evaluation.EvaluationPeriodicScheduler
 import io.split.client.thin.internal.evaluation.EvaluationReadStorage
 import io.split.client.thin.internal.evaluation.EvaluationRepository
+import io.split.client.thin.internal.evaluation.FetchReason
 import io.split.client.thin.internal.evaluation.StoredEvaluation
 import io.split.client.thin.internal.secure.EvaluationFilters
 import io.split.client.thin.internal.sdkevents.SdkInternalEvent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.mockito.ArgumentMatchers.any
@@ -32,6 +36,7 @@ class DefaultSplitClientTest {
     private lateinit var readStorage: FakeEvaluationReadStorage
     private lateinit var evaluationRepository: FakeEvaluationRepository
     private lateinit var eventsManager: EventsManager<SplitEvent, SdkInternalEvent, Any?>
+    private lateinit var periodicScheduler: FakeEvaluationPeriodicScheduler
     private lateinit var client: DefaultSplitClient
 
     @Before
@@ -40,6 +45,7 @@ class DefaultSplitClientTest {
         target = Target(Key("user-1"))
         readStorage = FakeEvaluationReadStorage()
         evaluationRepository = FakeEvaluationRepository()
+        periodicScheduler = FakeEvaluationPeriodicScheduler()
         eventsManager = mock(EventsManager::class.java) as EventsManager<SplitEvent, SdkInternalEvent, Any?>
         `when`(eventsManager.eventAlreadyTriggered(SplitEvent.SDK_READY)).thenReturn(true)
         client = DefaultSplitClient(
@@ -50,6 +56,7 @@ class DefaultSplitClientTest {
             evaluationRepository = evaluationRepository,
             filters = null,
             fallbackCalculator = null,
+            periodicScheduler = periodicScheduler,
         )
     }
 
@@ -109,6 +116,21 @@ class DefaultSplitClientTest {
         client.destroy()
         verify(tracker).enableTracking(false)
         verify(eventsManager).destroy()
+    }
+
+    @Test
+    fun `destroy stops periodic scheduler`() = runTest {
+        client.destroy()
+        assertTrue(periodicScheduler.stopCalled)
+    }
+
+    @Test
+    fun `setTarget calls updateTarget on periodic scheduler`() = runTest {
+        val newTarget = Target(Key("user-2"))
+        client.setTarget(newTarget)
+
+        assertEquals(1, periodicScheduler.updateTargetCalls.size)
+        assertEquals(newTarget, periodicScheduler.updateTargetCalls[0].first)
     }
 
     @Test
@@ -227,6 +249,23 @@ class FakeEvaluationReadStorage : EvaluationReadStorage {
         storedEvaluations.keys.filter { it.second == evalKey }.map { it.first }.toSet()
 
     override fun lastChangeNumber(evalKey: EvaluationKey): Long = -1L
+}
+
+class FakeEvaluationPeriodicScheduler : EvaluationPeriodicScheduler {
+    val startCalls = mutableListOf<Pair<Target, EvaluationFilters?>>()
+    val updateTargetCalls = mutableListOf<Pair<Target, EvaluationFilters?>>()
+    var stopCalled = false
+
+    override fun start(target: Target, filters: EvaluationFilters?) { startCalls.add(target to filters) }
+    override fun pause() {}
+    override fun resume() {}
+    override fun stop() { stopCalled = true }
+    override fun updateTarget(target: Target, filters: EvaluationFilters?) { updateTargetCalls.add(target to filters) }
+}
+
+class FakeEvaluationFetchCoordinator : EvaluationFetchCoordinator {
+    override suspend fun fetchIfNeeded(evalKey: EvaluationKey, filters: EvaluationFilters?, reason: FetchReason): Boolean = false
+    override suspend fun awaitPending(evalKey: EvaluationKey) {}
 }
 
 class FakeEvaluationRepository : EvaluationRepository {

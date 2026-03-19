@@ -4,6 +4,9 @@ import io.split.android.client.fallback.FallbackTreatmentsCalculator
 import io.split.client.thin.SplitClient
 import io.split.client.thin.Target
 import io.split.client.thin.events.EventTracker
+import io.split.client.thin.internal.evaluation.DefaultEvaluationPeriodicScheduler
+import io.split.client.thin.internal.evaluation.EvaluationFetchCoordinator
+import io.split.client.thin.internal.evaluation.EvaluationPeriodicScheduler
 import io.split.client.thin.internal.evaluation.EvaluationReadStorage
 import io.split.client.thin.internal.evaluation.EvaluationRepository
 import io.split.client.thin.internal.secure.EvaluationFilters
@@ -21,6 +24,11 @@ internal class DefaultClientFactory(
     private val evaluationRepository: EvaluationRepository,
     private val filters: EvaluationFilters?,
     private val fallbackCalculator: FallbackTreatmentsCalculator?,
+    private val fetchCoordinator: EvaluationFetchCoordinator,
+    private val schedulerIntervalMillis: Long,
+    private val schedulerFactory: (EvaluationFetchCoordinator, Long) -> EvaluationPeriodicScheduler = { coordinator, intervalMillis ->
+        DefaultEvaluationPeriodicScheduler(fetchCoordinator = coordinator, intervalMillis = intervalMillis)
+    },
 ) : (Target) -> SplitClient {
 
     override fun invoke(target: Target): SplitClient {
@@ -31,9 +39,11 @@ internal class DefaultClientFactory(
         )
         val eventManagerObserver = EventManagerObserver(eventsManager)
         compositeObserver.register(eventManagerObserver)
+        val scheduler = schedulerFactory(fetchCoordinator, schedulerIntervalMillis)
+        scheduler.start(target, filters)
         return DefaultSplitClient(
             target, eventTracker.tracker, readStorage,
-            evaluationRepository, filters, fallbackCalculator, eventsManager
+            evaluationRepository, filters, fallbackCalculator, eventsManager, scheduler
         )
     }
 }

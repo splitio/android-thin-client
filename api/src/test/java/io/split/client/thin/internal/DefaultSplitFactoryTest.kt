@@ -10,6 +10,7 @@ import io.split.client.thin.SplitEventListener
 import io.split.client.thin.SplitVoidCallback
 import io.split.client.thin.Target
 import io.split.client.thin.internal.evaluation.DefaultEvaluationFetchCoordinator
+import io.split.client.thin.internal.evaluation.EvaluationFetchCoordinator
 import io.split.client.thin.internal.evaluation.EvaluationChange
 import io.split.client.thin.internal.evaluation.EvaluationKey
 import io.split.client.thin.internal.evaluation.EvaluationProvider
@@ -58,6 +59,8 @@ class DefaultSplitFactoryTest {
             evaluationRepository = FakeEvaluationRepository(),
             filters = null,
             readStorage = FakeEvaluationReadStorage(),
+            fetchCoordinator = FakeEvaluationFetchCoordinator(),
+            schedulerIntervalMillis = 3_600_000L,
             clientManager = fakeClientManager,
         )
     }
@@ -113,6 +116,8 @@ class DefaultSplitFactoryTest {
             evaluationRepository = FakeEvaluationRepository(),
             filters = null,
             readStorage = storage,
+            fetchCoordinator = FakeEvaluationFetchCoordinator(),
+            schedulerIntervalMillis = 3_600_000L,
             clientManager = fakeClientManager,
         )
 
@@ -139,6 +144,8 @@ class DefaultSplitFactoryTest {
             evaluationRepository = FakeEvaluationRepository(),
             filters = null,
             readStorage = FakeEvaluationReadStorage(),
+            fetchCoordinator = FakeEvaluationFetchCoordinator(),
+            schedulerIntervalMillis = 3_600_000L,
             scope = testScope,
             clientManager = customManager,
         )
@@ -166,6 +173,8 @@ class DefaultSplitFactoryTest {
             evaluationRepository = FakeEvaluationRepository(),
             filters = null,
             readStorage = FakeEvaluationReadStorage(),
+            fetchCoordinator = FakeEvaluationFetchCoordinator(),
+            schedulerIntervalMillis = 3_600_000L,
             scope = testScope,
             clientManager = customManager,
         )
@@ -187,6 +196,8 @@ class DefaultSplitFactoryTest {
             evaluationRepository = FakeEvaluationRepository(),
             filters = null,
             readStorage = FakeEvaluationReadStorage(),
+            fetchCoordinator = FakeEvaluationFetchCoordinator(),
+            schedulerIntervalMillis = 3_600_000L,
             scope = testScope,
         )
 
@@ -325,6 +336,8 @@ class SdkReadyTimeoutTest {
             evaluationRepository = FakeEvaluationRepository(),
             filters = null,
             readStorage = FakeEvaluationReadStorage(),
+            fetchCoordinator = FakeEvaluationFetchCoordinator(),
+            schedulerIntervalMillis = 3_600_000L,
             scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
             compositeObserver = compositeObserver,
             clientManager = FakeClientManager(),
@@ -350,6 +363,8 @@ class SdkReadyTimeoutTest {
             evaluationRepository = FakeEvaluationRepository(),
             filters = null,
             readStorage = FakeEvaluationReadStorage(),
+            fetchCoordinator = FakeEvaluationFetchCoordinator(),
+            schedulerIntervalMillis = 3_600_000L,
             scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
             compositeObserver = compositeObserver,
             clientManager = FakeClientManager(),
