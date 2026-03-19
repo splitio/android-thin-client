@@ -8,7 +8,7 @@ import kotlinx.coroutines.launch
 
 internal class DefaultClientManager(
     private val scope: CoroutineScope,
-    private val clientFactory: (Target) -> SplitClient = DefaultClientFactory(),
+    private val clientFactory: (Target) -> SplitClient,
 ) : ClientManager {
 
     private val clients = HashMap<Key, SplitClient>()

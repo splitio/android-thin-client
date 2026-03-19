@@ -1,5 +1,6 @@
 package io.split.client.thin.internal
 
+import io.split.android.client.fallback.FallbackTreatmentsCalculator
 import io.split.android.client.tracker.Tracker
 import io.split.client.thin.EvaluationOptions
 import io.split.client.thin.EvaluationResult
@@ -7,10 +8,19 @@ import io.split.client.thin.SplitClient
 import io.split.client.thin.SplitEventListener
 import io.split.client.thin.SplitVoidCallback
 import io.split.client.thin.Target
+import io.split.client.thin.internal.evaluation.EvaluationReadStorage
+import io.split.client.thin.internal.evaluation.EvaluationRepository
+import io.split.client.thin.internal.evaluation.StoredEvaluation
+import io.split.client.thin.internal.evaluation.toEvaluationKey
+import io.split.client.thin.internal.secure.EvaluationFilters
 
 internal class DefaultSplitClient(
     initialTarget: Target,
-    private val tracker: Tracker
+    private val tracker: Tracker,
+    private val readStorage: EvaluationReadStorage,
+    private val evaluationRepository: EvaluationRepository,
+    private val filters: EvaluationFilters?,
+    private val fallbackCalculator: FallbackTreatmentsCalculator?,
 ) : SplitClient {
 
     @Volatile
@@ -20,25 +30,32 @@ internal class DefaultSplitClient(
         flag: String,
         evaluationOptions: EvaluationOptions?
     ): EvaluationResult {
-        TODO("Not yet implemented")
+        val evalKey = target.toEvaluationKey()
+        val stored = readStorage.get(flag, evalKey)
+        return resolveResult(flag, stored)
     }
 
     override fun getTreatments(
         flags: List<String>,
         evaluationOptions: EvaluationOptions?
     ): List<EvaluationResult> {
-        TODO("Not yet implemented")
+        val evalKey = target.toEvaluationKey()
+        val results = readStorage.get(flags.toSet(), evalKey)
+        return flags.map { flag -> resolveResult(flag, results[flag]) }
     }
 
     override fun getTreatmentsByFlagSets(
         flagSets: List<String>,
         evaluationOptions: EvaluationOptions?
     ): List<EvaluationResult> {
-        TODO("Not yet implemented")
+        val evalKey = target.toEvaluationKey()
+        val results = readStorage.getByFlagSets(flagSets.toSet(), evalKey)
+        return results.values.map { stored -> resolveResult(stored.result.flag, stored) }
     }
 
     override suspend fun setTarget(target: Target) {
         this.target = target
+        evaluationRepository.setTarget(target, filters)
     }
 
     override fun setTargetAsync(
@@ -86,5 +103,20 @@ internal class DefaultSplitClient(
 
     override fun flushAsync(callback: SplitVoidCallback) {
         TODO("Not yet implemented")
+    }
+
+    private fun resolveResult(flag: String, stored: StoredEvaluation?): EvaluationResult {
+        if (stored != null && stored.result.treatment != CONTROL) {
+            return stored.result
+        }
+        val fallback = fallbackCalculator?.resolve(flag)
+        if (fallback != null && fallback.treatment != CONTROL) {
+            return EvaluationResult(flag, fallback.treatment, fallback.config, fallback.label)
+        }
+        return stored?.result ?: EvaluationResult(flag, CONTROL)
+    }
+
+    companion object {
+        private const val CONTROL = "control"
     }
 }

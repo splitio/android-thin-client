@@ -9,7 +9,12 @@ class DefaultClientFactoryTest {
 
     @Test
     fun `invoke creates DefaultSplitClient`() {
-        val factory = DefaultClientFactory()
+        val factory = DefaultClientFactory(
+            readStorage = FakeEvaluationReadStorage(),
+            evaluationRepository = FakeEvaluationRepository(),
+            filters = null,
+            fallbackCalculator = null,
+        )
 
         val client = factory(Target(Key("user-1")))
 

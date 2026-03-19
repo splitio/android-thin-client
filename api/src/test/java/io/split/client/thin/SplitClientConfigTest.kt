@@ -153,18 +153,35 @@ class SplitClientConfigTest {
 
     @Test
     fun `DSL creates config with serviceEndpoints in sync block`() {
-        val endpoints = SplitClientConfig.ServiceEndpoints("https://api.example.com")
         val config = splitClientConfig {
             sync {
-                serviceEndpoints = endpoints
+                serviceEndpoints {
+                    authUrl = "https://auth.example.com"
+                    evaluationsUrl = "https://evaluations.example.com"
+                    eventsUrl = "https://events.example.com"
+                    telemetryUrl = "https://telemetry.example.com"
+                }
             }
         }
-        assertEquals(endpoints, config.sync.serviceEndpoints)
+        assertEquals(
+            SplitClientConfig.ServiceEndpoints(
+                authUrl = "https://auth.example.com",
+                evaluationsUrl = "https://evaluations.example.com",
+                eventsUrl = "https://events.example.com",
+                telemetryUrl = "https://telemetry.example.com",
+            ),
+            config.sync.serviceEndpoints
+        )
     }
 
     @Test
     fun `builder and DSL produce equal configs for same inputs`() {
-        val endpoints = SplitClientConfig.ServiceEndpoints("https://api.example.com")
+        val endpoints = SplitClientConfig.ServiceEndpoints(
+            authUrl = "https://auth.example.com",
+            evaluationsUrl = "https://evaluations.example.com",
+            eventsUrl = "https://events.example.com",
+            telemetryUrl = "https://telemetry.example.com",
+        )
         val fallbacks = FallbackTreatmentsConfiguration.builder()
             .byFlagStrings(mapOf("flag_a" to "on"))
             .build()
@@ -199,7 +216,12 @@ class SplitClientConfigTest {
                 mode = SplitClientConfig.SyncMode.POLLING
                 evaluationRefreshRate = 300
                 pushRate = 60
-                serviceEndpoints = endpoints
+                serviceEndpoints {
+                    authUrl = endpoints.authUrl
+                    evaluationsUrl = endpoints.evaluationsUrl
+                    eventsUrl = endpoints.eventsUrl
+                    telemetryUrl = endpoints.telemetryUrl
+                }
             }
             storage {
                 prefix = "parity_prefix"

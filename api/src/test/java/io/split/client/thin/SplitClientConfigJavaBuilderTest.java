@@ -104,7 +104,12 @@ public class SplitClientConfigJavaBuilderTest {
     @Test
     public void builderCanSetServiceEndpoints() {
         SplitClientConfig.ServiceEndpoints endpoints =
-                new SplitClientConfig.ServiceEndpoints("https://api.example.com");
+                new SplitClientConfig.ServiceEndpoints(
+                        "https://auth.example.com",
+                        "https://evaluations.example.com",
+                        "https://events.example.com",
+                        "https://telemetry.example.com"
+                );
 
         SplitClientConfig config = new SplitClientConfig.Builder()
                 .sync(new SplitClientConfig.SyncConfig.Builder()
