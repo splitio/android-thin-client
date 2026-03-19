@@ -241,7 +241,7 @@ private class FakeAsyncBridge : AsyncBridgeLike {
     }
 }
 
-// Verify FetchReason → ObservableEventType mapping by exercising the production onFetchSuccess callback
+// Verify FetchReason → ObservableEventType mapping by exercising the production onEvaluationsUpdated callback
 class FetchReasonObserverMappingTest {
 
     private val evalKey = EvaluationKey(Key("user-1"))
@@ -254,10 +254,10 @@ class FetchReasonObserverMappingTest {
             },
             readStorage = FakeEvaluationReadStorage(),
             writeStorage = object : EvaluationWriteStorage {
-                override fun upsert(change: EvaluationChange) {}
+                override fun upsert(change: EvaluationChange): Boolean = true
                 override fun clear(evalKey: EvaluationKey) {}
             },
-            onFetchSuccess = { reason ->
+            onEvaluationsUpdated = { reason ->
                 val eventType = when (reason) {
                     FetchReason.INITIALIZATION, FetchReason.TARGET_SWITCH ->
                         ObservableEventType.EVAL_STORAGE_UPDATED

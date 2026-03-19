@@ -8,10 +8,11 @@ class DefaultEvaluationFetchCoordinator(
     private val provider: EvaluationProvider,
     private val readStorage: EvaluationReadStorage,
     private val writeStorage: EvaluationWriteStorage,
-    private val onFetchSuccess: (FetchReason) -> Unit = {},
+    private val onEvaluationsUpdated: (FetchReason) -> Unit = {},
 ) : EvaluationFetchCoordinator {
 
     private val pending = ConcurrentHashMap<EvaluationKey, CompletableDeferred<Unit>>()
+    private val fetchedKeys = ConcurrentHashMap.newKeySet<EvaluationKey>()
 
     override suspend fun fetchIfNeeded(evalKey: EvaluationKey, filters: EvaluationFilters?, reason: FetchReason): Boolean {
         val deferred = CompletableDeferred<Unit>()
@@ -24,8 +25,9 @@ class DefaultEvaluationFetchCoordinator(
             val enrichedFilters = filters?.copy(changeNumber = changeNumber)
                 ?: EvaluationFilters(flagNames = null, flagSets = null, changeNumber = changeNumber)
             val change = provider.fetch(evalKey, enrichedFilters)
-            writeStorage.upsert(change)
-            onFetchSuccess(reason)
+            val updated = writeStorage.upsert(change)
+            val isFirstFetch = fetchedKeys.add(evalKey)
+            if (isFirstFetch || updated) onEvaluationsUpdated(reason)
             deferred.complete(Unit)
             return true
         } catch (t: Throwable) {

@@ -9,6 +9,6 @@ interface EvaluationReadStorage {
 }
 
 interface EvaluationWriteStorage {
-    fun upsert(change: EvaluationChange)
+    fun upsert(change: EvaluationChange): Boolean
     fun clear(evalKey: EvaluationKey)
 }

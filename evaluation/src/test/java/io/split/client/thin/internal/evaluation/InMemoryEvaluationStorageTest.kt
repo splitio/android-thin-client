@@ -149,6 +149,38 @@ class InMemoryEvaluationStorageTest {
     }
 
     @Test
+    fun `upsert skips update when changeNumber is same and flags are the same`() {
+        storage.upsert(change(key1, 5L, storedEval("flag-a", "on")))
+        storage.upsert(change(key1, 5L, storedEval("flag-a", "off")))
+
+        assertEquals("on", storage.get("flag-a", key1)?.result?.treatment)
+    }
+
+    @Test
+    fun `upsert skips update when changeNumber is older`() {
+        storage.upsert(change(key1, 5L, storedEval("flag-a", "on")))
+        storage.upsert(change(key1, 3L, storedEval("flag-a", "off")))
+
+        assertEquals("on", storage.get("flag-a", key1)?.result?.treatment)
+    }
+
+    @Test
+    fun `upsert applies update when flag is added with same changeNumber`() {
+        storage.upsert(change(key1, 5L, storedEval("flag-a", "on")))
+        storage.upsert(change(key1, 5L, storedEval("flag-a", "on"), storedEval("flag-b", "off")))
+
+        assertEquals("off", storage.get("flag-b", key1)?.result?.treatment)
+    }
+
+    @Test
+    fun `upsert applies update when flag is removed with same changeNumber`() {
+        storage.upsert(change(key1, 5L, storedEval("flag-a", "on"), storedEval("flag-b", "off")))
+        storage.upsert(change(key1, 5L, storedEval("flag-a", "on")))
+
+        assertNull(storage.get("flag-b", key1))
+    }
+
+    @Test
     fun `different attributes mean different storage entries`() {
         storage.upsert(change(key1, 1L, storedEval("flag-a", "on")))
         storage.upsert(change(keyWithAttrs, 2L, storedEval("flag-a", "off")))

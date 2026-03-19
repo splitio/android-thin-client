@@ -71,7 +71,7 @@ object SplitFactoryBuilder {
             provider = provider,
             readStorage = storage,
             writeStorage = storage,
-            onFetchSuccess = { reason ->
+            onEvaluationsUpdated = { reason ->
                 val eventType = when (reason) {
                     FetchReason.INITIALIZATION, FetchReason.TARGET_SWITCH ->
                         ObservableEventType.EVAL_STORAGE_UPDATED
