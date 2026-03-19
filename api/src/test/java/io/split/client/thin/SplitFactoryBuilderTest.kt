@@ -1,15 +1,12 @@
 package io.split.client.thin
 
-import io.split.android.client.network.HttpClient
 import io.split.client.thin.internal.DefaultSplitFactory
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import org.mockito.Mockito.mock
 
 class SplitFactoryBuilderTest {
 
-    private val httpClient = mock(HttpClient::class.java)
     private val sdkKey = SdkKey("test-sdk-key")
     private val defaultTarget = Target(Key("user-1"))
 
@@ -18,7 +15,6 @@ class SplitFactoryBuilderTest {
         val factory = SplitFactoryBuilder.build(
             sdkKey = sdkKey,
             defaultTarget = defaultTarget,
-            httpClient = httpClient,
         )
 
         assertNotNull(factory)
@@ -42,7 +38,6 @@ class SplitFactoryBuilderTest {
             sdkKey = sdkKey,
             defaultTarget = defaultTarget,
             config = config,
-            httpClient = httpClient,
         )
 
         assertNotNull(factory)

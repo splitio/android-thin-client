@@ -1,6 +1,6 @@
 package io.split.client.thin
 
-import io.split.android.client.network.HttpClient
+import io.split.android.client.network.HttpClientImpl
 import io.split.client.thin.http.createRetryableHttpClient
 import io.split.client.thin.internal.AsyncBridge
 import io.split.client.thin.internal.DefaultSplitFactory
@@ -37,8 +37,8 @@ object SplitFactoryBuilder {
         sdkKey: SdkKey,
         defaultTarget: Target,
         config: SplitClientConfig? = null,
-        httpClient: HttpClient,
     ): SplitFactory {
+        val httpClient = HttpClientImpl.Builder().build()
         val retryableHttpClient = createRetryableHttpClient(httpClient)
         val endpoints = config?.sync?.serviceEndpoints
 
