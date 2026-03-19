@@ -207,6 +207,26 @@ class ConsumerAndroidTest {
     }
 
     @Test
+    fun addEventListenerAcceptsListenerWithoutThrowing() {
+        // TODO: fully test once MockWebServer is set up — verify that registered callbacks
+        //  (onReady, onReadyFromCache, onUpdate) are actually invoked when the server delivers
+        //  the corresponding events.
+        val factory = SplitFactoryBuilder.build(
+            sdkKey = SdkKey("key"),
+            defaultTarget = Target(key = Key("user"))
+        )
+        val client = factory.getClient()
+        val listener = object : SplitEventListener() {
+            override fun onReady(client: SplitClient, metadata: SdkReadyMetadata) {}
+            override fun onReadyFromCache(client: SplitClient, metadata: SdkReadyMetadata) {}
+            override fun onUpdate(client: SplitClient, metadata: SdkUpdateMetadata) {}
+        }
+
+        client.addEventListener(listener)
+        // No exception thrown — listener registration is wired correctly.
+    }
+
+    @Test
     fun sdkReadyMetadata() {
         val meta = SdkReadyMetadata()
         assertNotNull(meta)

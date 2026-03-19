@@ -1,10 +1,12 @@
 package io.split.client.thin.internal
 
 import io.split.android.client.fallback.FallbackTreatmentsCalculator
+import io.harness.events.EventsManager
 import io.split.android.client.tracker.Tracker
 import io.split.client.thin.EvaluationOptions
 import io.split.client.thin.EvaluationResult
 import io.split.client.thin.SplitClient
+import io.split.client.thin.SplitEvent
 import io.split.client.thin.SplitEventListener
 import io.split.client.thin.SplitVoidCallback
 import io.split.client.thin.Target
@@ -13,6 +15,8 @@ import io.split.client.thin.internal.evaluation.EvaluationRepository
 import io.split.client.thin.internal.evaluation.StoredEvaluation
 import io.split.client.thin.internal.evaluation.toEvaluationKey
 import io.split.client.thin.internal.secure.EvaluationFilters
+import io.split.client.thin.internal.sdkevents.SdkInternalEvent
+import io.split.client.thin.internal.sdkevents.SplitEventListenerAdapter
 
 internal class DefaultSplitClient(
     initialTarget: Target,
@@ -21,6 +25,7 @@ internal class DefaultSplitClient(
     private val evaluationRepository: EvaluationRepository,
     private val filters: EvaluationFilters?,
     private val fallbackCalculator: FallbackTreatmentsCalculator?,
+    private val eventsManager: EventsManager<SplitEvent, SdkInternalEvent, Any?>,
 ) : SplitClient {
 
     @Volatile
@@ -66,7 +71,7 @@ internal class DefaultSplitClient(
     }
 
     override fun addEventListener(listener: SplitEventListener) {
-        TODO("Not yet implemented")
+        SplitEventListenerAdapter(listener, this).registerAll(eventsManager)
     }
 
     override fun track(
@@ -77,7 +82,7 @@ internal class DefaultSplitClient(
     ) {
         val javaProperties =
             runCatching { properties as? Map<String, Any> }.getOrDefault(emptyMap())
-        val isSdkReady = true // TODO
+        val isSdkReady = eventsManager.eventAlreadyTriggered(SplitEvent.SDK_READY)
         tracker.track(
             target.key.matchingKey,
             trafficType,
@@ -91,6 +96,7 @@ internal class DefaultSplitClient(
     override suspend fun destroy() {
         flush()
         tracker.enableTracking(false)
+        eventsManager.destroy()
     }
 
     override fun destroyAsync(callback: SplitVoidCallback) {

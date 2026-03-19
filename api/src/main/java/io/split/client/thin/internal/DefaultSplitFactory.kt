@@ -11,6 +11,7 @@ import io.split.client.thin.Target
 import io.split.client.thin.internal.evaluation.EvaluationReadStorage
 import io.split.client.thin.internal.evaluation.EvaluationRepository
 import io.split.client.thin.internal.secure.EvaluationFilters
+import io.split.client.thin.internal.observer.DefaultCompositeObserver
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -25,9 +26,12 @@ internal class DefaultSplitFactory(
     private val filters: EvaluationFilters?,
     private val readStorage: EvaluationReadStorage,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+    private val compositeObserver: DefaultCompositeObserver = DefaultCompositeObserver(),
     private val clientManager: ClientManager = DefaultClientManager(
         scope,
         DefaultClientFactory(
+            compositeObserver,
+            scope,
             readStorage,
             evaluationRepository,
             filters,
@@ -54,6 +58,7 @@ internal class DefaultSplitFactory(
     }
 
     override suspend fun destroy() {
+        compositeObserver.unregisterAll()
         clientManager.destroyAll()
         scope.cancel()
         asyncBridge.close()

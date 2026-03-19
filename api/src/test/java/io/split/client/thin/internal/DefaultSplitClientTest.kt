@@ -1,29 +1,37 @@
 package io.split.client.thin.internal
 
+import io.harness.events.EventsManager
 import io.split.android.client.tracker.Tracker
 import io.split.client.thin.EvaluationResult
 import io.split.client.thin.Key
+import io.split.client.thin.SplitEvent
+import io.split.client.thin.SplitEventListener
 import io.split.client.thin.Target
 import io.split.client.thin.internal.evaluation.EvaluationKey
 import io.split.client.thin.internal.evaluation.EvaluationReadStorage
 import io.split.client.thin.internal.evaluation.EvaluationRepository
 import io.split.client.thin.internal.evaluation.StoredEvaluation
 import io.split.client.thin.internal.secure.EvaluationFilters
+import io.split.client.thin.internal.sdkevents.SdkInternalEvent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
+import org.mockito.ArgumentMatchers.any
 import org.mockito.ArgumentMatchers.eq
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
+import org.mockito.Mockito.`when`
 
+@Suppress("UNCHECKED_CAST")
 class DefaultSplitClientTest {
 
     private lateinit var tracker: Tracker
     private lateinit var target: Target
     private lateinit var readStorage: FakeEvaluationReadStorage
     private lateinit var evaluationRepository: FakeEvaluationRepository
+    private lateinit var eventsManager: EventsManager<SplitEvent, SdkInternalEvent, Any?>
     private lateinit var client: DefaultSplitClient
 
     @Before
@@ -32,9 +40,12 @@ class DefaultSplitClientTest {
         target = Target(Key("user-1"))
         readStorage = FakeEvaluationReadStorage()
         evaluationRepository = FakeEvaluationRepository()
+        eventsManager = mock(EventsManager::class.java) as EventsManager<SplitEvent, SdkInternalEvent, Any?>
+        `when`(eventsManager.eventAlreadyTriggered(SplitEvent.SDK_READY)).thenReturn(true)
         client = DefaultSplitClient(
             initialTarget = target,
             tracker = tracker,
+            eventsManager = eventsManager,
             readStorage = readStorage,
             evaluationRepository = evaluationRepository,
             filters = null,
@@ -71,6 +82,22 @@ class DefaultSplitClientTest {
     }
 
     @Test
+    fun `track passes isSdkReady from events manager`() {
+        `when`(eventsManager.eventAlreadyTriggered(SplitEvent.SDK_READY)).thenReturn(false)
+
+        client.track("user", "purchase", 0.0, null)
+
+        verify(tracker).track(
+            eq("user-1"),
+            eq("user"),
+            eq("purchase"),
+            eq(0.0),
+            eq(null),
+            eq(false),
+        )
+    }
+
+    @Test
     fun `flush is no-op`() = runTest {
         client.flush()
         verify(tracker, never()).enableTracking(false)
@@ -78,9 +105,10 @@ class DefaultSplitClientTest {
     }
 
     @Test
-    fun `destroy disables tracking`() = runTest {
+    fun `destroy disables tracking and destroys events manager`() = runTest {
         client.destroy()
         verify(tracker).enableTracking(false)
+        verify(eventsManager).destroy()
     }
 
     @Test
@@ -198,5 +226,14 @@ class FakeEvaluationRepository : EvaluationRepository {
 
     override suspend fun setTarget(target: Target, filters: EvaluationFilters?) {
         setTargetCalls.add(target to filters)
+    fun `addEventListener registers all event handlers with events manager`() {
+        val listener = mock(SplitEventListener::class.java)
+
+        client.addEventListener(listener)
+
+        verify(eventsManager).register(eq(SplitEvent.SDK_READY), any())
+        verify(eventsManager).register(eq(SplitEvent.SDK_READY_FROM_CACHE), any())
+        verify(eventsManager).register(eq(SplitEvent.SDK_READY_TIMEOUT), any())
+        verify(eventsManager).register(eq(SplitEvent.SDK_UPDATE), any())
     }
 }

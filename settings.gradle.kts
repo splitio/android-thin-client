@@ -25,6 +25,7 @@ rootProject.name = "android-thin-client"
 include(":android-thin-client")
 include(":models")
 include(":api")
+include(":observer")
 include(":auth")
 include(":retryable-http-client")
 include(":secure-http-client")
@@ -40,6 +41,7 @@ listOf<String>(
     "http-api",
     "backoff",
     "tracker",
+    "events",
 ).forEach {
     include(":$it")
     project(":$it").projectDir = file("android-client/$it")

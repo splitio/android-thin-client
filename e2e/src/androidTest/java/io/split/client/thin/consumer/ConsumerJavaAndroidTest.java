@@ -183,6 +183,31 @@ public class ConsumerJavaAndroidTest {
     }
 
     @Test
+    public void addEventListenerAcceptsListenerWithoutThrowing() {
+        // TODO: fully test once MockWebServer is set up — verify that registered callbacks
+        //  (onReady, onReadyFromCache, onUpdate) are actually invoked when the server delivers
+        //  the corresponding events.
+        SplitFactory factory = SplitFactoryBuilder.build(
+                new SdkKey("key"),
+                new Target(new Key("user"))
+        );
+        SplitClient client = factory.getClient(null);
+        SplitEventListener listener = new SplitEventListener() {
+            @Override
+            public void onReady(SplitClient client, SdkReadyMetadata metadata) {}
+
+            @Override
+            public void onReadyFromCache(SplitClient client, SdkReadyMetadata metadata) {}
+
+            @Override
+            public void onUpdate(SplitClient client, @Nullable SdkUpdateMetadata metadata) {}
+        };
+
+        client.addEventListener(listener);
+        // No exception thrown — listener registration is wired correctly.
+    }
+
+    @Test
     public void sdkReadyMetadata() {
         SdkReadyMetadata meta = new SdkReadyMetadata();
         assertNotNull(meta);

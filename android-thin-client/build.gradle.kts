@@ -26,6 +26,8 @@ val fusedIncludedProjects = listOf(
     project(":auth"),
     project(":secure-http-client"),
     project(":evaluation"),
+    project(":observer"),
+    project(":events"),
 )
 
 dependencies {
