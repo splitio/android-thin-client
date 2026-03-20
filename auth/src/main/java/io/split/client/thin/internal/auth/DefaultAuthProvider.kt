@@ -10,6 +10,10 @@ import java.util.concurrent.ConcurrentHashMap
 internal class DefaultAuthProvider<T : AuthParamsProvider>(
     private val credentialFetcher: CredentialFetcher<T>,
     private val credentialStorage: CredentialStorage<T>,
+    private val onJwtRequestStarted: (target: T) -> Unit = {},
+    private val onJwtReturnedFromStorage: (credential: JwtCredential, target: T) -> Unit = { _, _ -> },
+    private val onJwtExpiredOrInvalid: (target: T) -> Unit = {},
+    private val onJwtStored: (credential: JwtCredential, target: T) -> Unit = { _, _ -> },
 ) : AuthProvider<T> {
 
     private val mutex = Mutex()
@@ -17,9 +21,13 @@ internal class DefaultAuthProvider<T : AuthParamsProvider>(
     private val inFlight = ConcurrentHashMap<T, Deferred<JwtCredential>>()
 
     override suspend fun credential(target: T): JwtCredential {
+        onJwtRequestStarted(target)
         val stored = credentialStorage.getCredential(target)
         if (stored != null && !stored.isExpired()) {
+            onJwtReturnedFromStorage(stored, target)
             return stored
+        } else if (stored != null) {
+            onJwtExpiredOrInvalid(target)
         }
 
         return fetchDeduplicated(target)
@@ -38,6 +46,7 @@ internal class DefaultAuthProvider<T : AuthParamsProvider>(
                 async {
                     val credential = credentialFetcher.fetchCredential(target)
                     credentialStorage.saveCredential(credential, target)
+                    onJwtStored(credential, target)
                     credential
                 }.also { newDeferred ->
                     // Always clear the entry when this deferred completes (success, failure, or cancellation).

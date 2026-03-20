@@ -18,13 +18,21 @@ fun EvaluationKey.toEvaluationTarget() = EvaluationTarget(
 class DefaultEvaluationProvider(
     private val secureHttpClient: SecureHttpClient,
     private val deserializer: EvaluationResponseDeserializer,
+    private val onEvalFetchStarted: (evalKey: EvaluationKey) -> Unit = {},
+    private val onEvalDeserializeFailed: (evalKey: EvaluationKey, error: Exception) -> Unit = { _, _ -> },
 ) : EvaluationProvider {
 
     override suspend fun fetch(evalKey: EvaluationKey, filters: EvaluationFilters?): EvaluationChange {
+        onEvalFetchStarted(evalKey)
         val target = evalKey.toEvaluationTarget()
         val response = secureHttpClient.fetchEvaluations(target, filters)
         val body = response.getData()
         check(!body.isNullOrEmpty()) { "Empty or null response body from evaluations endpoint" }
-        return deserializer.deserialize(body, evalKey)
+        return try {
+            deserializer.deserialize(body, evalKey)
+        } catch (e: Exception) {
+            onEvalDeserializeFailed(evalKey, e)
+            throw e
+        }
     }
 }
