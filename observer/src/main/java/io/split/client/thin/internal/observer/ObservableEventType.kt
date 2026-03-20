@@ -19,7 +19,6 @@ object ObservableEventType {
     const val FLUSH_COMPLETED = "flush_completed"
     const val FLUSH_FAILED = "flush_failed"
     const val EVALUATION_REQUESTED = "evaluation_requested"
-    const val TIMEOUT_REACHED = "timeout_reached"
 
     // Auth events
     const val JWT_REQUEST_STARTED = "jwt_request_started"
@@ -53,7 +52,7 @@ object ObservableEventType {
     const val EVENTS_POST_SUCCEEDED = "events_post_succeeded"
     const val EVENTS_POST_FAILED = "events_post_failed"
 
-    // App lifecycle (mobile)
+    // App lifecycle
     const val SYNC_PAUSED = "sync_paused"
     const val SYNC_RESUMED = "sync_resumed"
 

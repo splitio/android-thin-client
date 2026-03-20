@@ -41,7 +41,6 @@ class LoggerObserver(
             ObservableEventType.FLUSH_COMPLETED to Level.INFO,
             ObservableEventType.FLUSH_FAILED to Level.WARN,
             ObservableEventType.EVALUATION_REQUESTED to Level.DEBUG,
-            ObservableEventType.TIMEOUT_REACHED to Level.DEBUG,
             ObservableEventType.SDK_READY_TIMEOUT_REACHED to Level.DEBUG,
             // Auth
             ObservableEventType.JWT_REQUEST_STARTED to Level.DEBUG,
@@ -96,7 +95,6 @@ class LoggerObserver(
             ObservableEventType.FLUSH_COMPLETED to "Flush completed for [entity]",
             ObservableEventType.FLUSH_FAILED to "Flush failed [entity]",
             ObservableEventType.EVALUATION_REQUESTED to "Evaluation requested for [flagName]",
-            ObservableEventType.TIMEOUT_REACHED to "SDK timeout reached",
             ObservableEventType.SDK_READY_TIMEOUT_REACHED to "SDK timeout reached",
             // Auth
             ObservableEventType.JWT_REQUEST_STARTED to "JWT requested",
