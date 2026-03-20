@@ -1,18 +1,18 @@
 package io.split.client.thin.internal.observer
 
-import io.split.android.client.utils.logger.Logger
-
-class LoggerObserver : Observer {
+class LoggerObserver(
+    private val logger: Logger
+) : Observer {
 
     override fun notifyEvent(event: ObservableEvent) {
         val template = MESSAGES[event.type] ?: event.type
         val message = interpolateProperties(template, event.properties)
         when (LOG_LEVELS[event.type]) {
-            Level.DEBUG -> Logger.d(message)
-            Level.INFO -> Logger.i(message)
-            Level.WARN -> Logger.w(message)
-            Level.ERROR -> Logger.e(message)
-            null -> Logger.d(message)
+            Level.DEBUG -> logger.debug(message)
+            Level.INFO -> logger.info(message)
+            Level.WARN -> logger.warn(message)
+            Level.ERROR -> logger.error(message)
+            null -> logger.debug(message)
         }
     }
 

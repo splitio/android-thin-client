@@ -1,27 +1,20 @@
 package io.split.client.thin.internal.observer
 
-import io.split.android.client.utils.logger.LogPrinter
-import io.split.android.client.utils.logger.Logger
-import io.split.android.client.utils.logger.SplitLogLevel
 import org.junit.Before
 import org.junit.Test
-import org.mockito.ArgumentMatchers.anyString
 import org.mockito.ArgumentMatchers.contains
-import org.mockito.ArgumentMatchers.isNull
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.verify
 
 class LoggerObserverTest {
 
-    private lateinit var printer: LogPrinter
+    private lateinit var logger: Logger
     private lateinit var observer: LoggerObserver
 
     @Before
     fun setUp() {
-        printer = mock(LogPrinter::class.java)
-        Logger.instance().setLevel(SplitLogLevel.VERBOSE)
-        Logger.instance().setPrinter(printer)
-        observer = LoggerObserver()
+        logger = mock(Logger::class.java)
+        observer = LoggerObserver(logger)
     }
 
     @Test
@@ -33,7 +26,7 @@ class LoggerObserverTest {
 
         observer.notifyEvent(event)
 
-        verify(printer).i(anyString(), contains("Init started"), isNull())
+        verify(logger).info(contains("Init started"))
     }
 
     @Test
@@ -45,7 +38,7 @@ class LoggerObserverTest {
 
         observer.notifyEvent(event)
 
-        verify(printer).d(anyString(), contains("Client created"), isNull())
+        verify(logger).debug(contains("Client created"))
     }
 
     @Test
@@ -57,7 +50,7 @@ class LoggerObserverTest {
 
         observer.notifyEvent(event)
 
-        verify(printer).w(anyString(), contains("Flush failed"), isNull())
+        verify(logger).warn(contains("Flush failed"))
     }
 
     @Test
@@ -69,7 +62,7 @@ class LoggerObserverTest {
 
         observer.notifyEvent(event)
 
-        verify(printer).e(anyString(), contains("JWT fetch failed"), isNull())
+        verify(logger).error(contains("JWT fetch failed"))
     }
 
     @Test
@@ -81,7 +74,7 @@ class LoggerObserverTest {
 
         observer.notifyEvent(event)
 
-        verify(printer).d(anyString(), contains("unknown_event"), isNull())
+        verify(logger).debug(contains("unknown_event"))
     }
 
     @Test
@@ -93,7 +86,7 @@ class LoggerObserverTest {
 
         observer.notifyEvent(event)
 
-        verify(printer).i(anyString(), contains("Init started"), isNull())
+        verify(logger).info(contains("Init started"))
     }
 
     @Test
@@ -108,7 +101,7 @@ class LoggerObserverTest {
 
         observer.notifyEvent(event)
 
-        verify(printer).d(anyString(), contains("HTTP AUTH GET started"), isNull())
+        verify(logger).debug(contains("HTTP AUTH GET started"))
     }
 
     @Test
@@ -120,7 +113,7 @@ class LoggerObserverTest {
 
         observer.notifyEvent(event)
 
-        verify(printer).d(anyString(), contains("JWT returned from cache"), isNull())
+        verify(logger).debug(contains("JWT returned from cache"))
     }
 
     @Test
@@ -135,7 +128,7 @@ class LoggerObserverTest {
 
         observer.notifyEvent(event)
 
-        verify(printer).w(anyString(), contains("HTTP failed for AUTH (status: 503), retrying"), isNull())
+        verify(logger).warn(contains("HTTP failed for AUTH (status: 503), retrying"))
     }
 
     @Test
@@ -150,7 +143,7 @@ class LoggerObserverTest {
 
         observer.notifyEvent(event)
 
-        verify(printer).e(anyString(), contains("HTTP failed for EVALUATIONS (status: 401)"), isNull())
+        verify(logger).error(contains("HTTP failed for EVALUATIONS (status: 401)"))
     }
 
     @Test
@@ -162,7 +155,7 @@ class LoggerObserverTest {
 
         observer.notifyEvent(event)
 
-        verify(printer).i(anyString(), contains("JWT fetched (push enabled: true)"), isNull())
+        verify(logger).info(contains("JWT fetched (push enabled: true)"))
     }
 
     @Test
@@ -174,7 +167,7 @@ class LoggerObserverTest {
 
         observer.notifyEvent(event)
 
-        verify(printer).d(anyString(), contains("Polling (rate: 3600s)"), isNull())
+        verify(logger).debug(contains("Polling (rate: 3600s)"))
     }
 
     @Test
@@ -186,6 +179,6 @@ class LoggerObserverTest {
 
         observer.notifyEvent(event)
 
-        verify(printer).i(anyString(), contains("Evaluations fetch requested (reason: PERIODIC)"), isNull())
+        verify(logger).info(contains("Evaluations fetch requested (reason: PERIODIC)"))
     }
 }

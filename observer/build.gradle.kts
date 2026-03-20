@@ -30,7 +30,6 @@ android {
 }
 
 dependencies {
-    implementation(project(":logger"))
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.mockito:mockito-core:4.8.0")
     testImplementation("org.mockito:mockito-inline:4.8.0")
