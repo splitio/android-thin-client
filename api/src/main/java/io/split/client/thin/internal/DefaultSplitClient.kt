@@ -11,7 +11,6 @@ import io.split.client.thin.SplitEventListener
 import io.split.client.thin.SplitVoidCallback
 import io.split.client.thin.Target
 import io.split.client.thin.internal.evaluation.EvaluationPeriodicScheduler
-import io.split.client.thin.internal.evaluation.EvaluationReadStorage
 import io.split.client.thin.internal.evaluation.EvaluationRepository
 import io.split.client.thin.internal.evaluation.StoredEvaluation
 import io.split.client.thin.internal.evaluation.toEvaluationKey
@@ -22,7 +21,6 @@ import io.split.client.thin.internal.sdkevents.SplitEventListenerAdapter
 internal class DefaultSplitClient(
     initialTarget: Target,
     private val tracker: Tracker,
-    private val readStorage: EvaluationReadStorage,
     private val evaluationRepository: EvaluationRepository,
     private val filters: EvaluationFilters?,
     private val fallbackCalculator: FallbackTreatmentsCalculator?,
@@ -38,7 +36,7 @@ internal class DefaultSplitClient(
         evaluationOptions: EvaluationOptions?
     ): EvaluationResult {
         val evalKey = target.toEvaluationKey()
-        val stored = readStorage.get(flag, evalKey)
+        val stored = evaluationRepository.getTreatment(evalKey, flag)
         return resolveResult(flag, stored)
     }
 
@@ -47,7 +45,7 @@ internal class DefaultSplitClient(
         evaluationOptions: EvaluationOptions?
     ): List<EvaluationResult> {
         val evalKey = target.toEvaluationKey()
-        val results = readStorage.get(flags.toSet(), evalKey)
+        val results = evaluationRepository.getTreatments(evalKey, flags.toSet())
         return flags.map { flag -> resolveResult(flag, results[flag]) }
     }
 
@@ -56,7 +54,7 @@ internal class DefaultSplitClient(
         evaluationOptions: EvaluationOptions?
     ): List<EvaluationResult> {
         val evalKey = target.toEvaluationKey()
-        val results = readStorage.getByFlagSets(flagSets.toSet(), evalKey)
+        val results = evaluationRepository.getTreatmentsByFlagSets(evalKey, flagSets.toSet())
         return results.values.map { stored -> resolveResult(stored.result.flag, stored) }
     }
 

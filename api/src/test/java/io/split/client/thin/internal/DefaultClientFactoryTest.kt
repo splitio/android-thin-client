@@ -19,7 +19,6 @@ class DefaultClientFactoryTest {
         val factory = DefaultClientFactory(
             FakeCompositeObserver(),
             TestScope(),
-            readStorage = FakeEvaluationReadStorage(),
             evaluationRepository = FakeEvaluationRepository(),
             filters = null,
             fallbackCalculator = null,
@@ -39,7 +38,6 @@ class DefaultClientFactoryTest {
         val factory = DefaultClientFactory(
             FakeCompositeObserver(),
             TestScope(),
-            readStorage = FakeEvaluationReadStorage(),
             evaluationRepository = FakeEvaluationRepository(),
             filters = null,
             fallbackCalculator = null,
@@ -60,7 +58,6 @@ class DefaultClientFactoryTest {
         val factory = DefaultClientFactory(
             compositeObserver,
             TestScope(),
-            readStorage = FakeEvaluationReadStorage(),
             evaluationRepository = FakeEvaluationRepository(),
             filters = null,
             fallbackCalculator = null,

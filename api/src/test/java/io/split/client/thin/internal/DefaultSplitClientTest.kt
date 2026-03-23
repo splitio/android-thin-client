@@ -33,7 +33,6 @@ class DefaultSplitClientTest {
 
     private lateinit var tracker: Tracker
     private lateinit var target: Target
-    private lateinit var readStorage: FakeEvaluationReadStorage
     private lateinit var evaluationRepository: FakeEvaluationRepository
     private lateinit var eventsManager: EventsManager<SplitEvent, SdkInternalEvent, Any?>
     private lateinit var periodicScheduler: FakeEvaluationPeriodicScheduler
@@ -43,7 +42,6 @@ class DefaultSplitClientTest {
     fun setUp() {
         tracker = mock(Tracker::class.java)
         target = Target(Key("user-1"))
-        readStorage = FakeEvaluationReadStorage()
         evaluationRepository = FakeEvaluationRepository()
         periodicScheduler = FakeEvaluationPeriodicScheduler()
         eventsManager = mock(EventsManager::class.java) as EventsManager<SplitEvent, SdkInternalEvent, Any?>
@@ -52,7 +50,6 @@ class DefaultSplitClientTest {
             initialTarget = target,
             tracker = tracker,
             eventsManager = eventsManager,
-            readStorage = readStorage,
             evaluationRepository = evaluationRepository,
             filters = null,
             fallbackCalculator = null,
@@ -163,7 +160,7 @@ class DefaultSplitClientTest {
     fun `getTreatment returns stored evaluation result`() {
         val evalKey = EvaluationKey(target.key)
         val stored = StoredEvaluation(EvaluationResult("my_flag", "on"))
-        readStorage.store("my_flag", evalKey, stored)
+        evaluationRepository.store("my_flag", evalKey, stored)
 
         val result = client.getTreatment("my_flag")
 
@@ -182,8 +179,8 @@ class DefaultSplitClientTest {
     @Test
     fun `getTreatments returns results for multiple flags`() {
         val evalKey = EvaluationKey(target.key)
-        readStorage.store("flag_a", evalKey, StoredEvaluation(EvaluationResult("flag_a", "on")))
-        readStorage.store("flag_b", evalKey, StoredEvaluation(EvaluationResult("flag_b", "off")))
+        evaluationRepository.store("flag_a", evalKey, StoredEvaluation(EvaluationResult("flag_a", "on")))
+        evaluationRepository.store("flag_b", evalKey, StoredEvaluation(EvaluationResult("flag_b", "off")))
 
         val results = client.getTreatments(listOf("flag_a", "flag_b", "flag_c"))
 
@@ -196,11 +193,11 @@ class DefaultSplitClientTest {
     @Test
     fun `getTreatmentsByFlagSets returns results matching flag sets`() {
         val evalKey = EvaluationKey(target.key)
-        readStorage.store(
+        evaluationRepository.store(
             "flag_a", evalKey,
             StoredEvaluation(EvaluationResult("flag_a", "on"), flagSets = setOf("set_1"))
         )
-        readStorage.store(
+        evaluationRepository.store(
             "flag_b", evalKey,
             StoredEvaluation(EvaluationResult("flag_b", "off"), flagSets = setOf("set_2"))
         )
@@ -265,17 +262,31 @@ class FakeEvaluationPeriodicScheduler : EvaluationPeriodicScheduler {
 
 class FakeEvaluationFetchCoordinator : EvaluationFetchCoordinator {
     override suspend fun fetchIfNeeded(evalKey: EvaluationKey, filters: EvaluationFilters?, reason: FetchReason): Boolean = false
-    override suspend fun awaitPending(evalKey: EvaluationKey) {}
 }
 
 class FakeEvaluationRepository : EvaluationRepository {
+    private val storedEvaluations = mutableMapOf<Pair<String, EvaluationKey>, StoredEvaluation>()
     val setTargetCalls = mutableListOf<Pair<Target, EvaluationFilters?>>()
 
-    override suspend fun getTreatment(evalKey: EvaluationKey, flag: String): StoredEvaluation? = null
-    override suspend fun getTreatments(evalKey: EvaluationKey, flags: Set<String>): Map<String, StoredEvaluation> = emptyMap()
-    override suspend fun getTreatmentsByFlagSets(evalKey: EvaluationKey, flagSets: Set<String>): Map<String, StoredEvaluation> = emptyMap()
+    fun store(flag: String, evalKey: EvaluationKey, stored: StoredEvaluation) {
+        storedEvaluations[flag to evalKey] = stored
+    }
+
+    override fun getTreatment(evalKey: EvaluationKey, flag: String): StoredEvaluation? =
+        storedEvaluations[flag to evalKey]
+
+    override fun getTreatments(evalKey: EvaluationKey, flags: Set<String>): Map<String, StoredEvaluation> =
+        flags.mapNotNull { flag -> storedEvaluations[flag to evalKey]?.let { flag to it } }.toMap()
+
+    override fun getTreatmentsByFlagSets(evalKey: EvaluationKey, flagSets: Set<String>): Map<String, StoredEvaluation> =
+        storedEvaluations
+            .filter { (key, stored) -> key.second == evalKey && stored.flagSets.any { it in flagSets } }
+            .mapKeys { it.key.first }
 
     override suspend fun setTarget(target: Target, filters: EvaluationFilters?) {
         setTargetCalls.add(target to filters)
     }
+
+    override fun getFlagNames(evalKey: EvaluationKey): Set<String> =
+        storedEvaluations.keys.filter { it.second == evalKey }.map { it.first }.toSet()
 }

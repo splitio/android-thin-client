@@ -3,9 +3,6 @@ package io.split.client.thin.internal.evaluation
 import io.split.client.thin.EvaluationResult
 import io.split.client.thin.Key
 import io.split.client.thin.internal.secure.EvaluationFilters
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.async
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -13,7 +10,6 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class DefaultEvaluationFetchCoordinatorTest {
 
     private val evalKey = EvaluationKey(Key("user-1"))
@@ -71,13 +67,6 @@ class DefaultEvaluationFetchCoordinatorTest {
     }
 
     @Test
-    fun `awaitPending returns immediately when no fetch pending`() = runTest {
-        val (coordinator, _, _) = makeCoordinator()
-        // Should return without hanging
-        coordinator.awaitPending(evalKey)
-    }
-
-    @Test
     fun `error propagates from fetchIfNeeded`() = runTest {
         val error = RuntimeException("fetch failed")
         val (coordinator, _, _) = makeCoordinator(throwOnFetch = error)
@@ -90,14 +79,6 @@ class DefaultEvaluationFetchCoordinatorTest {
         }
 
         assertEquals(error, caughtError)
-    }
-
-    @Test
-    fun `awaitPending returns immediately after fetch completes`() = runTest {
-        val (coordinator, _, _) = makeCoordinator()
-        coordinator.fetchIfNeeded(evalKey, null, FetchReason.INITIALIZATION)
-        // No pending fetch now — should return immediately
-        coordinator.awaitPending(evalKey)
     }
 
     @Test
