@@ -36,6 +36,7 @@ android {
 dependencies {
     implementation(project(":models"))
     implementation(project(":http"))
+    implementation(project(":auth"))
     implementation(project(":secure-http-client"))
     implementation(project(":logger"))
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.5.1")

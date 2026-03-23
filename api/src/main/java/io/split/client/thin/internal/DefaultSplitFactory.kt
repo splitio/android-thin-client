@@ -10,6 +10,7 @@ import io.split.client.thin.SplitVoidCallback
 import io.split.client.thin.Target
 import io.split.client.thin.internal.evaluation.EvaluationReadStorage
 import io.split.client.thin.internal.evaluation.EvaluationRepository
+import io.split.client.thin.internal.evaluation.toEvaluationKey
 import io.split.client.thin.internal.secure.EvaluationFilters
 import io.split.client.thin.internal.observer.DefaultCompositeObserver
 import io.split.client.thin.internal.observer.ObservableEvent
@@ -41,7 +42,7 @@ internal class DefaultSplitFactory(
             buildFallbackCalculator(config),
         ),
     ),
-    private val splitManager: SplitManager = DefaultSplitManager(),
+    private val splitManager: SplitManager = DefaultSplitManager(readStorage, defaultTarget.toEvaluationKey()),
 ) : SplitFactory {
 
     init {

@@ -2,7 +2,7 @@ package io.split.client.thin.internal.auth
 
 import io.split.client.thin.http.RetryableHttpClient
 
-fun <T : Any> createAuthProvider(
+fun <T : AuthParamsProvider> createAuthProvider(
     retryableHttpClient: RetryableHttpClient,
     sdkKey: String,
     authUrl: String,

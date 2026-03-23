@@ -6,7 +6,7 @@ import io.split.client.thin.http.RequestCategory
 import io.split.client.thin.http.RetryableHttpClient
 import java.net.URI
 
-internal class DefaultCredentialFetcher<T : Any>(
+internal class DefaultCredentialFetcher<T : AuthParamsProvider>(
     private val retryableHttpClient: RetryableHttpClient,
     private val sdkKey: String,
     private val serviceUrl: String,
@@ -15,7 +15,7 @@ internal class DefaultCredentialFetcher<T : Any>(
 
     override suspend fun fetchCredential(target: T): JwtCredential {
         val request = HttpRequestDescriptor(
-            uri = URI.create("$serviceUrl/v1/auth"),
+            uri = URI.create("$serviceUrl/?users=${target.getUsers()}"),
             method = HttpMethod.GET,
             headers = mapOf("Authorization" to "Bearer $sdkKey"),
         )

@@ -21,11 +21,11 @@ import org.mockito.Mockito.`when`
 class DefaultAuthProviderTest {
 
     @Suppress("UNCHECKED_CAST")
-    private val fetcher = mock(CredentialFetcher::class.java) as CredentialFetcher<String>
+    private val fetcher = mock(CredentialFetcher::class.java) as CredentialFetcher<TestTarget>
     @Suppress("UNCHECKED_CAST")
-    private val storage = mock(CredentialStorage::class.java) as CredentialStorage<String>
+    private val storage = mock(CredentialStorage::class.java) as CredentialStorage<TestTarget>
 
-    private val target = "user-1"
+    private val target = TestTarget("user-1")
     private val validCredential = JwtCredential(
         token = "valid-token",
         expiresAt = System.currentTimeMillis() / 1000 + 3600,
@@ -37,7 +37,7 @@ class DefaultAuthProviderTest {
         pushEnabled = false,
     )
 
-    private lateinit var authProvider: DefaultAuthProvider<String>
+    private lateinit var authProvider: DefaultAuthProvider<TestTarget>
 
     @Before
     fun setUp() {
@@ -96,7 +96,7 @@ class DefaultAuthProviderTest {
         var attempts = 0
         // Ensure cancellation happens after the first fetch has actually started.
         val firstFetchStarted = CompletableDeferred<Unit>()
-        val cancelThenSucceedFetcher = CredentialFetcher<String> {
+        val cancelThenSucceedFetcher = CredentialFetcher<TestTarget> {
             attempts++
             if (attempts == 1) {
                 firstFetchStarted.complete(Unit)
@@ -105,7 +105,7 @@ class DefaultAuthProviderTest {
                 validCredential
             }
         }
-        authProvider = DefaultAuthProvider(cancelThenSucceedFetcher, storage)
+        authProvider = DefaultAuthProvider<TestTarget>(cancelThenSucceedFetcher, storage)
         `when`(storage.getCredential(target)).thenReturn(null)
 
         // Use an independent Job so cancelling this fetch does not cancel the test scope.
