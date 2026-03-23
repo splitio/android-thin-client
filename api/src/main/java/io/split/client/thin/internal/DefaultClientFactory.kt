@@ -2,10 +2,12 @@ package io.split.client.thin.internal
 
 import io.split.client.thin.SplitClient
 import io.split.client.thin.Target
+import io.split.client.thin.events.EventTracker
 
-class DefaultClientFactory : (Target) -> SplitClient {
+internal class DefaultClientFactory : (Target) -> SplitClient {
 
-    override fun invoke(p1: Target): SplitClient {
-        return DefaultSplitClient()
+    override fun invoke(target: Target): SplitClient {
+        val eventTracker = EventTracker.create()
+        return DefaultSplitClient(target, eventTracker.tracker)
     }
 }

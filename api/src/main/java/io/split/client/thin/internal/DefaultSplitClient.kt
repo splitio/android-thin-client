@@ -1,5 +1,6 @@
 package io.split.client.thin.internal
 
+import io.split.android.client.tracker.Tracker
 import io.split.client.thin.EvaluationOptions
 import io.split.client.thin.EvaluationResult
 import io.split.client.thin.SplitClient
@@ -7,7 +8,13 @@ import io.split.client.thin.SplitEventListener
 import io.split.client.thin.SplitVoidCallback
 import io.split.client.thin.Target
 
-class DefaultSplitClient: SplitClient {
+internal class DefaultSplitClient(
+    initialTarget: Target,
+    private val tracker: Tracker
+) : SplitClient {
+
+    @Volatile
+    private var target: Target = initialTarget
 
     override fun getTreatment(
         flag: String,
@@ -31,7 +38,7 @@ class DefaultSplitClient: SplitClient {
     }
 
     override suspend fun setTarget(target: Target) {
-        TODO("Not yet implemented")
+        this.target = target
     }
 
     override fun setTargetAsync(
@@ -51,11 +58,22 @@ class DefaultSplitClient: SplitClient {
         value: Double?,
         properties: Map<String, Any?>?
     ) {
-        TODO("Not yet implemented")
+        val javaProperties =
+            runCatching { properties as? Map<String, Any> }.getOrDefault(emptyMap())
+        val isSdkReady = true // TODO
+        tracker.track(
+            target.key.matchingKey,
+            trafficType,
+            eventType,
+            value ?: 0.0,
+            javaProperties,
+            isSdkReady,
+        )
     }
 
     override suspend fun destroy() {
-        TODO("Not yet implemented")
+        flush()
+        tracker.enableTracking(false)
     }
 
     override fun destroyAsync(callback: SplitVoidCallback) {
@@ -63,7 +81,7 @@ class DefaultSplitClient: SplitClient {
     }
 
     override suspend fun flush() {
-        TODO("Not yet implemented")
+        // no-op for milestone 1
     }
 
     override fun flushAsync(callback: SplitVoidCallback) {
