@@ -113,7 +113,7 @@ class DefaultSplitFactoryTest {
             defaultTarget = defaultTarget,
             config = null,
             asyncBridge = fakeAsyncBridge,
-            evaluationRepository = FakeEvaluationRepository(),
+            evaluationRepository = FakeEvaluationRepository(readStorage = storage),
             filters = null,
             readStorage = storage,
             fetchCoordinator = FakeEvaluationFetchCoordinator(),

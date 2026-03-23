@@ -94,33 +94,20 @@ class DefaultEvaluationRepositoryTest {
     }
 
     @Test
-    fun `read methods await pending fetch before returning`() = runTest {
-        val coordinator = FakeEvaluationFetchCoordinator()
-        val repo = makeRepository(coordinator = coordinator)
+    fun `getFlagNames delegates to storage`() {
+        val readStorage = FakeEvaluationReadStorage()
+        readStorage.store("flag-a", evalKey, storedEval("flag-a", "on"))
+        readStorage.store("flag-b", evalKey, storedEval("flag-b", "off"))
+        val repo = makeRepository(readStorage = readStorage)
 
-        repo.getTreatment(evalKey, "flag-a")
+        val result = repo.getFlagNames(evalKey)
 
-        assertEquals(1, coordinator.awaitCalls.size)
-        assertEquals(evalKey, coordinator.awaitCalls[0])
+        assertEquals(setOf("flag-a", "flag-b"), result)
     }
 
     @Test
-    fun `getTreatments awaits pending before returning`() = runTest {
-        val coordinator = FakeEvaluationFetchCoordinator()
-        val repo = makeRepository(coordinator = coordinator)
-
-        repo.getTreatments(evalKey, setOf("flag-a"))
-
-        assertEquals(1, coordinator.awaitCalls.size)
-    }
-
-    @Test
-    fun `getTreatmentsByFlagSets awaits pending before returning`() = runTest {
-        val coordinator = FakeEvaluationFetchCoordinator()
-        val repo = makeRepository(coordinator = coordinator)
-
-        repo.getTreatmentsByFlagSets(evalKey, setOf("set1"))
-
-        assertEquals(1, coordinator.awaitCalls.size)
+    fun `getFlagNames returns empty set for unknown key`() {
+        val repo = makeRepository()
+        assertEquals(emptySet<String>(), repo.getFlagNames(evalKey))
     }
 }

@@ -119,14 +119,9 @@ class FakeEvaluationFetchCoordinator(
 ) : EvaluationFetchCoordinator {
 
     val fetchCalls = mutableListOf<Triple<EvaluationKey, EvaluationFilters?, FetchReason>>()
-    val awaitCalls = mutableListOf<EvaluationKey>()
 
     override suspend fun fetchIfNeeded(evalKey: EvaluationKey, filters: EvaluationFilters?, reason: FetchReason): Boolean {
         fetchCalls.add(Triple(evalKey, filters, reason))
         return fetchIfNeededResult
-    }
-
-    override suspend fun awaitPending(evalKey: EvaluationKey) {
-        awaitCalls.add(evalKey)
     }
 }

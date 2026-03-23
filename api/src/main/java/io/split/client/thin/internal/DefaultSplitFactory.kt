@@ -62,7 +62,7 @@ internal class DefaultSplitFactory(
             },
         ),
     ),
-    private val splitManager: SplitManager = DefaultSplitManager(readStorage, defaultTarget.toEvaluationKey()),
+    private val splitManager: SplitManager = DefaultSplitManager(evaluationRepository, defaultTarget.toEvaluationKey()),
 ) : SplitFactory {
 
     init {

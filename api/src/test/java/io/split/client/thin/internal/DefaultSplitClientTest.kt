@@ -265,10 +265,11 @@ class FakeEvaluationPeriodicScheduler : EvaluationPeriodicScheduler {
 
 class FakeEvaluationFetchCoordinator : EvaluationFetchCoordinator {
     override suspend fun fetchIfNeeded(evalKey: EvaluationKey, filters: EvaluationFilters?, reason: FetchReason): Boolean = false
-    override suspend fun awaitPending(evalKey: EvaluationKey) {}
 }
 
-class FakeEvaluationRepository : EvaluationRepository {
+class FakeEvaluationRepository(
+    private val readStorage: EvaluationReadStorage? = null,
+) : EvaluationRepository {
     val setTargetCalls = mutableListOf<Pair<Target, EvaluationFilters?>>()
 
     override suspend fun getTreatment(evalKey: EvaluationKey, flag: String): StoredEvaluation? = null
@@ -278,4 +279,7 @@ class FakeEvaluationRepository : EvaluationRepository {
     override suspend fun setTarget(target: Target, filters: EvaluationFilters?) {
         setTargetCalls.add(target to filters)
     }
+
+    override fun getFlagNames(evalKey: EvaluationKey): Set<String> =
+        readStorage?.getFlagNames(evalKey) ?: emptySet()
 }
