@@ -12,6 +12,11 @@ internal class DefaultRetryableHttpClient(
     private val httpClient: HttpClient,
     private val policiesByCategory: Map<RequestCategory, CategoryRetryPolicies>,
     private val backoffFactory: (backoffBaseSeconds: Int) -> BackoffCounter,
+    private val onHttpRequestStarted: (request: HttpRequestDescriptor, category: RequestCategory) -> Unit = { _, _ -> },
+    private val onHttpRequestSucceeded: (response: HttpResponse, category: RequestCategory) -> Unit = { _, _ -> },
+    private val onHttpRequestFailedRetryable: (category: RequestCategory, statusCode: Int?, attempt: Int) -> Unit = { _, _, _ -> },
+    private val onHttpRequestFailedNonRetryable: (category: RequestCategory, statusCode: Int?, error: Exception?) -> Unit = { _, _, _ -> },
+    private val onHttpRetryExhausted: (category: RequestCategory, attempts: Int) -> Unit = { _, _ -> },
 ) : RetryableHttpClient {
 
     override suspend fun execute(
@@ -28,19 +33,44 @@ internal class DefaultRetryableHttpClient(
             attempt++
 
             try {
+                onHttpRequestStarted(request, category)
                 val response = buildRequest(request).execute()
-                if (response.isSuccess) return response
+                if (response.isSuccess) {
+                    onHttpRequestSucceeded(response, category)
+                    return response
+                }
 
-                val policy = policies.policyForStatus(response.httpStatus) ?: return response
-                if (!policy.shouldRetry(attempt)) return response
+                val policy = policies.policyForStatus(response.httpStatus)
+                if (policy == null) {
+                    onHttpRequestFailedNonRetryable(category, response.httpStatus, null)
+                    return response
+                }
+                if (!policy.shouldRetry(attempt)) {
+                    onHttpRetryExhausted(category, attempt)
+                    onHttpRequestFailedNonRetryable(category, response.httpStatus, null)
+                    return response
+                }
 
+                onHttpRequestFailedRetryable(category, response.httpStatus, attempt)
                 delay(backoffFor(policy, backoffByBase).nextRetryTime * MILLIS_PER_SECOND)
             } catch (e: HttpException) {
-                if (e.statusCode == SSL_ERROR_STATUS_CODE) throw e
+                if (e.statusCode == SSL_ERROR_STATUS_CODE) {
+                    onHttpRequestFailedNonRetryable(category, SSL_ERROR_STATUS_CODE, e)
+                    throw e
+                }
 
-                val policy = resolveExceptionPolicy(e, policies) ?: throw e
-                if (!policy.shouldRetry(attempt)) throw e
+                val policy = resolveExceptionPolicy(e, policies)
+                if (policy == null) {
+                    onHttpRequestFailedNonRetryable(category, e.statusCode, e)
+                    throw e
+                }
+                if (!policy.shouldRetry(attempt)) {
+                    onHttpRetryExhausted(category, attempt)
+                    onHttpRequestFailedNonRetryable(category, e.statusCode, e)
+                    throw e
+                }
 
+                onHttpRequestFailedRetryable(category, e.statusCode, attempt)
                 delay(backoffFor(policy, backoffByBase).nextRetryTime * MILLIS_PER_SECOND)
             }
         }

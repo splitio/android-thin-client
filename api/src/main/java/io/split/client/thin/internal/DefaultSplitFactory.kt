@@ -8,6 +8,7 @@ import io.split.client.thin.SplitFactory
 import io.split.client.thin.SplitManager
 import io.split.client.thin.SplitVoidCallback
 import io.split.client.thin.Target
+import io.split.client.thin.internal.evaluation.DefaultEvaluationPeriodicScheduler
 import io.split.client.thin.internal.evaluation.EvaluationFetchCoordinator
 import io.split.client.thin.internal.evaluation.EvaluationReadStorage
 import io.split.client.thin.internal.evaluation.EvaluationRepository
@@ -37,14 +38,28 @@ internal class DefaultSplitFactory(
     private val clientManager: ClientManager = DefaultClientManager(
         scope,
         DefaultClientFactory(
-            compositeObserver,
-            scope,
-            readStorage,
-            evaluationRepository,
-            filters,
-            buildFallbackCalculator(config),
-            fetchCoordinator,
-            schedulerIntervalMillis,
+            compositeObserver = compositeObserver,
+            scope = scope,
+            readStorage = readStorage,
+            evaluationRepository = evaluationRepository,
+            filters = filters,
+            fallbackCalculator = buildFallbackCalculator(config),
+            fetchCoordinator = fetchCoordinator,
+            schedulerIntervalMillis = schedulerIntervalMillis,
+            schedulerFactory = { coordinator, intervalMillis ->
+                DefaultEvaluationPeriodicScheduler(
+                    fetchCoordinator = coordinator,
+                    intervalMillis = intervalMillis,
+                    onPollTrigger = { interval ->
+                        compositeObserver.notifyEvent(
+                            ObservableEvent(
+                                type = ObservableEventType.POLL_TRIGGER,
+                                properties = mapOf("rate" to "${interval / 1000}s")
+                            )
+                        )
+                    }
+                )
+            },
         ),
     ),
     private val splitManager: SplitManager = DefaultSplitManager(readStorage, defaultTarget.toEvaluationKey()),

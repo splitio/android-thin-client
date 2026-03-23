@@ -1,6 +1,9 @@
 package io.split.client.thin.internal.evaluation
 
 import io.split.android.client.network.HttpResponse
+import io.split.client.thin.internal.observer.CompositeObserver
+import io.split.client.thin.internal.observer.ObservableEvent
+import io.split.client.thin.internal.observer.Observer
 import io.split.client.thin.internal.secure.EvaluationFilters
 import io.split.client.thin.internal.secure.EvaluationTarget
 import io.split.client.thin.internal.secure.SecureHttpClient
@@ -100,6 +103,14 @@ class FakeEvaluationWriteStorage(private val upsertResult: Boolean = true) : Eva
     override fun clear(evalKey: EvaluationKey) {
         clearCalls.add(evalKey)
     }
+}
+
+// FakeCompositeObserver
+class FakeCompositeObserver : CompositeObserver {
+    val capturedEvents = mutableListOf<ObservableEvent>()
+    override fun notifyEvent(event: ObservableEvent) { capturedEvents.add(event) }
+    override fun register(observer: Observer) = Unit
+    override fun unregisterAll() = Unit
 }
 
 // FakeEvaluationFetchCoordinator

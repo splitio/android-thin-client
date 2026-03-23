@@ -5,17 +5,12 @@ import io.split.client.thin.http.createRetryableHttpClient
 import io.split.client.thin.internal.AsyncBridge
 import io.split.client.thin.internal.DefaultSplitFactory
 import io.split.client.thin.internal.auth.createAuthProvider
-import io.split.client.thin.internal.evaluation.DefaultEvaluationFetchCoordinator
-import io.split.client.thin.internal.evaluation.DefaultEvaluationProvider
-import io.split.client.thin.internal.evaluation.DefaultEvaluationRepository
-import io.split.client.thin.internal.evaluation.FetchReason
-import io.split.client.thin.internal.evaluation.InMemoryEvaluationStorage
-import io.split.client.thin.internal.evaluation.JsonEvaluationResponseDeserializer
+import io.split.client.thin.internal.evaluation.createEvaluationComponents
 import io.split.client.thin.internal.evaluation.toEvaluationKey
 import io.split.client.thin.internal.evaluation.toEvaluationTarget
+import io.split.client.thin.internal.observer.AndroidLoggerAdapter
 import io.split.client.thin.internal.observer.DefaultCompositeObserver
-import io.split.client.thin.internal.observer.ObservableEvent
-import io.split.client.thin.internal.observer.ObservableEventType
+import io.split.client.thin.internal.observer.LoggerObserver
 import io.split.client.thin.internal.secure.EvaluationTarget
 import io.split.client.thin.internal.secure.createSecureHttpClient
 
@@ -30,10 +25,7 @@ object SplitFactoryBuilder {
     private const val DEFAULT_TELEMETRY_URL = "https://telemetry.split.io/api/v1/metrics/config"
 
     /**
-     * Creates a factory configured with the SDK key, default target, config and HTTP client.
-     *
-     * URL overrides can be provided via [SplitClientConfig.SyncConfig.serviceEndpoints];
-     * each field falls back to a built-in default when null.
+     * Creates a factory configured with the SDK key, default target and config.
      */
     @JvmStatic
     @JvmOverloads
@@ -43,13 +35,16 @@ object SplitFactoryBuilder {
         config: SplitClientConfig? = null,
     ): SplitFactory {
         val httpClient = HttpClientImpl.Builder().build()
-        val retryableHttpClient = createRetryableHttpClient(httpClient)
+        val compositeObserver = DefaultCompositeObserver()
+        compositeObserver.register(LoggerObserver(AndroidLoggerAdapter()))
+        val retryableHttpClient = createRetryableHttpClient(httpClient, compositeObserver)
         val endpoints = config?.sync?.serviceEndpoints
 
         val authProvider = createAuthProvider<EvaluationTarget>(
             retryableHttpClient = retryableHttpClient,
             sdkKey = sdkKey.sdkKey,
             authUrl = endpoints?.authUrl ?: DEFAULT_AUTH_URL,
+            compositeObserver = compositeObserver,
         )
 
         val defaultEvaluationTarget = defaultTarget.toEvaluationKey().toEvaluationTarget()
@@ -63,25 +58,10 @@ object SplitFactoryBuilder {
             sdkKey = sdkKey.sdkKey,
         )
 
-        val storage = InMemoryEvaluationStorage()
-        val compositeObserver = DefaultCompositeObserver()
-        val evaluationResponseDeserializer = JsonEvaluationResponseDeserializer()
-        val provider = DefaultEvaluationProvider(secureHttpClient, evaluationResponseDeserializer)
-        val fetchCoordinator = DefaultEvaluationFetchCoordinator(
-            provider = provider,
-            readStorage = storage,
-            writeStorage = storage,
-            onEvaluationsUpdated = { reason ->
-                val eventType = when (reason) {
-                    FetchReason.INITIALIZATION, FetchReason.TARGET_SWITCH ->
-                        ObservableEventType.EVAL_STORAGE_UPDATED
-                    FetchReason.PERIODIC, FetchReason.PUSH ->
-                        ObservableEventType.EVALUATIONS_UPDATED
-                }
-                compositeObserver.notifyEvent(ObservableEvent(eventType))
-            },
+        val (storage, fetchCoordinator, evaluationRepository) = createEvaluationComponents(
+            secureHttpClient = secureHttpClient,
+            compositeObserver = compositeObserver,
         )
-        val evaluationRepository = DefaultEvaluationRepository(storage, fetchCoordinator)
         val schedulerIntervalMillis = (config?.sync?.evaluationRefreshRate ?: 3600) * 1_000L
 
         return DefaultSplitFactory(

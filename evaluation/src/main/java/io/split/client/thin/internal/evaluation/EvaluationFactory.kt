@@ -1,0 +1,99 @@
+package io.split.client.thin.internal.evaluation
+
+import io.split.client.thin.internal.observer.CompositeObserver
+import io.split.client.thin.internal.observer.ObservableEvent
+import io.split.client.thin.internal.observer.ObservableEventType
+import io.split.client.thin.internal.secure.SecureHttpClient
+
+data class EvaluationComponents(
+    val storage: InMemoryEvaluationStorage,
+    val fetchCoordinator: EvaluationFetchCoordinator,
+    val repository: EvaluationRepository,
+)
+
+fun createEvaluationComponents(
+    secureHttpClient: SecureHttpClient,
+    compositeObserver: CompositeObserver,
+): EvaluationComponents {
+    val storage = InMemoryEvaluationStorage()
+    val provider = DefaultEvaluationProvider(
+        secureHttpClient = secureHttpClient,
+        deserializer = JsonEvaluationResponseDeserializer(),
+        onEvalFetchStarted = { evalKey ->
+            compositeObserver.notifyEvent(
+                ObservableEvent(
+                    type = ObservableEventType.EVAL_FETCH_STARTED,
+                    properties = mapOf("matchingKey" to evalKey.key.matchingKey)
+                )
+            )
+        },
+        onEvalDeserializeFailed = { evalKey, error ->
+            compositeObserver.notifyEvent(
+                ObservableEvent(
+                    type = ObservableEventType.EVAL_DESERIALIZE_FAILED,
+                    properties = mapOf(
+                        "matchingKey" to evalKey.key.matchingKey,
+                        "error" to error.message.orEmpty()
+                    )
+                )
+            )
+        },
+    )
+    val fetchCoordinator = DefaultEvaluationFetchCoordinator(
+        provider = provider,
+        readStorage = storage,
+        writeStorage = storage,
+        onEvaluationsUpdated = { reason ->
+            val eventType = when (reason) {
+                FetchReason.INITIALIZATION, FetchReason.TARGET_SWITCH ->
+                    ObservableEventType.EVAL_STORAGE_UPDATED
+                FetchReason.PERIODIC, FetchReason.PUSH ->
+                    ObservableEventType.EVALUATIONS_UPDATED
+            }
+            compositeObserver.notifyEvent(ObservableEvent(eventType))
+        },
+        onEvalFetchRequested = { evalKey, reason ->
+            compositeObserver.notifyEvent(
+                ObservableEvent(
+                    type = ObservableEventType.EVAL_FETCH_REQUESTED,
+                    properties = mapOf(
+                        "matchingKey" to evalKey.key.matchingKey,
+                        "reason" to reason.name
+                    )
+                )
+            )
+        },
+        onEvalFetchDeduped = { evalKey ->
+            compositeObserver.notifyEvent(
+                ObservableEvent(
+                    type = ObservableEventType.EVAL_FETCH_DEDUPED,
+                    properties = mapOf("matchingKey" to evalKey.key.matchingKey)
+                )
+            )
+        },
+        onEvalFetchSucceeded = { evalKey ->
+            compositeObserver.notifyEvent(
+                ObservableEvent(
+                    type = ObservableEventType.EVAL_FETCH_SUCCEEDED,
+                    properties = mapOf("matchingKey" to evalKey.key.matchingKey)
+                )
+            )
+        },
+        onEvalFetchFailed = { evalKey, error ->
+            compositeObserver.notifyEvent(
+                ObservableEvent(
+                    type = ObservableEventType.EVAL_FETCH_FAILED,
+                    properties = mapOf(
+                        "matchingKey" to evalKey.key.matchingKey,
+                        "error" to error.message.orEmpty()
+                    )
+                )
+            )
+        },
+    )
+    return EvaluationComponents(
+        storage = storage,
+        fetchCoordinator = fetchCoordinator,
+        repository = DefaultEvaluationRepository(storage, fetchCoordinator),
+    )
+}

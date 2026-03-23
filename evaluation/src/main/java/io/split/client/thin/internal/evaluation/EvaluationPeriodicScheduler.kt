@@ -23,6 +23,7 @@ class DefaultEvaluationPeriodicScheduler(
     private val fetchCoordinator: EvaluationFetchCoordinator,
     private val intervalMillis: Long,
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob()),
+    private val onPollTrigger: (intervalMillis: Long) -> Unit = {},
 ) : EvaluationPeriodicScheduler {
 
     private val currentTarget = AtomicReference<Pair<Target, EvaluationFilters?>?>(null)
@@ -58,6 +59,7 @@ class DefaultEvaluationPeriodicScheduler(
         pollingJob = scope.launch {
             while (isActive) {
                 delay(intervalMillis)
+                onPollTrigger(intervalMillis)
                 val (target, filters) = currentTarget.get() ?: continue
                 val evalKey = target.toEvaluationKey()
                 fetchCoordinator.fetchIfNeeded(evalKey, filters, FetchReason.PERIODIC)

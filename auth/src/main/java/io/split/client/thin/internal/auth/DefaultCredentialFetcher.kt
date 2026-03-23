@@ -11,6 +11,9 @@ internal class DefaultCredentialFetcher<T : AuthParamsProvider>(
     private val sdkKey: String,
     private val serviceUrl: String,
     private val tokenDeserializer: TokenDeserializer = JsonTokenDeserializer(),
+    private val onJwtFetchStarted: (target: T) -> Unit = {},
+    private val onJwtFetchSucceeded: (credential: JwtCredential, target: T) -> Unit = { _, _ -> },
+    private val onJwtFetchFailedNonRetryable: (target: T, error: Exception) -> Unit = { _, _ -> },
 ) : CredentialFetcher<T> {
 
     override suspend fun fetchCredential(target: T): JwtCredential {
@@ -19,7 +22,15 @@ internal class DefaultCredentialFetcher<T : AuthParamsProvider>(
             method = HttpMethod.GET,
             headers = mapOf("Authorization" to "Bearer $sdkKey"),
         )
-        val response = retryableHttpClient.execute(request, RequestCategory.AUTH)
-        return tokenDeserializer.deserialize(response.data)
+        onJwtFetchStarted(target)
+        try {
+            val response = retryableHttpClient.execute(request, RequestCategory.AUTH)
+            val credential = tokenDeserializer.deserialize(response.data)
+            onJwtFetchSucceeded(credential, target)
+            return credential
+        } catch (e: Exception) {
+            onJwtFetchFailedNonRetryable(target, e)
+            throw e
+        }
     }
 }
