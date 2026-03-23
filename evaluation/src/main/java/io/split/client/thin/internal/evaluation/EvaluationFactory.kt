@@ -6,7 +6,6 @@ import io.split.client.thin.internal.observer.ObservableEventType
 import io.split.client.thin.internal.secure.SecureHttpClient
 
 data class EvaluationComponents(
-    val storage: InMemoryEvaluationStorage,
     val fetchCoordinator: EvaluationFetchCoordinator,
     val repository: EvaluationRepository,
 )
@@ -92,7 +91,6 @@ fun createEvaluationComponents(
         },
     )
     return EvaluationComponents(
-        storage = storage,
         fetchCoordinator = fetchCoordinator,
         repository = DefaultEvaluationRepository(storage, fetchCoordinator),
     )

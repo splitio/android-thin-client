@@ -58,7 +58,6 @@ class DefaultSplitFactoryTest {
             asyncBridge = fakeAsyncBridge,
             evaluationRepository = FakeEvaluationRepository(),
             filters = null,
-            readStorage = FakeEvaluationReadStorage(),
             fetchCoordinator = FakeEvaluationFetchCoordinator(),
             schedulerIntervalMillis = 3_600_000L,
             clientManager = fakeClientManager,
@@ -104,18 +103,17 @@ class DefaultSplitFactoryTest {
 
     @Test
     fun `getManager returns flag names from storage for default target`() {
-        val storage = FakeEvaluationReadStorage()
+        val fakeRepository = FakeEvaluationRepository()
         val defaultEvalKey = defaultTarget.toEvaluationKey()
-        storage.store("flag-a", defaultEvalKey, StoredEvaluation(EvaluationResult("flag-a", "on"), emptySet()))
-        storage.store("flag-b", defaultEvalKey, StoredEvaluation(EvaluationResult("flag-b", "off"), emptySet()))
+        fakeRepository.store("flag-a", defaultEvalKey, StoredEvaluation(EvaluationResult("flag-a", "on"), emptySet()))
+        fakeRepository.store("flag-b", defaultEvalKey, StoredEvaluation(EvaluationResult("flag-b", "off"), emptySet()))
 
         val testFactory = DefaultSplitFactory(
             defaultTarget = defaultTarget,
             config = null,
             asyncBridge = fakeAsyncBridge,
-            evaluationRepository = FakeEvaluationRepository(readStorage = storage),
+            evaluationRepository = fakeRepository,
             filters = null,
-            readStorage = storage,
             fetchCoordinator = FakeEvaluationFetchCoordinator(),
             schedulerIntervalMillis = 3_600_000L,
             clientManager = fakeClientManager,
@@ -143,7 +141,6 @@ class DefaultSplitFactoryTest {
             asyncBridge = fakeAsyncBridge,
             evaluationRepository = FakeEvaluationRepository(),
             filters = null,
-            readStorage = FakeEvaluationReadStorage(),
             fetchCoordinator = FakeEvaluationFetchCoordinator(),
             schedulerIntervalMillis = 3_600_000L,
             scope = testScope,
@@ -172,7 +169,6 @@ class DefaultSplitFactoryTest {
             asyncBridge = fakeAsyncBridge,
             evaluationRepository = FakeEvaluationRepository(),
             filters = null,
-            readStorage = FakeEvaluationReadStorage(),
             fetchCoordinator = FakeEvaluationFetchCoordinator(),
             schedulerIntervalMillis = 3_600_000L,
             scope = testScope,
@@ -195,7 +191,6 @@ class DefaultSplitFactoryTest {
             asyncBridge = fakeAsyncBridge,
             evaluationRepository = FakeEvaluationRepository(),
             filters = null,
-            readStorage = FakeEvaluationReadStorage(),
             fetchCoordinator = FakeEvaluationFetchCoordinator(),
             schedulerIntervalMillis = 3_600_000L,
             scope = testScope,
@@ -335,7 +330,6 @@ class SdkReadyTimeoutTest {
             asyncBridge = FakeAsyncBridge(),
             evaluationRepository = FakeEvaluationRepository(),
             filters = null,
-            readStorage = FakeEvaluationReadStorage(),
             fetchCoordinator = FakeEvaluationFetchCoordinator(),
             schedulerIntervalMillis = 3_600_000L,
             scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
@@ -362,7 +356,6 @@ class SdkReadyTimeoutTest {
             asyncBridge = FakeAsyncBridge(),
             evaluationRepository = FakeEvaluationRepository(),
             filters = null,
-            readStorage = FakeEvaluationReadStorage(),
             fetchCoordinator = FakeEvaluationFetchCoordinator(),
             schedulerIntervalMillis = 3_600_000L,
             scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler)),

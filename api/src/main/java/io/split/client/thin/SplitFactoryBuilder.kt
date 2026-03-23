@@ -58,7 +58,7 @@ object SplitFactoryBuilder {
             sdkKey = sdkKey.sdkKey,
         )
 
-        val (storage, fetchCoordinator, evaluationRepository) = createEvaluationComponents(
+        val (fetchCoordinator, evaluationRepository) = createEvaluationComponents(
             secureHttpClient = secureHttpClient,
             compositeObserver = compositeObserver,
         )
@@ -70,7 +70,6 @@ object SplitFactoryBuilder {
             asyncBridge = AsyncBridge(),
             evaluationRepository = evaluationRepository,
             filters = null,
-            readStorage = storage,
             fetchCoordinator = fetchCoordinator,
             schedulerIntervalMillis = schedulerIntervalMillis,
             compositeObserver = compositeObserver,

@@ -1,6 +1,7 @@
 package io.split.client.thin.internal.evaluation
 
 import io.split.client.thin.internal.secure.EvaluationFilters
+import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 
 class DefaultEvaluationFetchCoordinator(
@@ -14,8 +15,8 @@ class DefaultEvaluationFetchCoordinator(
     private val onEvalFetchFailed: (evalKey: EvaluationKey, error: Throwable) -> Unit = { _, _ -> },
 ) : EvaluationFetchCoordinator {
 
-    private val inFlight: MutableSet<EvaluationKey> = ConcurrentHashMap.newKeySet()
-    private val fetchedKeys: MutableSet<EvaluationKey> = ConcurrentHashMap.newKeySet()
+    private val inFlight: MutableSet<EvaluationKey> = Collections.newSetFromMap(ConcurrentHashMap())
+    private val fetchedKeys: MutableSet<EvaluationKey> = Collections.newSetFromMap(ConcurrentHashMap())
 
     override suspend fun fetchIfNeeded(evalKey: EvaluationKey, filters: EvaluationFilters?, reason: FetchReason): Boolean {
         onEvalFetchRequested(evalKey, reason)

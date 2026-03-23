@@ -28,7 +28,7 @@ class DefaultEvaluationRepositoryTest {
     }
 
     @Test
-    fun `getTreatment reads from storage`() = runTest {
+    fun `getTreatment reads from storage`() {
         val readStorage = FakeEvaluationReadStorage()
         readStorage.store("flag-a", evalKey, storedEval("flag-a", "on"))
         val repo = makeRepository(readStorage = readStorage)
@@ -39,13 +39,13 @@ class DefaultEvaluationRepositoryTest {
     }
 
     @Test
-    fun `getTreatment returns null for unknown flag`() = runTest {
+    fun `getTreatment returns null for unknown flag`() {
         val repo = makeRepository()
         assertNull(repo.getTreatment(evalKey, "unknown"))
     }
 
     @Test
-    fun `getTreatments reads multiple flags from storage`() = runTest {
+    fun `getTreatments reads multiple flags from storage`() {
         val readStorage = FakeEvaluationReadStorage()
         readStorage.store("flag-a", evalKey, storedEval("flag-a", "on"))
         readStorage.store("flag-b", evalKey, storedEval("flag-b", "off"))
@@ -59,7 +59,7 @@ class DefaultEvaluationRepositoryTest {
     }
 
     @Test
-    fun `getTreatmentsByFlagSets delegates to storage`() = runTest {
+    fun `getTreatmentsByFlagSets delegates to storage`() {
         val readStorage = FakeEvaluationReadStorage()
         readStorage.store("flag-a", evalKey, storedEval("flag-a", "on", setOf("set1")))
         val repo = makeRepository(readStorage = readStorage)

@@ -7,7 +7,6 @@ import io.split.client.thin.events.EventTracker
 import io.split.client.thin.internal.evaluation.DefaultEvaluationPeriodicScheduler
 import io.split.client.thin.internal.evaluation.EvaluationFetchCoordinator
 import io.split.client.thin.internal.evaluation.EvaluationPeriodicScheduler
-import io.split.client.thin.internal.evaluation.EvaluationReadStorage
 import io.split.client.thin.internal.evaluation.EvaluationRepository
 import io.split.client.thin.internal.secure.EvaluationFilters
 import io.harness.events.EventsManagers
@@ -20,7 +19,6 @@ import kotlinx.coroutines.CoroutineScope
 internal class DefaultClientFactory(
     private val compositeObserver: CompositeObserver,
     private val scope: CoroutineScope,
-    private val readStorage: EvaluationReadStorage,
     private val evaluationRepository: EvaluationRepository,
     private val filters: EvaluationFilters?,
     private val fallbackCalculator: FallbackTreatmentsCalculator?,
@@ -42,7 +40,7 @@ internal class DefaultClientFactory(
         val scheduler = schedulerFactory(fetchCoordinator, schedulerIntervalMillis)
         scheduler.start(target, filters)
         return DefaultSplitClient(
-            target, eventTracker.tracker, readStorage,
+            target, eventTracker.tracker,
             evaluationRepository, filters, fallbackCalculator, eventsManager, scheduler
         )
     }

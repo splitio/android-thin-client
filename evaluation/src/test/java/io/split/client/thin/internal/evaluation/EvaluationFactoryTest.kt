@@ -26,7 +26,6 @@ class EvaluationFactoryTest {
     @Test
     fun `createEvaluationComponents returns components with wired collaborators`() {
         val (components, _) = makeComponents()
-        assertNotNull(components.storage)
         assertNotNull(components.fetchCoordinator)
         assertNotNull(components.repository)
     }
