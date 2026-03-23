@@ -9,6 +9,7 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -113,5 +114,41 @@ class DefaultEvaluationFetchCoordinatorTest {
 
         assertEquals(2, provider.fetchCalls.size)
         assertEquals(2, writeStorage.upsertCalls.size)
+    }
+
+    @Test
+    fun `fetchIfNeeded invokes onFetchSuccess with INITIALIZATION reason`() = runTest {
+        val capturedReason = mutableListOf<FetchReason>()
+        val coordinator = DefaultEvaluationFetchCoordinator(
+            provider = FakeEvaluationProvider(),
+            readStorage = FakeEvaluationReadStorage(),
+            writeStorage = FakeEvaluationWriteStorage(),
+            onFetchSuccess = { capturedReason.add(it) },
+        )
+
+        coordinator.fetchIfNeeded(evalKey, null, FetchReason.INITIALIZATION)
+
+        assertEquals(listOf(FetchReason.INITIALIZATION), capturedReason)
+    }
+
+    @Test
+    fun `fetchIfNeeded does not invoke onFetchSuccess on provider error`() = runTest {
+        var callbackInvoked = false
+        val coordinator = DefaultEvaluationFetchCoordinator(
+            provider = FakeEvaluationProvider(throwOnFetch = RuntimeException("fetch failed")),
+            readStorage = FakeEvaluationReadStorage(),
+            writeStorage = FakeEvaluationWriteStorage(),
+            onFetchSuccess = { callbackInvoked = true },
+        )
+
+        var caughtError: Throwable? = null
+        try {
+            coordinator.fetchIfNeeded(evalKey, null, FetchReason.INITIALIZATION)
+        } catch (e: RuntimeException) {
+            caughtError = e
+        }
+
+        assertNotNull(caughtError)
+        assertFalse(callbackInvoked)
     }
 }

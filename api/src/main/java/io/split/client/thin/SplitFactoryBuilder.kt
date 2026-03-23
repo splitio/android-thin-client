@@ -8,10 +8,14 @@ import io.split.client.thin.internal.auth.createAuthProvider
 import io.split.client.thin.internal.evaluation.DefaultEvaluationFetchCoordinator
 import io.split.client.thin.internal.evaluation.DefaultEvaluationProvider
 import io.split.client.thin.internal.evaluation.DefaultEvaluationRepository
+import io.split.client.thin.internal.evaluation.FetchReason
 import io.split.client.thin.internal.evaluation.InMemoryEvaluationStorage
 import io.split.client.thin.internal.evaluation.JsonEvaluationResponseDeserializer
 import io.split.client.thin.internal.evaluation.toEvaluationKey
 import io.split.client.thin.internal.evaluation.toEvaluationTarget
+import io.split.client.thin.internal.observer.DefaultCompositeObserver
+import io.split.client.thin.internal.observer.ObservableEvent
+import io.split.client.thin.internal.observer.ObservableEventType
 import io.split.client.thin.internal.secure.EvaluationTarget
 import io.split.client.thin.internal.secure.createSecureHttpClient
 
@@ -60,9 +64,23 @@ object SplitFactoryBuilder {
         )
 
         val storage = InMemoryEvaluationStorage()
+        val compositeObserver = DefaultCompositeObserver()
         val evaluationResponseDeserializer = JsonEvaluationResponseDeserializer()
         val provider = DefaultEvaluationProvider(secureHttpClient, evaluationResponseDeserializer)
-        val fetchCoordinator = DefaultEvaluationFetchCoordinator(provider, storage, storage)
+        val fetchCoordinator = DefaultEvaluationFetchCoordinator(
+            provider = provider,
+            readStorage = storage,
+            writeStorage = storage,
+            onFetchSuccess = { reason ->
+                val eventType = when (reason) {
+                    FetchReason.INITIALIZATION, FetchReason.TARGET_SWITCH ->
+                        ObservableEventType.EVAL_STORAGE_UPDATED
+                    FetchReason.PERIODIC, FetchReason.PUSH ->
+                        ObservableEventType.EVALUATIONS_UPDATED
+                }
+                compositeObserver.notifyEvent(ObservableEvent(eventType))
+            },
+        )
         val evaluationRepository = DefaultEvaluationRepository(storage, fetchCoordinator)
 
         return DefaultSplitFactory(
@@ -72,6 +90,7 @@ object SplitFactoryBuilder {
             evaluationRepository = evaluationRepository,
             filters = null,
             readStorage = storage,
+            compositeObserver = compositeObserver,
         )
     }
 }

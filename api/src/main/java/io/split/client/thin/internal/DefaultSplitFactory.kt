@@ -12,10 +12,13 @@ import io.split.client.thin.internal.evaluation.EvaluationReadStorage
 import io.split.client.thin.internal.evaluation.EvaluationRepository
 import io.split.client.thin.internal.secure.EvaluationFilters
 import io.split.client.thin.internal.observer.DefaultCompositeObserver
+import io.split.client.thin.internal.observer.ObservableEvent
+import io.split.client.thin.internal.observer.ObservableEventType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 internal class DefaultSplitFactory(
@@ -45,6 +48,16 @@ internal class DefaultSplitFactory(
         scope.launch {
             runCatching {
                 evaluationRepository.setTarget(defaultTarget, filters)
+            }
+        }
+
+        val timeoutSecs = config?.storage?.timeout ?: -1
+        if (timeoutSecs > 0) {
+            scope.launch {
+                delay(timeoutSecs * 1_000L)
+                compositeObserver.notifyEvent(
+                    ObservableEvent(ObservableEventType.SDK_READY_TIMEOUT_REACHED)
+                )
             }
         }
     }

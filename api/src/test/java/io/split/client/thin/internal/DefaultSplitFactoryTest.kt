@@ -9,9 +9,26 @@ import io.split.client.thin.SplitClient
 import io.split.client.thin.SplitEventListener
 import io.split.client.thin.SplitVoidCallback
 import io.split.client.thin.Target
+import io.split.client.thin.internal.evaluation.DefaultEvaluationFetchCoordinator
+import io.split.client.thin.internal.evaluation.EvaluationChange
+import io.split.client.thin.internal.evaluation.EvaluationKey
+import io.split.client.thin.internal.evaluation.EvaluationProvider
+import io.split.client.thin.internal.evaluation.EvaluationWriteStorage
+import io.split.client.thin.internal.evaluation.FetchReason
+import io.split.client.thin.SplitClientConfig
+import io.split.client.thin.internal.observer.DefaultCompositeObserver
+import io.split.client.thin.internal.observer.ObservableEvent
+import io.split.client.thin.internal.observer.ObservableEventType
+import io.split.client.thin.internal.observer.Observer
+import io.split.client.thin.internal.secure.EvaluationFilters
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -190,6 +207,146 @@ private class FakeAsyncBridge : AsyncBridgeLike {
 
     override fun close() {
         closeCalled = true
+    }
+}
+
+// Verify FetchReason → ObservableEventType mapping by exercising the production onFetchSuccess callback
+class FetchReasonObserverMappingTest {
+
+    private val evalKey = EvaluationKey(Key("user-1"))
+
+    private fun makeCoordinator(compositeObserver: DefaultCompositeObserver): DefaultEvaluationFetchCoordinator {
+        return DefaultEvaluationFetchCoordinator(
+            provider = object : EvaluationProvider {
+                override suspend fun fetch(evalKey: EvaluationKey, filters: EvaluationFilters?): EvaluationChange =
+                    EvaluationChange(evalKey, -1L, emptyList())
+            },
+            readStorage = FakeEvaluationReadStorage(),
+            writeStorage = object : EvaluationWriteStorage {
+                override fun upsert(change: EvaluationChange) {}
+                override fun clear(evalKey: EvaluationKey) {}
+            },
+            onFetchSuccess = { reason ->
+                val eventType = when (reason) {
+                    FetchReason.INITIALIZATION, FetchReason.TARGET_SWITCH ->
+                        ObservableEventType.EVAL_STORAGE_UPDATED
+                    FetchReason.PERIODIC, FetchReason.PUSH ->
+                        ObservableEventType.EVALUATIONS_UPDATED
+                }
+                compositeObserver.notifyEvent(ObservableEvent(eventType))
+            },
+        )
+    }
+
+    @Test
+    fun `INITIALIZATION fetch emits EVAL_STORAGE_UPDATED to observers`() = runTest {
+        val fakeObserver = FakeObserver()
+        val compositeObserver = DefaultCompositeObserver()
+        compositeObserver.register(fakeObserver)
+
+        makeCoordinator(compositeObserver).fetchIfNeeded(evalKey, null, FetchReason.INITIALIZATION)
+
+        assertEquals(listOf(ObservableEventType.EVAL_STORAGE_UPDATED), fakeObserver.receivedEventTypes)
+    }
+
+    @Test
+    fun `TARGET_SWITCH fetch emits EVAL_STORAGE_UPDATED to observers`() = runTest {
+        val fakeObserver = FakeObserver()
+        val compositeObserver = DefaultCompositeObserver()
+        compositeObserver.register(fakeObserver)
+
+        makeCoordinator(compositeObserver).fetchIfNeeded(evalKey, null, FetchReason.TARGET_SWITCH)
+
+        assertEquals(listOf(ObservableEventType.EVAL_STORAGE_UPDATED), fakeObserver.receivedEventTypes)
+    }
+
+    @Test
+    fun `PERIODIC fetch emits EVALUATIONS_UPDATED to observers`() = runTest {
+        val fakeObserver = FakeObserver()
+        val compositeObserver = DefaultCompositeObserver()
+        compositeObserver.register(fakeObserver)
+
+        makeCoordinator(compositeObserver).fetchIfNeeded(evalKey, null, FetchReason.PERIODIC)
+
+        assertEquals(listOf(ObservableEventType.EVALUATIONS_UPDATED), fakeObserver.receivedEventTypes)
+    }
+
+    @Test
+    fun `PUSH fetch emits EVALUATIONS_UPDATED to observers`() = runTest {
+        val fakeObserver = FakeObserver()
+        val compositeObserver = DefaultCompositeObserver()
+        compositeObserver.register(fakeObserver)
+
+        makeCoordinator(compositeObserver).fetchIfNeeded(evalKey, null, FetchReason.PUSH)
+
+        assertEquals(listOf(ObservableEventType.EVALUATIONS_UPDATED), fakeObserver.receivedEventTypes)
+    }
+}
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class SdkReadyTimeoutTest {
+
+    private val defaultTarget = Target(Key("user-1"))
+
+    @Test
+    fun `emits SDK_READY_TIMEOUT_REACHED after configured timeout seconds`() = runTest {
+        val fakeObserver = FakeObserver()
+        val compositeObserver = DefaultCompositeObserver()
+        compositeObserver.register(fakeObserver)
+
+        val config = SplitClientConfig.Builder()
+            .storage(SplitClientConfig.StorageConfig.Builder().timeout(1).build())
+            .build()
+
+        DefaultSplitFactory(
+            defaultTarget = defaultTarget,
+            config = config,
+            asyncBridge = FakeAsyncBridge(),
+            evaluationRepository = FakeEvaluationRepository(),
+            filters = null,
+            readStorage = FakeEvaluationReadStorage(),
+            scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
+            compositeObserver = compositeObserver,
+            clientManager = FakeClientManager(),
+        )
+
+        advanceTimeBy(1_001)
+
+        assertTrue(
+            fakeObserver.receivedEventTypes.contains(ObservableEventType.SDK_READY_TIMEOUT_REACHED)
+        )
+    }
+
+    @Test
+    fun `does not emit SDK_READY_TIMEOUT_REACHED when timeout is -1`() = runTest {
+        val fakeObserver = FakeObserver()
+        val compositeObserver = DefaultCompositeObserver()
+        compositeObserver.register(fakeObserver)
+
+        DefaultSplitFactory(
+            defaultTarget = defaultTarget,
+            config = null,   // default: no timeout (-1)
+            asyncBridge = FakeAsyncBridge(),
+            evaluationRepository = FakeEvaluationRepository(),
+            filters = null,
+            readStorage = FakeEvaluationReadStorage(),
+            scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
+            compositeObserver = compositeObserver,
+            clientManager = FakeClientManager(),
+        )
+
+        advanceTimeBy(100_000)
+
+        assertFalse(
+            fakeObserver.receivedEventTypes.contains(ObservableEventType.SDK_READY_TIMEOUT_REACHED)
+        )
+    }
+}
+
+private class FakeObserver : Observer {
+    val receivedEventTypes = mutableListOf<String>()
+    override fun notifyEvent(event: ObservableEvent) {
+        receivedEventTypes.add(event.type)
     }
 }
 

@@ -8,6 +8,7 @@ class DefaultEvaluationFetchCoordinator(
     private val provider: EvaluationProvider,
     private val readStorage: EvaluationReadStorage,
     private val writeStorage: EvaluationWriteStorage,
+    private val onFetchSuccess: (FetchReason) -> Unit = {},
 ) : EvaluationFetchCoordinator {
 
     private val pending = ConcurrentHashMap<EvaluationKey, CompletableDeferred<Unit>>()
@@ -24,6 +25,7 @@ class DefaultEvaluationFetchCoordinator(
                 ?: EvaluationFilters(flagNames = null, flagSets = null, changeNumber = changeNumber)
             val change = provider.fetch(evalKey, enrichedFilters)
             writeStorage.upsert(change)
+            onFetchSuccess(reason)
             deferred.complete(Unit)
             return true
         } catch (t: Throwable) {
