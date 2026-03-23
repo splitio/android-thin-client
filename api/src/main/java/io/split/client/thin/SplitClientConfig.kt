@@ -201,7 +201,12 @@ class SplitClientConfig private constructor(
      *
      * @param url Base URL.
      */
-    data class ServiceEndpoints(val url: String)
+    data class ServiceEndpoints(
+        val authUrl: String,
+        val evaluationsUrl: String,
+        val eventsUrl: String,
+        val telemetryUrl: String,
+    )
 
     /**
      * Synchronization-related configuration.
@@ -287,18 +292,37 @@ class SplitClientConfig private constructor(
     }
 }
 
+/** DSL scope for [SplitClientConfig.ServiceEndpoints]. */
+class ServiceEndpointsDsl {
+    var authUrl: String = ""
+    var evaluationsUrl: String = ""
+    var eventsUrl: String = ""
+    var telemetryUrl: String = ""
+
+    internal fun build() = SplitClientConfig.ServiceEndpoints(
+        authUrl = authUrl,
+        evaluationsUrl = evaluationsUrl,
+        eventsUrl = eventsUrl,
+        telemetryUrl = telemetryUrl,
+    )
+}
+
 /** DSL scope for [SplitClientConfig.SyncConfig]. */
 class SyncConfigDsl {
     var mode: SplitClientConfig.SyncMode = SplitClientConfig.SyncMode.STREAMING
     var evaluationRefreshRate: Int = 3600
     var pushRate: Int = 1800
-    var serviceEndpoints: SplitClientConfig.ServiceEndpoints? = null
+    private var _serviceEndpoints: SplitClientConfig.ServiceEndpoints? = null
+
+    fun serviceEndpoints(block: ServiceEndpointsDsl.() -> Unit) {
+        _serviceEndpoints = ServiceEndpointsDsl().apply(block).build()
+    }
 
     internal fun build() = SplitClientConfig.SyncConfig(
         mode = mode,
         evaluationRefreshRate = evaluationRefreshRate,
         pushRate = pushRate,
-        serviceEndpoints = serviceEndpoints,
+        serviceEndpoints = _serviceEndpoints,
     )
 }
 

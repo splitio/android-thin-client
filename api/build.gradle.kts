@@ -35,6 +35,7 @@ android {
     }
 
     testOptions {
+        unitTests.isReturnDefaultValues = true
         unitTests.all {
             it.extensions.configure(JacocoTaskExtension::class.java) {
                 isIncludeNoLocationClasses = true
@@ -45,9 +46,15 @@ android {
 }
 
 dependencies {
+    api(project(":models"))
     api(project(":fallback"))
     implementation(project(":logger"))
     implementation(project(":events-tracking"))
+    implementation(project(":evaluation"))
+    implementation(project(":secure-http-client"))
+    implementation(project(":auth"))
+    implementation(project(":observer"))
+    implementation(project(":events"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
     testImplementation("junit:junit:4.13.2")

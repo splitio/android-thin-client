@@ -31,7 +31,7 @@ android {
 }
 
 dependencies {
-    implementation(project(":retryable-http-client"))
+    api(project(":retryable-http-client"))
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.5.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 

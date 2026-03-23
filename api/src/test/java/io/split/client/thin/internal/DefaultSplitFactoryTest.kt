@@ -33,10 +33,12 @@ class DefaultSplitFactoryTest {
         fakeClientManager = FakeClientManager()
         fakeAsyncBridge = FakeAsyncBridge()
         factory = DefaultSplitFactory(
-            sdkKey = sdkKey,
             defaultTarget = defaultTarget,
             config = null,
             asyncBridge = fakeAsyncBridge,
+            evaluationRepository = FakeEvaluationRepository(),
+            filters = null,
+            readStorage = FakeEvaluationReadStorage(),
             clientManager = fakeClientManager,
         )
     }
@@ -94,10 +96,12 @@ class DefaultSplitFactoryTest {
             clientFactory = { stubClient },
         )
         val factoryWithDefaultManager = DefaultSplitFactory(
-            sdkKey = sdkKey,
             defaultTarget = defaultTarget,
             config = null,
             asyncBridge = fakeAsyncBridge,
+            evaluationRepository = FakeEvaluationRepository(),
+            filters = null,
+            readStorage = FakeEvaluationReadStorage(),
             scope = testScope,
             clientManager = customManager,
         )
@@ -119,10 +123,12 @@ class DefaultSplitFactoryTest {
             },
         )
         val factoryWithDefaultManager = DefaultSplitFactory(
-            sdkKey = sdkKey,
             defaultTarget = defaultTarget,
             config = null,
             asyncBridge = fakeAsyncBridge,
+            evaluationRepository = FakeEvaluationRepository(),
+            filters = null,
+            readStorage = FakeEvaluationReadStorage(),
             scope = testScope,
             clientManager = customManager,
         )
@@ -138,10 +144,12 @@ class DefaultSplitFactoryTest {
     fun `destroy with default manager cancels scope`() = runTest {
         val testScope = TestScope()
         val factoryWithDefaultManager = DefaultSplitFactory(
-            sdkKey = sdkKey,
             defaultTarget = defaultTarget,
             config = null,
             asyncBridge = fakeAsyncBridge,
+            evaluationRepository = FakeEvaluationRepository(),
+            filters = null,
+            readStorage = FakeEvaluationReadStorage(),
             scope = testScope,
         )
 
