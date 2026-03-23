@@ -10,6 +10,7 @@ import io.split.client.thin.SplitEventListener
 import io.split.client.thin.SplitVoidCallback
 import io.split.client.thin.Target
 import io.split.client.thin.internal.evaluation.DefaultEvaluationFetchCoordinator
+import io.split.client.thin.internal.evaluation.EvaluationFetchCoordinator
 import io.split.client.thin.internal.evaluation.EvaluationChange
 import io.split.client.thin.internal.evaluation.EvaluationKey
 import io.split.client.thin.internal.evaluation.EvaluationProvider
@@ -58,6 +59,8 @@ class DefaultSplitFactoryTest {
             evaluationRepository = FakeEvaluationRepository(),
             filters = null,
             readStorage = FakeEvaluationReadStorage(),
+            fetchCoordinator = FakeEvaluationFetchCoordinator(),
+            schedulerIntervalMillis = 3_600_000L,
             clientManager = fakeClientManager,
         )
     }
@@ -113,6 +116,8 @@ class DefaultSplitFactoryTest {
             evaluationRepository = FakeEvaluationRepository(),
             filters = null,
             readStorage = storage,
+            fetchCoordinator = FakeEvaluationFetchCoordinator(),
+            schedulerIntervalMillis = 3_600_000L,
             clientManager = fakeClientManager,
         )
 
@@ -139,6 +144,8 @@ class DefaultSplitFactoryTest {
             evaluationRepository = FakeEvaluationRepository(),
             filters = null,
             readStorage = FakeEvaluationReadStorage(),
+            fetchCoordinator = FakeEvaluationFetchCoordinator(),
+            schedulerIntervalMillis = 3_600_000L,
             scope = testScope,
             clientManager = customManager,
         )
@@ -166,6 +173,8 @@ class DefaultSplitFactoryTest {
             evaluationRepository = FakeEvaluationRepository(),
             filters = null,
             readStorage = FakeEvaluationReadStorage(),
+            fetchCoordinator = FakeEvaluationFetchCoordinator(),
+            schedulerIntervalMillis = 3_600_000L,
             scope = testScope,
             clientManager = customManager,
         )
@@ -187,6 +196,8 @@ class DefaultSplitFactoryTest {
             evaluationRepository = FakeEvaluationRepository(),
             filters = null,
             readStorage = FakeEvaluationReadStorage(),
+            fetchCoordinator = FakeEvaluationFetchCoordinator(),
+            schedulerIntervalMillis = 3_600_000L,
             scope = testScope,
         )
 
@@ -230,7 +241,7 @@ private class FakeAsyncBridge : AsyncBridgeLike {
     }
 }
 
-// Verify FetchReason → ObservableEventType mapping by exercising the production onFetchSuccess callback
+// Verify FetchReason → ObservableEventType mapping by exercising the production onEvaluationsUpdated callback
 class FetchReasonObserverMappingTest {
 
     private val evalKey = EvaluationKey(Key("user-1"))
@@ -243,10 +254,10 @@ class FetchReasonObserverMappingTest {
             },
             readStorage = FakeEvaluationReadStorage(),
             writeStorage = object : EvaluationWriteStorage {
-                override fun upsert(change: EvaluationChange) {}
+                override fun upsert(change: EvaluationChange): Boolean = true
                 override fun clear(evalKey: EvaluationKey) {}
             },
-            onFetchSuccess = { reason ->
+            onEvaluationsUpdated = { reason ->
                 val eventType = when (reason) {
                     FetchReason.INITIALIZATION, FetchReason.TARGET_SWITCH ->
                         ObservableEventType.EVAL_STORAGE_UPDATED
@@ -325,6 +336,8 @@ class SdkReadyTimeoutTest {
             evaluationRepository = FakeEvaluationRepository(),
             filters = null,
             readStorage = FakeEvaluationReadStorage(),
+            fetchCoordinator = FakeEvaluationFetchCoordinator(),
+            schedulerIntervalMillis = 3_600_000L,
             scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
             compositeObserver = compositeObserver,
             clientManager = FakeClientManager(),
@@ -350,6 +363,8 @@ class SdkReadyTimeoutTest {
             evaluationRepository = FakeEvaluationRepository(),
             filters = null,
             readStorage = FakeEvaluationReadStorage(),
+            fetchCoordinator = FakeEvaluationFetchCoordinator(),
+            schedulerIntervalMillis = 3_600_000L,
             scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
             compositeObserver = compositeObserver,
             clientManager = FakeClientManager(),

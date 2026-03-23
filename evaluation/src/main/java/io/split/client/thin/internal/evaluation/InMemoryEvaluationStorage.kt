@@ -33,11 +33,17 @@ class InMemoryEvaluationStorage : EvaluationReadStorage, EvaluationWriteStorage 
         return store[evalKey]?.changeNumber ?: -1L
     }
 
-    override fun upsert(change: EvaluationChange) {
+    override fun upsert(change: EvaluationChange): Boolean {
         val keyEvals = store.getOrPut(change.evaluationKey) { KeyEvaluations() }
         synchronized(keyEvals) {
+            val incomingFlagNames = change.evaluations.map { it.result.flag }.toSet()
+            val shouldUpdate = change.changeNumber > keyEvals.changeNumber ||
+                    incomingFlagNames != keyEvals.evaluations.keys
+            if (!shouldUpdate) return false
+            keyEvals.evaluations.clear()
             change.evaluations.forEach { keyEvals.evaluations[it.result.flag] = it }
             keyEvals.changeNumber = change.changeNumber
+            return true
         }
     }
 

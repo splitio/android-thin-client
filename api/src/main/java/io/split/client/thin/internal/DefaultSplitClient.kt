@@ -10,6 +10,7 @@ import io.split.client.thin.SplitEvent
 import io.split.client.thin.SplitEventListener
 import io.split.client.thin.SplitVoidCallback
 import io.split.client.thin.Target
+import io.split.client.thin.internal.evaluation.EvaluationPeriodicScheduler
 import io.split.client.thin.internal.evaluation.EvaluationReadStorage
 import io.split.client.thin.internal.evaluation.EvaluationRepository
 import io.split.client.thin.internal.evaluation.StoredEvaluation
@@ -26,6 +27,7 @@ internal class DefaultSplitClient(
     private val filters: EvaluationFilters?,
     private val fallbackCalculator: FallbackTreatmentsCalculator?,
     private val eventsManager: EventsManager<SplitEvent, SdkInternalEvent, Any?>,
+    private val periodicScheduler: EvaluationPeriodicScheduler,
 ) : SplitClient {
 
     @Volatile
@@ -60,6 +62,7 @@ internal class DefaultSplitClient(
 
     override suspend fun setTarget(target: Target) {
         this.target = target
+        periodicScheduler.updateTarget(target, filters)
         evaluationRepository.setTarget(target, filters)
     }
 
@@ -94,6 +97,7 @@ internal class DefaultSplitClient(
     }
 
     override suspend fun destroy() {
+        periodicScheduler.stop()
         flush()
         tracker.enableTracking(false)
         eventsManager.destroy()

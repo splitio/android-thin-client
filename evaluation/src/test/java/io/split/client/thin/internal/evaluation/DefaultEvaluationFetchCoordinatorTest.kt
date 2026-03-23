@@ -117,13 +117,13 @@ class DefaultEvaluationFetchCoordinatorTest {
     }
 
     @Test
-    fun `fetchIfNeeded invokes onFetchSuccess with INITIALIZATION reason`() = runTest {
+    fun `fetchIfNeeded invokes onEvaluationsUpdated with INITIALIZATION reason`() = runTest {
         val capturedReason = mutableListOf<FetchReason>()
         val coordinator = DefaultEvaluationFetchCoordinator(
             provider = FakeEvaluationProvider(),
             readStorage = FakeEvaluationReadStorage(),
             writeStorage = FakeEvaluationWriteStorage(),
-            onFetchSuccess = { capturedReason.add(it) },
+            onEvaluationsUpdated = { capturedReason.add(it) },
         )
 
         coordinator.fetchIfNeeded(evalKey, null, FetchReason.INITIALIZATION)
@@ -132,13 +132,45 @@ class DefaultEvaluationFetchCoordinatorTest {
     }
 
     @Test
-    fun `fetchIfNeeded does not invoke onFetchSuccess on provider error`() = runTest {
+    fun `fetchIfNeeded invokes onEvaluationsUpdated on first fetch even when upsert reports no change`() = runTest {
+        var callbackInvoked = false
+        val coordinator = DefaultEvaluationFetchCoordinator(
+            provider = FakeEvaluationProvider(),
+            readStorage = FakeEvaluationReadStorage(),
+            writeStorage = FakeEvaluationWriteStorage(upsertResult = false),
+            onEvaluationsUpdated = { callbackInvoked = true },
+        )
+
+        coordinator.fetchIfNeeded(evalKey, null, FetchReason.INITIALIZATION)
+
+        assertTrue(callbackInvoked)
+    }
+
+    @Test
+    fun `fetchIfNeeded does not invoke onEvaluationsUpdated on subsequent fetch when upsert reports no change`() = runTest {
+        val capturedReasons = mutableListOf<FetchReason>()
+        val coordinator = DefaultEvaluationFetchCoordinator(
+            provider = FakeEvaluationProvider(),
+            readStorage = FakeEvaluationReadStorage(),
+            writeStorage = FakeEvaluationWriteStorage(upsertResult = false),
+            onEvaluationsUpdated = { capturedReasons.add(it) },
+        )
+
+        coordinator.fetchIfNeeded(evalKey, null, FetchReason.INITIALIZATION)
+        coordinator.fetchIfNeeded(evalKey, null, FetchReason.PERIODIC)
+
+        assertEquals(1, capturedReasons.size)
+        assertEquals(FetchReason.INITIALIZATION, capturedReasons[0])
+    }
+
+    @Test
+    fun `fetchIfNeeded does not invoke onEvaluationsUpdated on provider error`() = runTest {
         var callbackInvoked = false
         val coordinator = DefaultEvaluationFetchCoordinator(
             provider = FakeEvaluationProvider(throwOnFetch = RuntimeException("fetch failed")),
             readStorage = FakeEvaluationReadStorage(),
             writeStorage = FakeEvaluationWriteStorage(),
-            onFetchSuccess = { callbackInvoked = true },
+            onEvaluationsUpdated = { callbackInvoked = true },
         )
 
         var caughtError: Throwable? = null

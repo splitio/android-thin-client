@@ -8,6 +8,7 @@ import io.split.client.thin.SplitFactory
 import io.split.client.thin.SplitManager
 import io.split.client.thin.SplitVoidCallback
 import io.split.client.thin.Target
+import io.split.client.thin.internal.evaluation.EvaluationFetchCoordinator
 import io.split.client.thin.internal.evaluation.EvaluationReadStorage
 import io.split.client.thin.internal.evaluation.EvaluationRepository
 import io.split.client.thin.internal.evaluation.toEvaluationKey
@@ -29,6 +30,8 @@ internal class DefaultSplitFactory(
     private val evaluationRepository: EvaluationRepository,
     private val filters: EvaluationFilters?,
     private val readStorage: EvaluationReadStorage,
+    private val fetchCoordinator: EvaluationFetchCoordinator,
+    private val schedulerIntervalMillis: Long,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
     private val compositeObserver: DefaultCompositeObserver = DefaultCompositeObserver(),
     private val clientManager: ClientManager = DefaultClientManager(
@@ -40,6 +43,8 @@ internal class DefaultSplitFactory(
             evaluationRepository,
             filters,
             buildFallbackCalculator(config),
+            fetchCoordinator,
+            schedulerIntervalMillis,
         ),
     ),
     private val splitManager: SplitManager = DefaultSplitManager(readStorage, defaultTarget.toEvaluationKey()),

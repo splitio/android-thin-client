@@ -88,12 +88,13 @@ class FakeEvaluationReadStorage(
 }
 
 // FakeEvaluationWriteStorage
-class FakeEvaluationWriteStorage : EvaluationWriteStorage {
+class FakeEvaluationWriteStorage(private val upsertResult: Boolean = true) : EvaluationWriteStorage {
     val upsertCalls = mutableListOf<EvaluationChange>()
     val clearCalls = mutableListOf<EvaluationKey>()
 
-    override fun upsert(change: EvaluationChange) {
+    override fun upsert(change: EvaluationChange): Boolean {
         upsertCalls.add(change)
+        return upsertResult
     }
 
     override fun clear(evalKey: EvaluationKey) {

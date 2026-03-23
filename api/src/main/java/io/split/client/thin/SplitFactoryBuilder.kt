@@ -71,7 +71,7 @@ object SplitFactoryBuilder {
             provider = provider,
             readStorage = storage,
             writeStorage = storage,
-            onFetchSuccess = { reason ->
+            onEvaluationsUpdated = { reason ->
                 val eventType = when (reason) {
                     FetchReason.INITIALIZATION, FetchReason.TARGET_SWITCH ->
                         ObservableEventType.EVAL_STORAGE_UPDATED
@@ -82,6 +82,7 @@ object SplitFactoryBuilder {
             },
         )
         val evaluationRepository = DefaultEvaluationRepository(storage, fetchCoordinator)
+        val schedulerIntervalMillis = (config?.sync?.evaluationRefreshRate ?: 3600) * 1_000L
 
         return DefaultSplitFactory(
             defaultTarget = defaultTarget,
@@ -90,6 +91,8 @@ object SplitFactoryBuilder {
             evaluationRepository = evaluationRepository,
             filters = null,
             readStorage = storage,
+            fetchCoordinator = fetchCoordinator,
+            schedulerIntervalMillis = schedulerIntervalMillis,
             compositeObserver = compositeObserver,
         )
     }
