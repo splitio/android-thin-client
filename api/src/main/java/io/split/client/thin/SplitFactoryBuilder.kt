@@ -1,5 +1,8 @@
 package io.split.client.thin
 
+import android.os.Handler
+import android.os.Looper
+import androidx.lifecycle.ProcessLifecycleOwner
 import io.split.android.client.network.HttpClientImpl
 import io.split.client.thin.http.createRetryableHttpClient
 import io.split.client.thin.internal.AsyncBridge
@@ -8,6 +11,7 @@ import io.split.client.thin.internal.auth.createAuthProvider
 import io.split.client.thin.internal.evaluation.createEvaluationComponents
 import io.split.client.thin.internal.evaluation.toEvaluationKey
 import io.split.client.thin.internal.evaluation.toEvaluationTarget
+import io.split.client.thin.internal.lifecycle.DefaultLifecycleManager
 import io.split.client.thin.internal.observer.AndroidLoggerAdapter
 import io.split.client.thin.internal.observer.DefaultCompositeObserver
 import io.split.client.thin.internal.observer.LoggerObserver
@@ -64,6 +68,20 @@ object SplitFactoryBuilder {
         )
         val schedulerIntervalMillis = (config?.sync?.evaluationRefreshRate ?: 3600) * 1_000L
 
+        val lifecycleManager = DefaultLifecycleManager(
+            compositeObserver = compositeObserver,
+            observerRegistrar = { observer ->
+                Handler(Looper.getMainLooper()).post {
+                    ProcessLifecycleOwner.get().lifecycle.addObserver(observer)
+                }
+            },
+            observerUnregistrar = { observer ->
+                Handler(Looper.getMainLooper()).post {
+                    ProcessLifecycleOwner.get().lifecycle.removeObserver(observer)
+                }
+            },
+        )
+
         return DefaultSplitFactory(
             defaultTarget = defaultTarget,
             config = config,
@@ -73,6 +91,7 @@ object SplitFactoryBuilder {
             fetchCoordinator = fetchCoordinator,
             schedulerIntervalMillis = schedulerIntervalMillis,
             compositeObserver = compositeObserver,
+            lifecycleManager = lifecycleManager,
         )
     }
 }

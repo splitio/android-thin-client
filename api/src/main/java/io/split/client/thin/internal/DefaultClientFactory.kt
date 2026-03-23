@@ -10,6 +10,8 @@ import io.split.client.thin.internal.evaluation.EvaluationPeriodicScheduler
 import io.split.client.thin.internal.evaluation.EvaluationRepository
 import io.split.client.thin.internal.secure.EvaluationFilters
 import io.harness.events.EventsManagers
+import io.split.client.thin.internal.lifecycle.LifecycleComponent
+import io.split.client.thin.internal.lifecycle.LifecycleManager
 import io.split.client.thin.internal.observer.CompositeObserver
 import io.split.client.thin.internal.sdkevents.EventManagerObserver
 import io.split.client.thin.internal.sdkevents.SplitEventDelivery
@@ -24,6 +26,7 @@ internal class DefaultClientFactory(
     private val fallbackCalculator: FallbackTreatmentsCalculator?,
     private val fetchCoordinator: EvaluationFetchCoordinator,
     private val schedulerIntervalMillis: Long,
+    private val lifecycleManager: LifecycleManager? = null,
     private val schedulerFactory: (EvaluationFetchCoordinator, Long) -> EvaluationPeriodicScheduler = { coordinator, intervalMillis ->
         DefaultEvaluationPeriodicScheduler(fetchCoordinator = coordinator, intervalMillis = intervalMillis)
     },
@@ -39,9 +42,13 @@ internal class DefaultClientFactory(
         compositeObserver.register(eventManagerObserver)
         val scheduler = schedulerFactory(fetchCoordinator, schedulerIntervalMillis)
         scheduler.start(target, filters)
+        lifecycleManager?.register(object : LifecycleComponent {
+            override fun pause() = scheduler.pause()
+            override fun resume() = scheduler.resume()
+        })
         return DefaultSplitClient(
             target, eventTracker.tracker,
-            evaluationRepository, filters, fallbackCalculator, eventsManager, scheduler
+            evaluationRepository, filters, fallbackCalculator, eventsManager, scheduler, scope
         )
     }
 }
