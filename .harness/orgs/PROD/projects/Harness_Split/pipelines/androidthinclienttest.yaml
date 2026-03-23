@@ -133,8 +133,8 @@ pipeline:
                         -Dsonar.token=$SONAR_TOKEN
                         -Dsonar.scanner.skipJreProvisioning=true
                         -Dsonar.scanner.skipSystemTruststore=true
-                        -Dsonar.sources=api/src/main,auth/src/main,retryable-http-client/src/main
-                        -Dsonar.tests=api/src/test,auth/src/test,retryable-http-client/src/test
+                        -Dsonar.sources=api/src/main,auth/src/main,retryable-http-client/src/main,secure-http-client/src/main
+                        -Dsonar.tests=api/src/test,auth/src/test,retryable-http-client/src/test,secure-http-client/src/test
                         -Dsonar.exclusions=**/build/**
                         -Dsonar.coverage.exclusions=**/*Test.kt,**/*Test.java
                         -Dsonar.coverage.jacoco.xmlReportPaths=build/reports/jacoco/jacocoAggregateUnitTestReport/jacocoAggregateUnitTestReport.xml

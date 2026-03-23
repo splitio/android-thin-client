@@ -1,6 +1,6 @@
 package io.split.client.thin.internal.auth
 
-internal data class JwtCredential(
+data class JwtCredential(
     val token: String,
     val expiresAt: Long,     // Unix timestamp (seconds)
     val pushEnabled: Boolean,

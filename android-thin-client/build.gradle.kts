@@ -23,6 +23,7 @@ val fusedIncludedProjects = listOf(
     project(":tracker"),
     project(":events-tracking"),
     project(":auth"),
+    project(":secure-http-client"),
 )
 
 dependencies {
