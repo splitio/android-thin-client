@@ -26,6 +26,7 @@ internal class DefaultSplitClient(
     private val fallbackCalculator: FallbackTreatmentsCalculator?,
     private val eventsManager: EventsManager<SplitEvent, SdkInternalEvent, Any?>,
     private val periodicScheduler: EvaluationPeriodicScheduler,
+    private val flushFn: suspend () -> Unit = {},
 ) : SplitClient {
 
     @Volatile
@@ -106,7 +107,7 @@ internal class DefaultSplitClient(
     }
 
     override suspend fun flush() {
-        // no-op for milestone 1
+        flushFn()
     }
 
     override fun flushAsync(callback: SplitVoidCallback) {

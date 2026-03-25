@@ -31,6 +31,8 @@ val fusedIncludedProjects = listOf(
     project(":evaluation"),
     project(":observer"),
     project(":events"),
+    project(":executor"),
+    project(":submitter"),
 )
 
 dependencies {

@@ -42,6 +42,8 @@ listOf<String>(
     "backoff",
     "tracker",
     "events",
+    "executor",
+    "submitter",
 ).forEach {
     include(":$it")
     project(":$it").projectDir = file("android-client/$it")

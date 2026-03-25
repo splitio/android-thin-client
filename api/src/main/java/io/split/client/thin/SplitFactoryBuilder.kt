@@ -1,6 +1,16 @@
 package io.split.client.thin
 
 import io.split.android.client.network.HttpClientImpl
+import io.split.android.client.service.executor.SplitTaskType
+import io.split.android.client.submitter.RecorderSyncHelperImpl
+import io.split.client.thin.events.CoroutineSplitTaskExecutor
+import io.split.client.thin.events.DefaultEventSubmissionCoordinator
+import io.split.client.thin.events.EventsPeriodicScheduler
+import io.split.client.thin.events.EventsPushHandler
+import io.split.client.thin.events.EventsRecorderTask
+import io.split.client.thin.events.EventsStorage
+import io.split.client.thin.events.HttpEventsSubmitter
+import io.split.client.thin.events.InBytesSizableStorageAdapter
 import io.split.client.thin.http.createRetryableHttpClient
 import io.split.client.thin.internal.AsyncBridge
 import io.split.client.thin.internal.DefaultSplitFactory
@@ -13,6 +23,9 @@ import io.split.client.thin.internal.observer.DefaultCompositeObserver
 import io.split.client.thin.internal.observer.LoggerObserver
 import io.split.client.thin.internal.secure.EvaluationTarget
 import io.split.client.thin.internal.secure.createSecureHttpClient
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 
 /**
  * Builder for creating a [SplitFactory] instance.
@@ -64,6 +77,37 @@ object SplitFactoryBuilder {
         )
         val schedulerIntervalMillis = (config?.sync?.evaluationRefreshRate ?: 3600) * 1_000L
 
+        // Event tracking components
+        val eventsScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val eventsStorage = EventsStorage()
+        val httpEventsSubmitter = HttpEventsSubmitter(secureHttpClient::postEvents)
+        val eventsRecorderTask = EventsRecorderTask(
+            storage = eventsStorage,
+            submitter = httpEventsSubmitter,
+            batchSize = 500
+        )
+        val taskExecutor = CoroutineSplitTaskExecutor(eventsScope)
+        val storageAdapter = InBytesSizableStorageAdapter(eventsStorage)
+        val syncHelper = RecorderSyncHelperImpl<io.split.android.client.submitter.InBytesSizable>(
+            SplitTaskType.GENERIC_TASK,
+            storageAdapter,
+            5000,
+            5_242_880L,
+            taskExecutor
+        )
+        val eventsCoordinator = DefaultEventSubmissionCoordinator(
+            scope = eventsScope,
+            task = { eventsRecorderTask.execute() }
+        )
+        val pushRateMillis = (config?.sync?.pushRate ?: 1800) * 1_000L
+        val eventsScheduler = EventsPeriodicScheduler(
+            scope = eventsScope,
+            coordinator = eventsCoordinator,
+            pushRateMillis = pushRateMillis
+        )
+        val eventsPushHandler = EventsPushHandler(syncHelper, eventsCoordinator)
+        eventsScheduler.start()
+
         return DefaultSplitFactory(
             defaultTarget = defaultTarget,
             config = config,
@@ -72,7 +116,23 @@ object SplitFactoryBuilder {
             filters = null,
             fetchCoordinator = fetchCoordinator,
             schedulerIntervalMillis = schedulerIntervalMillis,
+            eventsScheduler = eventsScheduler,
+            eventsCoordinator = eventsCoordinator,
             compositeObserver = compositeObserver,
+            clientManager = io.split.client.thin.internal.DefaultClientManager(
+                CoroutineScope(SupervisorJob() + Dispatchers.IO),
+                io.split.client.thin.internal.DefaultClientFactory(
+                    compositeObserver = compositeObserver,
+                    scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+                    evaluationRepository = evaluationRepository,
+                    filters = null,
+                    fallbackCalculator = DefaultSplitFactory.buildFallbackCalculator(config),
+                    fetchCoordinator = fetchCoordinator,
+                    schedulerIntervalMillis = schedulerIntervalMillis,
+                    onEventPush = eventsPushHandler,
+                    flushFn = { eventsCoordinator.flush() },
+                )
+            ),
         )
     }
 }
