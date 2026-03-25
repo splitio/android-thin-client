@@ -16,8 +16,8 @@ class EventsStorage : RecorderStorage<TrackerEvent>, StoragePusher<TrackerEvent>
     @Synchronized
     override fun pop(count: Int): List<TrackerEvent> {
         val itemsToPop = minOf(count, queue.size)
-        val items = queue.take(itemsToPop)
-        repeat(itemsToPop) { queue.removeAt(0) }
+        val items = queue.subList(0, itemsToPop).toList()
+        queue.subList(0, itemsToPop).clear()
         return items
     }
 

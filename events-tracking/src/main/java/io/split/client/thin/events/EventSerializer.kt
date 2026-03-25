@@ -30,7 +30,7 @@ object EventSerializer {
         val key: String,
         val trafficTypeName: String,
         val eventTypeId: String,
-        val value: Double,
+        val value: Double?,
         val timestamp: Long,
         val properties: Map<String, @Serializable(with = AnySerializer::class) Any>?
     )

@@ -98,7 +98,6 @@ internal class DefaultSplitFactory(
     override suspend fun destroy() {
         eventsScheduler?.stop()
         eventsCoordinator?.flush()
-        eventsCoordinator?.stop()
         compositeObserver.unregisterAll()
         clientManager.destroyAll()
         scope.cancel()

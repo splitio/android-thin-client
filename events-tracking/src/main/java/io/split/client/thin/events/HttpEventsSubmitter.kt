@@ -3,6 +3,7 @@ package io.split.client.thin.events
 import io.split.android.client.network.HttpResponse
 import io.split.android.client.submitter.RecorderException
 import io.split.android.client.submitter.RecorderSubmitter
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 
 class HttpEventsSubmitter(
@@ -10,7 +11,7 @@ class HttpEventsSubmitter(
 ) : RecorderSubmitter<String> {
 
     override fun execute(data: String) {
-        val response = runBlocking { postEvents(data) }
+        val response = runBlocking(Dispatchers.IO) { postEvents(data) }
 
         if (!response.isSuccess) {
             val isRetryable = response.httpStatus >= 500

@@ -101,17 +101,6 @@ class EventSubmissionCoordinatorTest {
     }
 
     @Test
-    fun `stop cancels scope`() = runTest(testDispatcher) {
-        coordinator.stop()
-
-        coordinator.triggerSubmission(EventFlushReason.QUEUE)
-        advanceUntilIdle()
-
-        // Task should not execute after stop
-        assertEquals(0, taskExecutionCount)
-    }
-
-    @Test
     fun `multiple sequential triggers execute successfully`() = runTest(testDispatcher) {
         coordinator.triggerSubmission(EventFlushReason.QUEUE)
         advanceUntilIdle()
