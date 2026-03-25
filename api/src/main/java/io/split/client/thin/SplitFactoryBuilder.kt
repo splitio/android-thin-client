@@ -13,6 +13,8 @@ import io.split.client.thin.events.HttpEventsSubmitter
 import io.split.client.thin.events.InBytesSizableStorageAdapter
 import io.split.client.thin.http.createRetryableHttpClient
 import io.split.client.thin.internal.AsyncBridge
+import io.split.client.thin.internal.DefaultClientFactory
+import io.split.client.thin.internal.DefaultClientManager
 import io.split.client.thin.internal.DefaultSplitFactory
 import io.split.client.thin.internal.auth.createAuthProvider
 import io.split.client.thin.internal.evaluation.createEvaluationComponents
@@ -121,9 +123,9 @@ object SplitFactoryBuilder {
             eventsCoordinator = eventsCoordinator,
             scope = factoryScope,
             compositeObserver = compositeObserver,
-            clientManager = io.split.client.thin.internal.DefaultClientManager(
+            clientManager = DefaultClientManager(
                 factoryScope,
-                io.split.client.thin.internal.DefaultClientFactory(
+                DefaultClientFactory(
                     compositeObserver = compositeObserver,
                     scope = factoryScope,
                     evaluationRepository = evaluationRepository,
