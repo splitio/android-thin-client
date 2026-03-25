@@ -15,13 +15,11 @@ class DefaultEventSubmissionCoordinator(
 
     override fun triggerSubmission(reason: EventFlushReason) {
         scope.launch {
-            if (mutex.isLocked) {
-                // Drop request if submission already in progress
-                return@launch
-            }
-
-            mutex.withLock {
+            if (!mutex.tryLock()) return@launch
+            try {
                 task()
+            } finally {
+                mutex.unlock()
             }
         }
     }

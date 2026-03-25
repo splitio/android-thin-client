@@ -77,8 +77,10 @@ object SplitFactoryBuilder {
         )
         val schedulerIntervalMillis = (config?.sync?.evaluationRefreshRate ?: 3600) * 1_000L
 
+        // Single factory-level scope for all async operations
+        val factoryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
         // Event tracking components
-        val eventsScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         val eventsStorage = EventsStorage()
         val httpEventsSubmitter = HttpEventsSubmitter(secureHttpClient::postEvents)
         val eventsRecorderTask = EventsRecorderTask(
@@ -86,7 +88,7 @@ object SplitFactoryBuilder {
             submitter = httpEventsSubmitter,
             batchSize = 500
         )
-        val taskExecutor = CoroutineSplitTaskExecutor(eventsScope)
+        val taskExecutor = CoroutineSplitTaskExecutor(factoryScope)
         val storageAdapter = InBytesSizableStorageAdapter(eventsStorage)
         val syncHelper = RecorderSyncHelperImpl<io.split.android.client.submitter.InBytesSizable>(
             SplitTaskType.GENERIC_TASK,
@@ -96,17 +98,16 @@ object SplitFactoryBuilder {
             taskExecutor
         )
         val eventsCoordinator = DefaultEventSubmissionCoordinator(
-            scope = eventsScope,
+            scope = factoryScope,
             task = { eventsRecorderTask.execute() }
         )
         val pushRateMillis = (config?.sync?.pushRate ?: 1800) * 1_000L
         val eventsScheduler = EventsPeriodicScheduler(
-            scope = eventsScope,
+            scope = factoryScope,
             coordinator = eventsCoordinator,
             pushRateMillis = pushRateMillis
         )
         val eventsPushHandler = EventsPushHandler(syncHelper, eventsCoordinator)
-        eventsScheduler.start()
 
         return DefaultSplitFactory(
             defaultTarget = defaultTarget,
@@ -118,12 +119,13 @@ object SplitFactoryBuilder {
             schedulerIntervalMillis = schedulerIntervalMillis,
             eventsScheduler = eventsScheduler,
             eventsCoordinator = eventsCoordinator,
+            scope = factoryScope,
             compositeObserver = compositeObserver,
             clientManager = io.split.client.thin.internal.DefaultClientManager(
-                CoroutineScope(SupervisorJob() + Dispatchers.IO),
+                factoryScope,
                 io.split.client.thin.internal.DefaultClientFactory(
                     compositeObserver = compositeObserver,
-                    scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+                    scope = factoryScope,
                     evaluationRepository = evaluationRepository,
                     filters = null,
                     fallbackCalculator = DefaultSplitFactory.buildFallbackCalculator(config),

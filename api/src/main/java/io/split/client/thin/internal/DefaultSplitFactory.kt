@@ -83,6 +83,8 @@ internal class DefaultSplitFactory(
                 )
             }
         }
+
+        eventsScheduler?.start()
     }
 
     override fun getClient(target: Target?): SplitClient {
