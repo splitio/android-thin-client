@@ -5,7 +5,7 @@ import java.util.concurrent.ConcurrentHashMap
 class InMemoryEvaluationStorage : EvaluationReadStorage, EvaluationWriteStorage {
 
     private class KeyEvaluations {
-        val evaluations = ConcurrentHashMap<String, StoredEvaluation>()
+        @Volatile var evaluations: Map<String, StoredEvaluation> = emptyMap()
         @Volatile var changeNumber: Long = -1L
     }
 
@@ -40,8 +40,7 @@ class InMemoryEvaluationStorage : EvaluationReadStorage, EvaluationWriteStorage 
             val shouldUpdate = change.changeNumber > keyEvals.changeNumber ||
                     incomingFlagNames != keyEvals.evaluations.keys
             if (!shouldUpdate) return false
-            keyEvals.evaluations.clear()
-            change.evaluations.forEach { keyEvals.evaluations[it.result.flag] = it }
+            keyEvals.evaluations = change.evaluations.associateBy { it.result.flag }
             keyEvals.changeNumber = change.changeNumber
             return true
         }

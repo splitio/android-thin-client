@@ -1,7 +1,5 @@
 package io.split.client.thin
 
-import io.split.android.client.fallback.FallbackTreatmentsConfiguration
-
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals

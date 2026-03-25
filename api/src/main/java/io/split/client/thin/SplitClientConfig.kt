@@ -1,6 +1,5 @@
 package io.split.client.thin
 
-import io.split.android.client.fallback.FallbackTreatmentsConfiguration
 import io.split.android.client.utils.logger.Logger
 import io.split.android.client.utils.logger.SplitLogLevel
 

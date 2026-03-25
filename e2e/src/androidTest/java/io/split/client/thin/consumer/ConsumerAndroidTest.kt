@@ -16,10 +16,6 @@ import io.split.client.thin.SplitFactoryBuilder
 import io.split.client.thin.SplitManager
 import io.split.client.thin.Target
 import io.split.client.thin.splitClientConfig
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull

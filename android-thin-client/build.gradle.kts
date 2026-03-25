@@ -6,12 +6,15 @@ plugins {
     id("com.vanniktech.maven.publish")
 }
 
+apply(from = rootProject.file("gradle/shadow-repackage.gradle.kts"))
+
 androidFusedLibrary {
     namespace = "io.split.client.thin"
     minSdk {
         version = release(21)
     }
 }
+
 val fusedIncludedProjects = listOf(
     project(":models"),
     project(":api"),
@@ -72,6 +75,8 @@ tasks.configureEach {
     }
 }
 
+val repackageAar = tasks.named("repackageAar")
+
 afterEvaluate {
     tasks.configureEach {
         if (name.startsWith("generateMetadataFileFor") ||
@@ -79,6 +84,11 @@ afterEvaluate {
             javaClass.name.endsWith("GenerateModuleMetadata")
         ) {
             enabled = false
+        }
+
+        // Make all publish tasks depend on repackageAar so the repackaged AAR is ready
+        if (name.startsWith("publish") || name == "publishToMavenLocal") {
+            dependsOn(repackageAar)
         }
     }
 
@@ -97,6 +107,16 @@ afterEvaluate {
             // Ensure publication always includes one concrete merged sources artifact.
             artifacts.removeAll { it.classifier == "sources" && it.extension == "jar" }
             artifact(fusedSourcesJar)
+
+            // Replace the default AAR with the repackaged one
+            val repackagedAar = layout.buildDirectory
+                .file("outputs/aar/android-thin-client-release-repackaged.aar")
+                .get().asFile
+            artifacts.removeAll { it.extension == "aar" }
+            artifact(repackagedAar) {
+                extension = "aar"
+                builtBy(repackageAar)
+            }
         }
     }
 }
