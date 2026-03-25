@@ -124,6 +124,7 @@ val extractAarForRepackaging by tasks.registering {
  *
  * Relocation rules:
  * - `io.split.android.client.*` → `io.split.client.thin.repackaged.io.split.android.client.*`
+ * - `io.split.android.engine.*` → `io.split.client.thin.repackaged.io.split.android.engine.*`
  * - `io.harness.events.*` → `io.split.client.thin.repackaged.io.harness.events.*`
  */
 val shadowClassesJar by tasks.registering(ShadowJar::class) {
@@ -140,6 +141,7 @@ val shadowClassesJar by tasks.registering(ShadowJar::class) {
 
     // Relocate android-client and harness packages to isolated namespace
     relocate("io.split.android.client", "io.split.client.thin.repackaged.io.split.android.client")
+    relocate("io.split.android.engine", "io.split.client.thin.repackaged.io.split.android.engine")
     relocate("io.harness.events", "io.split.client.thin.repackaged.io.harness.events")
 
     // Merge META-INF/services files - required for ServiceLoader to discover relocated providers
@@ -233,7 +235,9 @@ tasks.register("verifyRepackaging") {
             }).use { jar ->
                 jar.entries().asSequence().filter { it.name.endsWith(".class") }.forEach { entry ->
                     val path = entry.name
-                    if (path.startsWith("io/split/android/client/") || path.startsWith("io/harness/events/")) {
+                    if (path.startsWith("io/split/android/client/") ||
+                        path.startsWith("io/split/android/engine/") ||
+                        path.startsWith("io/harness/events/")) {
                         logger.error("FORBIDDEN class found: $path")
                         foundForbidden = true
                     }
