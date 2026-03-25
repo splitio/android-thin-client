@@ -2,6 +2,7 @@ package io.split.client.thin.internal
 
 import io.split.android.client.fallback.FallbackTreatmentsCalculator
 import io.split.android.client.fallback.FallbackTreatmentsCalculatorImpl
+import io.split.client.thin.internal.toInternal
 import io.split.client.thin.SplitClient
 import io.split.client.thin.SplitClientConfig
 import io.split.client.thin.SplitFactory
@@ -102,7 +103,7 @@ internal class DefaultSplitFactory(
     companion object {
         fun buildFallbackCalculator(config: SplitClientConfig?): FallbackTreatmentsCalculator? {
             val fbConfig = config?.fallbackTreatments ?: return null
-            return FallbackTreatmentsCalculatorImpl(fbConfig)
+            return FallbackTreatmentsCalculatorImpl(fbConfig.toInternal())
         }
     }
 }

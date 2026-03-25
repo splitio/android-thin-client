@@ -2,6 +2,16 @@ import com.android.build.api.dsl.LibraryExtension
 import org.gradle.testing.jacoco.plugins.JacocoTaskExtension
 import org.gradle.testing.jacoco.tasks.JacocoReport
 
+buildscript {
+    repositories {
+        gradlePluginPortal()
+        mavenCentral()
+    }
+    dependencies {
+        classpath("com.gradleup.shadow:shadow-gradle-plugin:9.4.0")
+    }
+}
+
 plugins {
     jacoco
     id("com.android.library") version "9.0.0" apply false
