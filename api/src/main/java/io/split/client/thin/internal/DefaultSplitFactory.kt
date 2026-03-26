@@ -15,6 +15,7 @@ import io.split.client.thin.internal.evaluation.DefaultEvaluationPeriodicSchedul
 import io.split.client.thin.internal.evaluation.EvaluationFetchCoordinator
 import io.split.client.thin.internal.evaluation.EvaluationRepository
 import io.split.client.thin.internal.evaluation.toEvaluationKey
+import io.split.client.thin.internal.lifecycle.LifecycleComponent
 import io.split.client.thin.internal.lifecycle.LifecycleManager
 import io.split.client.thin.internal.secure.EvaluationFilters
 import io.split.client.thin.internal.observer.DefaultCompositeObserver
@@ -88,6 +89,14 @@ internal class DefaultSplitFactory(
         }
 
         eventsScheduler?.start()
+
+        // Register events scheduler with lifecycle manager
+        eventsScheduler?.let { scheduler ->
+            lifecycleManager?.register(object : LifecycleComponent {
+                override fun pause() = scheduler.pause()
+                override fun resume() = scheduler.resume()
+            })
+        }
     }
 
     override fun getClient(target: Target?): SplitClient {

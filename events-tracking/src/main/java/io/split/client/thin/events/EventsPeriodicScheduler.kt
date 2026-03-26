@@ -22,7 +22,19 @@ class EventsPeriodicScheduler(
         }
     }
 
+    fun pause() {
+        job?.cancel()
+        job = null
+    }
+
+    fun resume() {
+        if (job == null || job?.isCancelled == true) {
+            start()
+        }
+    }
+
     fun stop() {
         job?.cancel()
+        job = null
     }
 }
