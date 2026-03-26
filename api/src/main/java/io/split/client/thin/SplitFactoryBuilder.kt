@@ -15,8 +15,17 @@ import io.split.client.thin.internal.lifecycle.DefaultLifecycleManager
 import io.split.client.thin.internal.observer.AndroidLoggerAdapter
 import io.split.client.thin.internal.observer.DefaultCompositeObserver
 import io.split.client.thin.internal.observer.LoggerObserver
+import io.split.android.client.backoff.ExponentialBackoffCounter
+import io.split.android.client.service.sseclient.EventStreamParser
+import io.split.android.client.service.sseclient.sseclient.EventSourceClientImpl
+import io.split.client.thin.internal.secure.DefaultSecureHttpClient
 import io.split.client.thin.internal.secure.EvaluationTarget
 import io.split.client.thin.internal.secure.createSecureHttpClient
+import io.split.client.thin.internal.streaming.DefaultStreamingController
+import io.split.client.thin.internal.streaming.StreamingConnectionManager
+import io.split.client.thin.internal.streaming.StreamingTransportImpl
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 
 /**
  * Builder for creating a [SplitFactory] instance.
@@ -27,6 +36,7 @@ object SplitFactoryBuilder {
     private const val DEFAULT_EVALUATIONS_URL = "https://sdk.split.io/api/v2/evaluations"
     private const val DEFAULT_EVENTS_URL = "https://events.split.io/api/v1/events/bulk"
     private const val DEFAULT_TELEMETRY_URL = "https://telemetry.split.io/api/v1/metrics/config"
+    private const val DEFAULT_STREAMING_URL = "https://streaming.split.io/sse"
 
     /**
      * Creates a factory configured with the SDK key, default target and config.
@@ -66,6 +76,29 @@ object SplitFactoryBuilder {
             secureHttpClient = secureHttpClient,
             compositeObserver = compositeObserver,
         )
+        val syncMode = config?.sync?.mode ?: SplitClientConfig.SyncMode.STREAMING
+        if (syncMode == SplitClientConfig.SyncMode.STREAMING) {
+            val streamingUrl = endpoints?.streamingUrl ?: DEFAULT_STREAMING_URL
+            val streamingScope = CoroutineScope(SupervisorJob())
+            val streamingConnectionManager = StreamingConnectionManager(
+                streamingUrl = streamingUrl,
+                target = defaultEvaluationTarget,
+                fetchCoordinator = fetchCoordinator,
+                eventSourceClientProvider = {
+                    EventSourceClientImpl(
+                        StreamingTransportImpl(retryableHttpClient),
+                        EventStreamParser(),
+                    )
+                },
+                authProvider = authProvider,
+                backoffCounter = ExponentialBackoffCounter(1, 60),
+                scope = streamingScope,
+                onOccupancyZero = { /* TODO: handle occupancy zero */ },
+            )
+            (secureHttpClient as? DefaultSecureHttpClient)?.streamingController =
+                DefaultStreamingController(streamingConnectionManager)
+        }
+
         val schedulerIntervalMillis = (config?.sync?.evaluationRefreshRate ?: 3600) * 1_000L
 
         val lifecycleManager = DefaultLifecycleManager(

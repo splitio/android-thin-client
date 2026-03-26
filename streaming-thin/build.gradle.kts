@@ -46,7 +46,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
     // JSON parsing
-    implementation(libs.gson)
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.5.1")
 
     // Testing
     testImplementation(libs.junit4)

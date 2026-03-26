@@ -11,7 +11,7 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.URI
 
-internal class StreamingTransportImpl(
+class StreamingTransportImpl(
     private val httpClient: RetryableHttpClient
 ) : StreamingTransport {
 

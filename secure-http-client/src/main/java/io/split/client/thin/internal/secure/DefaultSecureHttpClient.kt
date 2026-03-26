@@ -9,7 +9,7 @@ import io.split.client.thin.internal.auth.AuthProvider
 import java.net.URI
 import java.net.URLEncoder
 
-internal class DefaultSecureHttpClient(
+class DefaultSecureHttpClient(
     private val authProvider: AuthProvider<EvaluationTarget>,
     private val retryableHttpClient: RetryableHttpClient,
     private val defaultTarget: EvaluationTarget,
@@ -20,6 +20,8 @@ internal class DefaultSecureHttpClient(
     private val impressionsMode: Int? = null,
     private val sdkVersion: String = SDK_VERSION,
 ) : SecureHttpClient {
+
+    var streamingController: StreamingController? = null
 
     override suspend fun fetchEvaluations(target: EvaluationTarget, filters: EvaluationFilters?): HttpResponse {
         val uri = buildEvaluationsUri(target, filters)
@@ -46,11 +48,13 @@ internal class DefaultSecureHttpClient(
     }
 
     override suspend fun openStreaming(target: EvaluationTarget) {
-        throw UnsupportedOperationException("Streaming not yet implemented")
+        streamingController?.start()
+            ?: throw UnsupportedOperationException("Streaming not configured")
     }
 
     override suspend fun closeStreaming() {
-        throw UnsupportedOperationException("Streaming not yet implemented")
+        streamingController?.stop()
+            ?: throw UnsupportedOperationException("Streaming not configured")
     }
 
     private suspend fun executeAuthenticated(

@@ -1,17 +1,22 @@
 package io.split.client.thin.internal.streaming
 
-import com.google.gson.Gson
-import com.google.gson.JsonSyntaxException
 import io.split.android.client.utils.logger.Logger
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.Json
 
 internal class ThinNotificationParser(
-    private val gson: Gson = Gson()
+    private val json: Json = Json { ignoreUnknownKeys = true }
 ) {
 
     fun parseRaw(jsonData: String): RawThinNotification? {
         return try {
-            gson.fromJson(jsonData, RawThinNotification::class.java)
-        } catch (e: JsonSyntaxException) {
+            val dto = json.decodeFromString<RawThinNotificationDto>(jsonData)
+            RawThinNotification(
+                channel = dto.channel,
+                data = dto.data,
+                timestamp = dto.timestamp
+            )
+        } catch (e: SerializationException) {
             Logger.e("Failed to parse raw notification: ${e.message}")
             null
         }
@@ -36,35 +41,57 @@ internal class ThinNotificationParser(
     }
 
     private fun parseEvaluationUpdate(raw: RawThinNotification): EvaluationUpdateNotification? {
-        val dataMap = gson.fromJson(raw.data, Map::class.java)
-        val changeNumber = (dataMap["changeNumber"] as? Number)?.toLong() ?: return null
-        return EvaluationUpdateNotification(changeNumber, raw.channel, raw.timestamp)
+        return try {
+            val dto = json.decodeFromString<EvaluationUpdateDataDto>(raw.data)
+            EvaluationUpdateNotification(dto.changeNumber, raw.channel, raw.timestamp)
+        } catch (e: SerializationException) {
+            Logger.e("Failed to parse EVALUATION_UPDATE: ${e.message}")
+            null
+        }
     }
 
     private fun parseControl(raw: RawThinNotification): ThinControlNotification? {
-        val dataMap = gson.fromJson(raw.data, Map::class.java)
-        val controlTypeStr = dataMap["controlType"] as? String ?: return null
-        val controlType = when (controlTypeStr) {
-            "STREAMING_RESUMED" -> ThinControlNotification.ControlType.STREAMING_RESUMED
-            "STREAMING_DISABLED" -> ThinControlNotification.ControlType.STREAMING_DISABLED
-            "STREAMING_PAUSED" -> ThinControlNotification.ControlType.STREAMING_PAUSED
-            "STREAMING_RESET" -> ThinControlNotification.ControlType.STREAMING_RESET
-            else -> return null
+        return try {
+            val dto = json.decodeFromString<ControlDataDto>(raw.data)
+            val controlType = when (dto.controlType) {
+                "STREAMING_RESUMED" -> ThinControlNotification.ControlType.STREAMING_RESUMED
+                "STREAMING_DISABLED" -> ThinControlNotification.ControlType.STREAMING_DISABLED
+                "STREAMING_PAUSED" -> ThinControlNotification.ControlType.STREAMING_PAUSED
+                "STREAMING_RESET" -> ThinControlNotification.ControlType.STREAMING_RESET
+                else -> {
+                    Logger.w("Unknown control type: ${dto.controlType}")
+                    return null
+                }
+            }
+            ThinControlNotification(controlType, raw.channel, raw.timestamp)
+        } catch (e: SerializationException) {
+            Logger.e("Failed to parse CONTROL: ${e.message}")
+            null
         }
-        return ThinControlNotification(controlType, raw.channel, raw.timestamp)
     }
 
     private fun parseOccupancy(raw: RawThinNotification): ThinOccupancyNotification? {
-        val dataMap = gson.fromJson(raw.data, Map::class.java)
-        val publishers = (dataMap["publishers"] as? Number)?.toInt() ?: return null
-        return ThinOccupancyNotification(publishers, raw.channel, raw.timestamp)
+        return try {
+            val dto = json.decodeFromString<OccupancyDataDto>(raw.data)
+            ThinOccupancyNotification(dto.publishers, raw.channel, raw.timestamp)
+        } catch (e: SerializationException) {
+            Logger.e("Failed to parse OCCUPANCY: ${e.message}")
+            null
+        }
     }
 
     private fun parseError(raw: RawThinNotification): ThinStreamingError? {
-        val dataMap = gson.fromJson(raw.data, Map::class.java)
-        val message = dataMap["message"] as? String ?: "Unknown error"
-        val code = (dataMap["code"] as? Number)?.toInt() ?: -1
-        val statusCode = (dataMap["statusCode"] as? Number)?.toInt()
-        return ThinStreamingError(message, code, statusCode, raw.timestamp)
+        return try {
+            val dto = json.decodeFromString<ErrorDataDto>(raw.data)
+            ThinStreamingError(
+                message = dto.message ?: "Unknown error",
+                code = dto.code ?: -1,
+                statusCode = dto.statusCode,
+                eventTimestamp = raw.timestamp
+            )
+        } catch (e: SerializationException) {
+            Logger.e("Failed to parse ERROR: ${e.message}")
+            null
+        }
     }
 }

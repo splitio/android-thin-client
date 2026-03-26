@@ -19,7 +19,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.net.URI
 
-internal class StreamingConnectionManager(
+class StreamingConnectionManager(
     private val streamingUrl: String,
     private val target: EvaluationTarget,
     private val fetchCoordinator: EvaluationFetchCoordinator,
