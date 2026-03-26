@@ -32,11 +32,7 @@ interface SplitClient {
     /**
      * Switches the client target used for subsequent evaluations.
      */
-    @JvmSynthetic
-    suspend fun setTarget(target: Target)
-
-    @Deprecated("Use suspend setTarget()", level = DeprecationLevel.ERROR)
-    fun setTargetAsync(target: Target, callback: SplitVoidCallback)
+    fun setTarget(target: Target)
 
     /**
      * Registers a listener for SDK lifecycle and update events.

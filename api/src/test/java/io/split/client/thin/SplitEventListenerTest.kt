@@ -17,9 +17,7 @@ class SplitEventListenerTest {
             evaluationOptions: EvaluationOptions?,
         ) = emptyList<EvaluationResult>()
 
-        override suspend fun setTarget(target: Target) = Unit
-
-        override fun setTargetAsync(target: Target, callback: SplitVoidCallback) = Unit
+        override fun setTarget(target: Target) = Unit
 
         override fun addEventListener(listener: SplitEventListener) = Unit
 

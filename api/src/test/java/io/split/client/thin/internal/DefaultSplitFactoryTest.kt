@@ -388,11 +388,7 @@ private class StubSplitClient : SplitClient {
     override fun getTreatmentsByFlagSets(flagSets: List<String>, evaluationOptions: EvaluationOptions?): List<EvaluationResult> =
         throw UnsupportedOperationException()
 
-    override suspend fun setTarget(target: Target) = Unit
-
-    @Deprecated("Use suspend setTarget()", level = DeprecationLevel.ERROR)
-    override fun setTargetAsync(target: Target, callback: SplitVoidCallback): Unit =
-        throw UnsupportedOperationException()
+    override fun setTarget(target: Target) = Unit
 
     override fun addEventListener(listener: SplitEventListener): Unit =
         throw UnsupportedOperationException()

@@ -15,6 +15,7 @@ import io.split.client.thin.internal.evaluation.DefaultEvaluationPeriodicSchedul
 import io.split.client.thin.internal.evaluation.EvaluationFetchCoordinator
 import io.split.client.thin.internal.evaluation.EvaluationRepository
 import io.split.client.thin.internal.evaluation.toEvaluationKey
+import io.split.client.thin.internal.lifecycle.LifecycleManager
 import io.split.client.thin.internal.secure.EvaluationFilters
 import io.split.client.thin.internal.observer.DefaultCompositeObserver
 import io.split.client.thin.internal.observer.ObservableEvent
@@ -38,6 +39,7 @@ internal class DefaultSplitFactory(
     private val eventsCoordinator: EventSubmissionCoordinator? = null,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
     private val compositeObserver: DefaultCompositeObserver = DefaultCompositeObserver(),
+    private val lifecycleManager: LifecycleManager? = null,
     private val clientManager: ClientManager = DefaultClientManager(
         scope,
         DefaultClientFactory(
@@ -48,6 +50,7 @@ internal class DefaultSplitFactory(
             fallbackCalculator = buildFallbackCalculator(config),
             fetchCoordinator = fetchCoordinator,
             schedulerIntervalMillis = schedulerIntervalMillis,
+            lifecycleManager = lifecycleManager,
             schedulerFactory = { coordinator, intervalMillis ->
                 DefaultEvaluationPeriodicScheduler(
                     fetchCoordinator = coordinator,
@@ -98,6 +101,7 @@ internal class DefaultSplitFactory(
     override suspend fun destroy() {
         eventsScheduler?.stop()
         eventsCoordinator?.flush()
+        lifecycleManager?.destroy()
         compositeObserver.unregisterAll()
         clientManager.destroyAll()
         scope.cancel()

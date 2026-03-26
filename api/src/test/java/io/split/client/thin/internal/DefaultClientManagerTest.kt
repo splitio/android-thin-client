@@ -261,14 +261,10 @@ private class FakeSplitClient(
         evaluationOptions: EvaluationOptions?,
     ): List<EvaluationResult> = throw UnsupportedOperationException()
 
-    override suspend fun setTarget(target: Target) {
+    override fun setTarget(target: Target) {
         setTargetCallCount++
         lastSetTarget = target
     }
-
-    @Deprecated("Use suspend setTarget()", level = DeprecationLevel.ERROR)
-    override fun setTargetAsync(target: Target, callback: SplitVoidCallback): Unit =
-        throw UnsupportedOperationException()
 
     override fun addEventListener(listener: SplitEventListener): Unit =
         throw UnsupportedOperationException()

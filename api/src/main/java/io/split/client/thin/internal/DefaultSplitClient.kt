@@ -17,6 +17,8 @@ import io.split.client.thin.internal.evaluation.toEvaluationKey
 import io.split.client.thin.internal.secure.EvaluationFilters
 import io.split.client.thin.internal.sdkevents.SdkInternalEvent
 import io.split.client.thin.internal.sdkevents.SplitEventListenerAdapter
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 
 internal class DefaultSplitClient(
     initialTarget: Target,
@@ -27,6 +29,7 @@ internal class DefaultSplitClient(
     private val eventsManager: EventsManager<SplitEvent, SdkInternalEvent, Any?>,
     private val periodicScheduler: EvaluationPeriodicScheduler,
     private val flushFn: suspend () -> Unit = {},
+    private val scope: CoroutineScope,
 ) : SplitClient {
 
     @Volatile
@@ -59,17 +62,12 @@ internal class DefaultSplitClient(
         return results.values.map { stored -> resolveResult(stored.result.flag, stored) }
     }
 
-    override suspend fun setTarget(target: Target) {
+    override fun setTarget(target: Target) {
         this.target = target
         periodicScheduler.updateTarget(target, filters)
-        evaluationRepository.setTarget(target, filters)
-    }
-
-    override fun setTargetAsync(
-        target: Target,
-        callback: SplitVoidCallback
-    ) {
-        TODO("Not yet implemented")
+        scope.launch {
+            evaluationRepository.setTarget(target, filters)
+        }
     }
 
     override fun addEventListener(listener: SplitEventListener) {

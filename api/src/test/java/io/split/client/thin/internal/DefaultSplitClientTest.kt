@@ -16,6 +16,7 @@ import io.split.client.thin.internal.evaluation.FetchReason
 import io.split.client.thin.internal.evaluation.StoredEvaluation
 import io.split.client.thin.internal.secure.EvaluationFilters
 import io.split.client.thin.internal.sdkevents.SdkInternalEvent
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -30,6 +31,8 @@ import org.mockito.Mockito.`when`
 
 @Suppress("UNCHECKED_CAST")
 class DefaultSplitClientTest {
+
+    private val testScope = TestScope()
 
     private lateinit var tracker: Tracker
     private lateinit var target: Target
@@ -54,6 +57,7 @@ class DefaultSplitClientTest {
             filters = null,
             fallbackCalculator = null,
             periodicScheduler = periodicScheduler,
+            scope = testScope,
         )
     }
 
@@ -148,9 +152,10 @@ class DefaultSplitClientTest {
     }
 
     @Test
-    fun `setTarget delegates to evaluation repository`() = runTest {
+    fun `setTarget delegates to evaluation repository`() = testScope.runTest {
         val newTarget = Target(Key("user-2"))
         client.setTarget(newTarget)
+        testScheduler.advanceUntilIdle()
 
         assertEquals(1, evaluationRepository.setTargetCalls.size)
         assertEquals(newTarget, evaluationRepository.setTargetCalls[0].first)
