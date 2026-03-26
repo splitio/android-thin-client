@@ -31,6 +31,7 @@ include(":retryable-http-client")
 include(":secure-http-client")
 include(":events-tracking")
 include(":evaluation")
+include(":streaming-thin")
 include(":e2e")
 // include(":sdk")
 
@@ -42,6 +43,8 @@ listOf<String>(
     "backoff",
     "tracker",
     "events",
+    "streaming",
+    "streaming-support",
 ).forEach {
     include(":$it")
     project(":$it").projectDir = file("android-client/$it")
