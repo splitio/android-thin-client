@@ -20,8 +20,8 @@ import io.split.client.thin.internal.lifecycle.LifecycleComponent
 import io.split.client.thin.internal.observer.AndroidLoggerAdapter
 import io.split.client.thin.internal.observer.DefaultCompositeObserver
 import io.split.client.thin.internal.observer.LoggerObserver
-import io.split.client.thin.internal.secure.DefaultSecureHttpClient
 import io.split.client.thin.internal.secure.EvaluationTarget
+import io.split.client.thin.internal.secure.createSecureHttpClient
 import io.split.client.thin.internal.streaming.DefaultStreamingManager
 import io.split.client.thin.internal.streaming.StreamingTransportImpl
 import kotlinx.coroutines.CoroutineScope
@@ -69,7 +69,16 @@ object SplitFactoryBuilder {
         )
 
         val defaultEvaluationTarget = defaultTarget.toEvaluationKey().toEvaluationTarget()
-        val secureHttpClient = DefaultSecureHttpClient(
+
+        var onFetchNotification: suspend () -> Unit = {}
+        val syncMode = config?.sync?.mode ?: SplitClientConfig.SyncMode.STREAMING
+
+        // Track latest streaming targets for multi-user composite JWT in the tokenProvider.
+        // Updated atomically before streamingManager.start() is called so the token is always fresh.
+        var latestStreamingTargets: Set<EvaluationTarget> = setOf(defaultEvaluationTarget)
+        var streamingManager: DefaultStreamingManager? = null
+
+        val secureHttpClient = createSecureHttpClient(
             authProvider = authProvider,
             retryableHttpClient = retryableHttpClient,
             defaultTarget = defaultEvaluationTarget,
@@ -77,15 +86,18 @@ object SplitFactoryBuilder {
             eventsUrl = endpoints?.eventsUrl ?: DEFAULT_EVENTS_URL,
             telemetryUrl = endpoints?.telemetryUrl ?: DEFAULT_TELEMETRY_URL,
             sdkKey = sdkKey.sdkKey,
+            onStreamingTargetsChanged = { targets ->
+                latestStreamingTargets = targets
+                streamingManager?.start()
+            },
+            onStreamingEmpty = { streamingManager?.stopAll() },
         )
 
-        var onFetchNotification: suspend () -> Unit = {}
-        val syncMode = config?.sync?.mode ?: SplitClientConfig.SyncMode.STREAMING
-        val streamingManager = if (syncMode == SplitClientConfig.SyncMode.STREAMING) {
+        if (syncMode == SplitClientConfig.SyncMode.STREAMING) {
             val streamingScope = CoroutineScope(SupervisorJob())
-            DefaultStreamingManager(
+            streamingManager = DefaultStreamingManager(
                 streamingUrl = endpoints?.streamingUrl ?: DEFAULT_STREAMING_URL,
-                tokenProvider = { secureHttpClient.getStreamingToken() },
+                tokenProvider = { authProvider.credential(latestStreamingTargets).token },
                 eventSourceClientProvider = {
                     EventSourceClientImpl(
                         StreamingTransportImpl(retryableHttpClient),
@@ -96,8 +108,8 @@ object SplitFactoryBuilder {
                 scope = streamingScope,
                 onOccupancyZero = { /* TODO: handle occupancy zero */ },
                 onEvaluationFetchNotification = { onFetchNotification() },
-            ).also { secureHttpClient.streamingManager = it }
-        } else null
+            )
+        }
 
         val (fetchCoordinator, evaluationRepository) = createEvaluationComponents(
             secureHttpClient = secureHttpClient,

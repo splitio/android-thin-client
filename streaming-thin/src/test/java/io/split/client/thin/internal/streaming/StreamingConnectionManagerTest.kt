@@ -1,29 +1,29 @@
 package io.split.client.thin.internal.streaming
 
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
 import org.junit.Test
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class StreamingConnectionManagerTest {
 
     @Test
-    fun `start initiates connection`() = runBlocking {
+    fun `start initiates connection`() = runTest {
         val eventSourceClient = FakeEventSourceClient()
-        val manager = createManager(
-            eventSourceClientProvider = { eventSourceClient }
-        )
+        val manager = createManager(eventSourceClientProvider = { eventSourceClient })
 
         manager.start()
-        delay(100) // Give time for coroutine to start
+        advanceUntilIdle()
 
         assertTrue(eventSourceClient.connectCalled)
     }
 
     @Test
-    fun `start when already started is idempotent`() = runBlocking {
+    fun `start when already started is idempotent`() = runTest {
         var connectCount = 0
         val manager = createManager(
             eventSourceClientProvider = {
@@ -33,31 +33,28 @@ class StreamingConnectionManagerTest {
         )
 
         manager.start()
-        delay(50)
-        manager.start() // Second start should be ignored
-        delay(50)
+        advanceUntilIdle()
+        manager.start()
+        advanceUntilIdle()
 
         assertEquals(1, connectCount)
     }
 
     @Test
-    fun `stop cancels connection`() = runBlocking {
+    fun `stop cancels connection`() = runTest {
         val eventSourceClient = FakeEventSourceClient()
-        val manager = createManager(
-            eventSourceClientProvider = { eventSourceClient }
-        )
+        val manager = createManager(eventSourceClientProvider = { eventSourceClient })
 
         manager.start()
-        delay(50)
+        advanceUntilIdle()
         manager.stop()
-        delay(50)
+        advanceUntilIdle()
 
-        // Should have connected but not reconnecting
         assertTrue(eventSourceClient.connectCalled)
     }
 
     @Test
-    fun `pause disconnects without reconnect`() = runBlocking {
+    fun `pause disconnects without reconnect`() = runTest {
         val eventSourceClient = FakeEventSourceClient()
         var connectCount = 0
         val manager = createManager(
@@ -68,16 +65,16 @@ class StreamingConnectionManagerTest {
         )
 
         manager.start()
-        delay(50)
+        advanceUntilIdle()
         manager.pause()
-        delay(200) // Wait longer than reconnect backoff
+        advanceUntilIdle()
 
         // Should only connect once (no reconnect after pause)
         assertEquals(1, connectCount)
     }
 
     @Test
-    fun `resume reconnects if started`() = runBlocking {
+    fun `resume reconnects if paused`() = runTest {
         var connectCount = 0
         val manager = createManager(
             eventSourceClientProvider = {
@@ -87,18 +84,18 @@ class StreamingConnectionManagerTest {
         )
 
         manager.start()
-        delay(50)
+        advanceUntilIdle()
         manager.pause()
-        delay(50)
+        advanceUntilIdle()
         manager.resume()
-        delay(50)
+        advanceUntilIdle()
 
         // Should connect twice: initial start + resume
         assertEquals(2, connectCount)
     }
 
     @Test
-    fun `resume when not started does nothing`() = runBlocking {
+    fun `resume when not started does nothing`() = runTest {
         var connectCount = 0
         val manager = createManager(
             eventSourceClientProvider = {
@@ -107,55 +104,52 @@ class StreamingConnectionManagerTest {
             }
         )
 
-        manager.resume() // Resume without start
-        delay(100)
+        manager.resume()
+        advanceUntilIdle()
 
         assertEquals(0, connectCount)
     }
 
     @Test
-    fun `onOpen resets backoff counter`() = runBlocking {
+    fun `onOpen resets backoff counter`() = runTest {
         val eventSourceClient = FakeEventSourceClient()
         val backoffCounter = FakeBackoffCounter()
         val manager = createManager(
             eventSourceClientProvider = { eventSourceClient },
-            backoffCounter = backoffCounter
+            backoffCounter = backoffCounter,
         )
 
         manager.start()
-        delay(100)
+        advanceUntilIdle()
 
-        // onOpen should have been called, resetting backoff
         assertEquals(1, backoffCounter.resetCount)
     }
 
     @Test
-    fun `onMessage with EVALUATION_UPDATE triggers onEvaluationFetchNotification`() = runBlocking {
+    fun `onMessage with EVALUATION_UPDATE triggers onEvaluationFetchNotification`() = runTest {
         val eventSourceClient = FakeEventSourceClient()
         var fetchNotificationCount = 0
         val manager = createManager(
             eventSourceClientProvider = { eventSourceClient },
-            onEvaluationFetchNotification = { fetchNotificationCount++ }
+            onEvaluationFetchNotification = { fetchNotificationCount++ },
         )
 
         manager.start()
-        delay(100)
+        advanceUntilIdle()
 
-        // Simulate EVALUATION_UPDATE message
         eventSourceClient.simulateMessage(
             mapOf(
                 "channel" to "evaluations",
                 "data" to """{"type":"EVALUATION_UPDATE","changeNumber":123}"""
             )
         )
-        delay(100)
+        advanceUntilIdle()
 
-        // Should have triggered fetch notification
         assertEquals(1, fetchNotificationCount)
     }
 
     @Test
-    fun `onMessage with STREAMING_RESUMED calls resume`() = runBlocking {
+    fun `onMessage with STREAMING_RESUMED triggers reconnect when paused`() = runTest {
         val eventSourceClient = FakeEventSourceClient()
         var connectCount = 0
         val manager = createManager(
@@ -166,25 +160,21 @@ class StreamingConnectionManagerTest {
         )
 
         manager.start()
-        delay(50)
+        advanceUntilIdle()
         manager.pause()
-        delay(50)
-        connectCount = 0 // Reset count after initial start and pause
+        advanceUntilIdle()
+        connectCount = 0
 
-        // Simulate STREAMING_RESUMED
         eventSourceClient.simulateMessage(
-            mapOf(
-                "data" to """{"type":"CONTROL","controlType":"STREAMING_RESUMED"}"""
-            )
+            mapOf("data" to """{"type":"CONTROL","controlType":"STREAMING_RESUMED"}""")
         )
-        delay(100)
+        advanceUntilIdle()
 
-        // Should have reconnected
         assertTrue(connectCount > 0)
     }
 
     @Test
-    fun `onMessage with STREAMING_PAUSED calls pause`() = runBlocking {
+    fun `onMessage with STREAMING_PAUSED does not reconnect`() = runTest {
         val eventSourceClient1 = FakeEventSourceClient()
         val eventSourceClient2 = FakeEventSourceClient()
         var connectCount = 0
@@ -196,22 +186,19 @@ class StreamingConnectionManagerTest {
         )
 
         manager.start()
-        delay(100)
+        advanceUntilIdle()
 
-        // Simulate STREAMING_PAUSED
         eventSourceClient1.simulateMessage(
-            mapOf(
-                "data" to """{"type":"CONTROL","controlType":"STREAMING_PAUSED"}"""
-            )
+            mapOf("data" to """{"type":"CONTROL","controlType":"STREAMING_PAUSED"}""")
         )
-        delay(200) // Wait to see if it reconnects (it shouldn't)
+        advanceUntilIdle()
 
         // Should only connect once (paused, no reconnect)
         assertEquals(1, connectCount)
     }
 
     @Test
-    fun `onMessage with STREAMING_DISABLED calls stop`() = runBlocking {
+    fun `onMessage with STREAMING_DISABLED stops without reconnect`() = runTest {
         val eventSourceClient = FakeEventSourceClient()
         var connectCount = 0
         val manager = createManager(
@@ -222,104 +209,82 @@ class StreamingConnectionManagerTest {
         )
 
         manager.start()
-        delay(100)
+        advanceUntilIdle()
 
-        // Simulate STREAMING_DISABLED
         eventSourceClient.simulateMessage(
-            mapOf(
-                "data" to """{"type":"CONTROL","controlType":"STREAMING_DISABLED"}"""
-            )
+            mapOf("data" to """{"type":"CONTROL","controlType":"STREAMING_DISABLED"}""")
         )
-        delay(200) // Wait to verify no reconnect
+        advanceUntilIdle()
 
-        // Should only connect once (stopped)
         assertEquals(1, connectCount)
     }
 
     @Test
-    fun `onMessage with STREAMING_RESET calls stop then start`() = runBlocking {
+    fun `onMessage with STREAMING_RESET reconnects`() = runTest {
+        val firstClient = FakeEventSourceClient()
         var connectCount = 0
         val manager = createManager(
             eventSourceClientProvider = {
                 connectCount++
-                FakeEventSourceClient()
+                firstClient
             }
         )
 
         manager.start()
-        delay(100)
-        val initialConnectCount = connectCount
+        advanceUntilIdle()
+        assertEquals(1, connectCount)
 
-        // Get reference to first client to send message
-        val firstClient = FakeEventSourceClient()
-        val managerWithFirstClient = createManager(
-            eventSourceClientProvider = { firstClient }
-        )
-        managerWithFirstClient.start()
-        delay(50)
-
-        // Simulate STREAMING_RESET
         firstClient.simulateMessage(
-            mapOf(
-                "data" to """{"type":"CONTROL","controlType":"STREAMING_RESET"}"""
-            )
+            mapOf("data" to """{"type":"CONTROL","controlType":"STREAMING_RESET"}""")
         )
-        delay(150)
+        advanceUntilIdle()
 
-        // Should have reconnected (stop + start)
-        // Note: This test is simplified; actual behavior depends on implementation
+        // stop + start should have caused a second connect
+        assertTrue(connectCount >= 2)
     }
 
     @Test
-    fun `onMessage with OCCUPANCY publishers=0 triggers callback`() = runBlocking {
+    fun `onMessage with OCCUPANCY publishers=0 triggers callback`() = runTest {
         val eventSourceClient = FakeEventSourceClient()
         var callbackInvoked = false
         val manager = createManager(
             eventSourceClientProvider = { eventSourceClient },
-            onOccupancyZero = { callbackInvoked = true }
+            onOccupancyZero = { callbackInvoked = true },
         )
 
         manager.start()
-        delay(100)
+        advanceUntilIdle()
 
-        // Simulate OCCUPANCY with 0 publishers
         eventSourceClient.simulateMessage(
-            mapOf(
-                "data" to """{"type":"OCCUPANCY","publishers":0}"""
-            )
+            mapOf("data" to """{"type":"OCCUPANCY","publishers":0}""")
         )
-        delay(100)
+        advanceUntilIdle()
 
-        // Should have triggered callback and stopped
         assertTrue(callbackInvoked)
     }
 
     @Test
-    fun `onMessage with OCCUPANCY publishers greater than 0 does not trigger callback`() = runBlocking {
+    fun `onMessage with OCCUPANCY publishers greater than 0 does not trigger callback`() = runTest {
         val eventSourceClient = FakeEventSourceClient()
         var callbackInvoked = false
         val manager = createManager(
             eventSourceClientProvider = { eventSourceClient },
-            onOccupancyZero = { callbackInvoked = true }
+            onOccupancyZero = { callbackInvoked = true },
         )
 
         manager.start()
-        delay(100)
+        advanceUntilIdle()
 
-        // Simulate OCCUPANCY with publishers > 0
         eventSourceClient.simulateMessage(
-            mapOf(
-                "data" to """{"type":"OCCUPANCY","publishers":5}"""
-            )
+            mapOf("data" to """{"type":"OCCUPANCY","publishers":5}""")
         )
-        delay(100)
+        advanceUntilIdle()
 
-        // Should NOT trigger callback
         assertFalse(callbackInvoked)
     }
 
     @Test
-    fun `connection error triggers reconnect with backoff`() = runBlocking {
+    fun `connection error triggers reconnect with backoff`() = runTest {
         var connectCount = 0
         val backoffCounter = FakeBackoffCounter(delays = listOf(50, 100))
         val manager = createManager(
@@ -329,31 +294,28 @@ class StreamingConnectionManagerTest {
                     if (connectCount == 1) shouldFailConnect = true
                 }
             },
-            backoffCounter = backoffCounter
+            backoffCounter = backoffCounter,
         )
 
         manager.start()
-        delay(300) // Wait for initial failure and reconnect
+        advanceUntilIdle()
 
-        // Should have attempted connect at least twice
         assertTrue(connectCount >= 2)
     }
 
-    // Helper to create StreamingConnectionManager with test doubles
-    private fun createManager(
+    private fun TestScope.createManager(
         eventSourceClientProvider: () -> FakeEventSourceClient = { FakeEventSourceClient() },
         backoffCounter: FakeBackoffCounter = FakeBackoffCounter(),
         onOccupancyZero: suspend () -> Unit = {},
         onEvaluationFetchNotification: suspend () -> Unit = {},
-    ): StreamingConnectionManager {
-        return StreamingConnectionManager(
-            streamingUrl = "https://streaming.test.io/sse",
-            tokenProvider = { "test-token" },
-            eventSourceClientProvider = eventSourceClientProvider,
-            backoffCounter = backoffCounter,
-            scope = CoroutineScope(Dispatchers.Unconfined), // Use Unconfined for synchronous test execution
-            onOccupancyZero = onOccupancyZero,
-            onEvaluationFetchNotification = onEvaluationFetchNotification,
-        )
-    }
+    ): StreamingConnectionManager = StreamingConnectionManager(
+        streamingUrl = "https://streaming.test.io/sse",
+        tokenProvider = { "test-token" },
+        eventSourceClientProvider = eventSourceClientProvider,
+        backoffCounter = backoffCounter,
+        scope = this,
+        connectionDispatcher = UnconfinedTestDispatcher(testScheduler),
+        onOccupancyZero = onOccupancyZero,
+        onEvaluationFetchNotification = onEvaluationFetchNotification,
+    )
 }

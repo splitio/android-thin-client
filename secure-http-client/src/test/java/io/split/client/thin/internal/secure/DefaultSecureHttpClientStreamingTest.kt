@@ -1,93 +1,88 @@
 package io.split.client.thin.internal.secure
 
-import io.split.client.thin.internal.streaming.StreamingManager
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class DefaultSecureHttpClientStreamingTest {
 
     @Test
-    fun `openStreaming adds target matchingKey to active set and starts streaming`() = runTest {
-        val streamingManager = FakeStreamingManager()
-        val (client, _, _) = makeClient(streamingManager = streamingManager)
+    fun `openStreaming calls onStreamingTargetsChanged with updated active set`() = runTest {
+        var capturedTargets: Set<EvaluationTarget>? = null
+        val (client, _, _) = makeClient(
+            onStreamingTargetsChanged = { targets -> capturedTargets = targets }
+        )
 
         client.openStreaming(testDefaultTarget)
 
-        assertEquals(1, streamingManager.startCallCount)
+        assertEquals(setOf(testDefaultTarget), capturedTargets)
     }
 
     @Test
-    fun `openStreaming with no streaming manager configured is a no-op`() = runTest {
-        val (client, _, _) = makeClient(streamingManager = null)
+    fun `openStreaming with no callbacks configured is a no-op`() = runTest {
+        val (client, _, _) = makeClient()
 
         // Should not throw
         client.openStreaming(testDefaultTarget)
     }
 
     @Test
-    fun `closeStreaming removes target and stops streaming when no more active targets`() = runTest {
-        val streamingManager = FakeStreamingManager()
-        val (client, _, _) = makeClient(streamingManager = streamingManager)
-
-        client.openStreaming(testDefaultTarget)
-        client.closeStreaming(testDefaultTarget)
-
-        assertEquals(1, streamingManager.stopAllCallCount)
-    }
-
-    @Test
-    fun `closeStreaming reconnects streaming when other targets remain active`() = runTest {
-        val target2 = EvaluationTarget("user-2", null, null)
-        val streamingManager = FakeStreamingManager()
-        val (client, _, _) = makeClient(streamingManager = streamingManager)
-
-        client.openStreaming(testDefaultTarget)
-        client.openStreaming(target2)
-        client.closeStreaming(testDefaultTarget)
-
-        // Should have reconnected (not stopped completely)
-        assertTrue(streamingManager.startCallCount >= 2)
-        assertEquals(0, streamingManager.stopAllCallCount)
-    }
-
-    @Test
-    fun `openStreaming triggers credential for active targets`() = runTest {
+    fun `openStreaming requests credential for active targets`() = runTest {
         val authProvider = FakeAuthProvider()
-        val (client, _, _) = makeClient(authProvider = authProvider, streamingManager = FakeStreamingManager())
+        val (client, _, _) = makeClient(
+            authProvider = authProvider,
+            onStreamingTargetsChanged = { _ -> }
+        )
 
         client.openStreaming(testDefaultTarget)
 
         assertTrue(authProvider.credentialCallCount > 0)
     }
-}
 
-internal class FakeStreamingManager : StreamingManager {
-    var startCallCount = 0
-    var stopCallCount = 0
-    var pauseCallCount = 0
-    var resumeCallCount = 0
-    var stopAllCallCount = 0
-    var lastTokenProvider: (suspend () -> String)? = null
+    @Test
+    fun `openStreaming does not invalidate existing credentials`() = runTest {
+        val authProvider = FakeAuthProvider()
+        val (client, _, _) = makeClient(
+            authProvider = authProvider,
+            onStreamingTargetsChanged = { _ -> }
+        )
 
-    override suspend fun start() {
-        startCallCount++
+        client.openStreaming(testDefaultTarget)
+
+        assertEquals(0, authProvider.invalidateCallCount)
     }
 
-    override suspend fun stop() {
-        stopCallCount++
+    @Test
+    fun `closeStreaming calls onStreamingEmpty when no active targets remain`() = runTest {
+        var emptyCalled = false
+        val (client, _, _) = makeClient(
+            onStreamingEmpty = { emptyCalled = true }
+        )
+
+        client.openStreaming(testDefaultTarget)
+        client.closeStreaming(testDefaultTarget)
+
+        assertTrue(emptyCalled)
     }
 
-    override fun pause() {
-        pauseCallCount++
-    }
+    @Test
+    fun `closeStreaming calls onStreamingTargetsChanged when other targets remain active`() = runTest {
+        val target2 = EvaluationTarget("user-2", null, null)
+        var changedCallCount = 0
+        var emptyCalled = false
+        val (client, _, _) = makeClient(
+            onStreamingTargetsChanged = { _ -> changedCallCount++ },
+            onStreamingEmpty = { emptyCalled = true },
+        )
 
-    override fun resume() {
-        resumeCallCount++
-    }
+        client.openStreaming(testDefaultTarget)
+        client.openStreaming(target2)
+        client.closeStreaming(testDefaultTarget)
 
-    override suspend fun stopAll() {
-        stopAllCallCount++
+        // Called for open(default), open(target2), close(default) — target2 remains
+        assertEquals(3, changedCallCount)
+        assertFalse(emptyCalled)
     }
 }

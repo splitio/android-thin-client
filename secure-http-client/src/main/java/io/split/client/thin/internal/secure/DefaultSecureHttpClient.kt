@@ -6,11 +6,10 @@ import io.split.client.thin.http.HttpRequestDescriptor
 import io.split.client.thin.http.RequestCategory
 import io.split.client.thin.http.RetryableHttpClient
 import io.split.client.thin.internal.auth.AuthProvider
-import io.split.client.thin.internal.streaming.StreamingManager
 import java.net.URI
 import java.net.URLEncoder
 
-class DefaultSecureHttpClient(
+internal class DefaultSecureHttpClient(
     private val authProvider: AuthProvider<EvaluationTarget>,
     private val retryableHttpClient: RetryableHttpClient,
     private val defaultTarget: EvaluationTarget,
@@ -20,15 +19,12 @@ class DefaultSecureHttpClient(
     private val sdkKey: String,
     private val impressionsMode: Int? = null,
     private val sdkVersion: String = SDK_VERSION,
-    var streamingManager: StreamingManager? = null,
+    private val onStreamingTargetsChanged: (suspend (Set<EvaluationTarget>) -> Unit)? = null,
+    private val onStreamingEmpty: (suspend () -> Unit)? = null,
 ) : SecureHttpClient {
 
     private val activeTargets = mutableSetOf<EvaluationTarget>()
     private val activeTargetsLock = Any()
-
-    suspend fun getStreamingToken(): String {
-        return authProvider.credential(effectiveTargets()).token
-    }
 
     override suspend fun fetchEvaluations(target: EvaluationTarget, filters: EvaluationFilters?): HttpResponse {
         val uri = buildEvaluationsUri(target, filters)
@@ -60,7 +56,8 @@ class DefaultSecureHttpClient(
             activeTargets.add(target)
             activeTargets.toSet()
         }
-        reauthorizeAndReconnect(currentTargets)
+        authProvider.credential(currentTargets)
+        onStreamingTargetsChanged?.invoke(currentTargets)
     }
 
     override suspend fun closeStreaming(target: EvaluationTarget) {
@@ -69,17 +66,11 @@ class DefaultSecureHttpClient(
             activeTargets.toSet()
         }
         if (currentTargets.isEmpty()) {
-            streamingManager?.stopAll()
+            onStreamingEmpty?.invoke()
         } else {
-            reauthorizeAndReconnect(currentTargets)
+            authProvider.credential(currentTargets)
+            onStreamingTargetsChanged?.invoke(currentTargets)
         }
-    }
-
-    private suspend fun reauthorizeAndReconnect(targets: Set<EvaluationTarget>) {
-        val manager = streamingManager ?: return
-        authProvider.invalidateAll(targets)
-        authProvider.credential(targets)
-        manager.start()
     }
 
     private fun effectiveTargets(): Set<EvaluationTarget> {

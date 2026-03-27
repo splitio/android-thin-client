@@ -2,7 +2,6 @@ package io.split.client.thin.internal.secure
 
 import io.split.client.thin.http.RetryableHttpClient
 import io.split.client.thin.internal.auth.AuthProvider
-import io.split.client.thin.internal.streaming.StreamingManager
 
 fun createSecureHttpClient(
     authProvider: AuthProvider<EvaluationTarget>,
@@ -12,7 +11,8 @@ fun createSecureHttpClient(
     eventsUrl: String,
     telemetryUrl: String,
     sdkKey: String,
-    streamingManager: StreamingManager? = null,
+    onStreamingTargetsChanged: (suspend (Set<EvaluationTarget>) -> Unit)? = null,
+    onStreamingEmpty: (suspend () -> Unit)? = null,
 ): SecureHttpClient = DefaultSecureHttpClient(
     authProvider = authProvider,
     retryableHttpClient = retryableHttpClient,
@@ -21,5 +21,6 @@ fun createSecureHttpClient(
     eventsUrl = eventsUrl,
     telemetryUrl = telemetryUrl,
     sdkKey = sdkKey,
-    streamingManager = streamingManager,
+    onStreamingTargetsChanged = onStreamingTargetsChanged,
+    onStreamingEmpty = onStreamingEmpty,
 )

@@ -19,7 +19,7 @@ StreamingManager               (lifecycle coordinator — one per SDK instance)
 ```
 
 **`StreamingManager` / `DefaultStreamingManager`**
-Top-level lifecycle interface. Holds at most one active `StreamingConnectionManager` at a time, protected by a `Mutex`. On `start()`, replaces any existing connection with a new one; on `stopAll()`, tears down and clears it. `pause()` and `resume()` delegate to the current connection.
+Top-level lifecycle interface. Holds at most one active `StreamingConnectionManager` at a time, protected by a `Mutex`. On `start()`, creates a connection if none exists (idempotent); on `stopAll()`, tears down and clears it. `pause()` and `resume()` delegate to the current connection.
 
 **`StreamingConnectionManager`**
 Manages the SSE connection lifecycle. Internal states: `Stopped → Started → Paused`. On `start()`:

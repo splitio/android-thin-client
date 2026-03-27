@@ -6,7 +6,6 @@ import io.split.client.thin.http.RequestCategory
 import io.split.client.thin.http.RetryableHttpClient
 import io.split.client.thin.internal.auth.AuthProvider
 import io.split.client.thin.internal.auth.JwtCredential
-import io.split.client.thin.internal.streaming.StreamingManager
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.`when`
 
@@ -30,7 +29,8 @@ internal fun makeClient(
     impressionsMode: Int? = null,
     sdkVersion: String = "test-version",
     sdkKey: String = "test-sdk-key",
-    streamingManager: StreamingManager? = null,
+    onStreamingTargetsChanged: (suspend (Set<EvaluationTarget>) -> Unit)? = null,
+    onStreamingEmpty: (suspend () -> Unit)? = null,
 ): Triple<DefaultSecureHttpClient, FakeAuthProvider, FakeRetryableHttpClient> = Triple(
     DefaultSecureHttpClient(
         authProvider = authProvider,
@@ -42,7 +42,8 @@ internal fun makeClient(
         sdkKey = sdkKey,
         impressionsMode = impressionsMode,
         sdkVersion = sdkVersion,
-        streamingManager = streamingManager,
+        onStreamingTargetsChanged = onStreamingTargetsChanged,
+        onStreamingEmpty = onStreamingEmpty,
     ),
     authProvider,
     httpClient,

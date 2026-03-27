@@ -3,6 +3,7 @@ package io.split.client.thin.internal.streaming
 import io.split.android.client.backoff.BackoffCounter
 import io.split.android.client.service.sseclient.sseclient.EventSourceClient
 import io.split.android.client.utils.logger.Logger
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -21,6 +22,7 @@ class StreamingConnectionManager(
     private val scope: CoroutineScope,
     private val onOccupancyZero: suspend () -> Unit,
     private val onEvaluationFetchNotification: suspend () -> Unit,
+    private val connectionDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
     private val stateMutex = Mutex()
     private var state: ConnectionState = ConnectionState.Stopped
@@ -91,7 +93,7 @@ class StreamingConnectionManager(
                 currentEventSourceClient = client
 
                 // EventSourceClient.connect() is blocking, so run in IO dispatcher
-                withContext(Dispatchers.IO) {
+                withContext(connectionDispatcher) {
                     client.connect(uri, createEventHandler())
                 }
             } catch (e: Exception) {

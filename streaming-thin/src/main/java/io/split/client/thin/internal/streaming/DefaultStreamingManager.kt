@@ -2,7 +2,9 @@ package io.split.client.thin.internal.streaming
 
 import io.split.android.client.backoff.BackoffCounter
 import io.split.android.client.service.sseclient.sseclient.EventSourceClient
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -15,6 +17,7 @@ class DefaultStreamingManager(
     private val scope: CoroutineScope,
     private val onOccupancyZero: suspend () -> Unit,
     private val onEvaluationFetchNotification: suspend () -> Unit,
+    private val connectionDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : StreamingManager {
 
     private val mutex = Mutex()
@@ -65,6 +68,7 @@ class DefaultStreamingManager(
             eventSourceClientProvider = eventSourceClientProvider,
             backoffCounter = backoffCounterFactory(),
             scope = scope,
+            connectionDispatcher = connectionDispatcher,
             onOccupancyZero = onOccupancyZero,
             onEvaluationFetchNotification = onEvaluationFetchNotification,
         )

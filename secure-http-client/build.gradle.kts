@@ -32,7 +32,6 @@ android {
 dependencies {
     implementation(project(":retryable-http-client"))
     implementation(project(":auth"))
-    implementation(project(":streaming-thin"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
     testImplementation("junit:junit:4.13.2")

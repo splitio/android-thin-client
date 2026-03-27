@@ -1,43 +1,44 @@
 package io.split.client.thin.internal.streaming
 
 import io.split.android.client.service.sseclient.sseclient.EventSourceClient
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
 import org.junit.Test
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class DefaultStreamingManagerTest {
 
     @Test
-    fun `start opens connection`() = runBlocking {
+    fun `start opens connection`() = runTest {
         val eventSourceClient = FakeEventSourceClient()
         val manager = createManager(eventSourceClientProvider = { eventSourceClient })
 
         manager.start()
-        delay(100)
+        advanceUntilIdle()
 
         assertTrue(eventSourceClient.connectCalled)
     }
 
     @Test
-    fun `stop closes connection`() = runBlocking {
+    fun `stop closes connection`() = runTest {
         val eventSourceClient = FakeEventSourceClient()
         val manager = createManager(eventSourceClientProvider = { eventSourceClient })
 
         manager.start()
-        delay(50)
+        advanceUntilIdle()
         manager.stop()
-        delay(50)
+        advanceUntilIdle()
 
         assertTrue(eventSourceClient.connectCalled)
-        // Verify it disconnected
         assertEquals(EventSourceClient.DISCONNECTED, eventSourceClient.status())
     }
 
     @Test
-    fun `pause delegates to connection manager`() = runBlocking {
+    fun `pause delegates to connection manager`() = runTest {
         var connectCount = 0
         val manager = createManager(eventSourceClientProvider = {
             connectCount++
@@ -45,15 +46,15 @@ class DefaultStreamingManagerTest {
         })
 
         manager.start()
-        delay(50)
+        advanceUntilIdle()
         manager.pause()
-        delay(200)
+        advanceUntilIdle()
 
         assertEquals(1, connectCount)
     }
 
     @Test
-    fun `resume reconnects after pause`() = runBlocking {
+    fun `resume reconnects after pause`() = runTest {
         var connectCount = 0
         val manager = createManager(eventSourceClientProvider = {
             connectCount++
@@ -61,30 +62,30 @@ class DefaultStreamingManagerTest {
         })
 
         manager.start()
-        delay(50)
+        advanceUntilIdle()
         manager.pause()
-        delay(50)
+        advanceUntilIdle()
         manager.resume()
-        delay(50)
+        advanceUntilIdle()
 
         assertEquals(2, connectCount)
     }
 
     @Test
-    fun `stopAll stops connection`() = runBlocking {
+    fun `stopAll stops connection`() = runTest {
         val eventSourceClient = FakeEventSourceClient()
         val manager = createManager(eventSourceClientProvider = { eventSourceClient })
 
         manager.start()
-        delay(50)
+        advanceUntilIdle()
         manager.stopAll()
-        delay(50)
+        advanceUntilIdle()
 
         assertEquals(EventSourceClient.DISCONNECTED, eventSourceClient.status())
     }
 
     @Test
-    fun `start after stopAll reconnects`() = runBlocking {
+    fun `start after stopAll reconnects`() = runTest {
         var connectCount = 0
         val manager = createManager(eventSourceClientProvider = {
             connectCount++
@@ -92,17 +93,17 @@ class DefaultStreamingManagerTest {
         })
 
         manager.start()
-        delay(50)
+        advanceUntilIdle()
         manager.stopAll()
-        delay(50)
+        advanceUntilIdle()
         manager.start()
-        delay(50)
+        advanceUntilIdle()
 
         assertEquals(2, connectCount)
     }
 
     @Test
-    fun `tokenProvider is called on connection`() = runBlocking {
+    fun `tokenProvider is called on connection`() = runTest {
         var tokenRequests = 0
         val manager = createManager(tokenProvider = {
             tokenRequests++
@@ -110,13 +111,13 @@ class DefaultStreamingManagerTest {
         })
 
         manager.start()
-        delay(100)
+        advanceUntilIdle()
 
         assertEquals(1, tokenRequests)
     }
 
     @Test
-    fun `onEvaluationFetchNotification is forwarded from connection manager`() = runBlocking {
+    fun `onEvaluationFetchNotification is forwarded from connection manager`() = runTest {
         val eventSourceClient = FakeEventSourceClient()
         var notificationCount = 0
         val manager = createManager(
@@ -125,7 +126,7 @@ class DefaultStreamingManagerTest {
         )
 
         manager.start()
-        delay(100)
+        advanceUntilIdle()
 
         eventSourceClient.simulateMessage(
             mapOf(
@@ -133,25 +134,24 @@ class DefaultStreamingManagerTest {
                 "data" to """{"type":"EVALUATION_UPDATE","changeNumber":123}"""
             )
         )
-        delay(100)
+        advanceUntilIdle()
 
         assertEquals(1, notificationCount)
     }
 
-    private fun createManager(
+    private fun TestScope.createManager(
         tokenProvider: suspend () -> String = { "test-token" },
         eventSourceClientProvider: () -> FakeEventSourceClient = { FakeEventSourceClient() },
         onOccupancyZero: suspend () -> Unit = {},
         onEvaluationFetchNotification: suspend () -> Unit = {},
-    ): DefaultStreamingManager {
-        return DefaultStreamingManager(
-            streamingUrl = "https://streaming.test.io/sse",
-            tokenProvider = tokenProvider,
-            eventSourceClientProvider = eventSourceClientProvider,
-            backoffCounterFactory = { FakeBackoffCounter() },
-            scope = CoroutineScope(Dispatchers.Unconfined),
-            onOccupancyZero = onOccupancyZero,
-            onEvaluationFetchNotification = onEvaluationFetchNotification,
-        )
-    }
+    ): DefaultStreamingManager = DefaultStreamingManager(
+        streamingUrl = "https://streaming.test.io/sse",
+        tokenProvider = tokenProvider,
+        eventSourceClientProvider = eventSourceClientProvider,
+        backoffCounterFactory = { FakeBackoffCounter() },
+        scope = this,
+        connectionDispatcher = UnconfinedTestDispatcher(testScheduler),
+        onOccupancyZero = onOccupancyZero,
+        onEvaluationFetchNotification = onEvaluationFetchNotification,
+    )
 }
