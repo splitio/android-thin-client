@@ -3,11 +3,6 @@ package io.split.client.thin.internal.streaming
 import io.split.android.client.backoff.BackoffCounter
 import io.split.android.client.network.HttpResponse
 import io.split.android.client.service.sseclient.sseclient.EventSourceClient
-import io.split.client.thin.internal.evaluation.EvaluationFetchCoordinator
-import io.split.client.thin.internal.evaluation.EvaluationKey
-import io.split.client.thin.internal.evaluation.FetchReason
-import io.split.client.thin.internal.secure.EvaluationFilters
-import io.split.client.thin.internal.secure.EvaluationTarget
 import io.split.client.thin.http.HttpRequestDescriptor
 import io.split.client.thin.http.RequestCategory
 import io.split.client.thin.http.RetryableHttpClient
@@ -51,26 +46,6 @@ class FakeEventSourceClient : EventSourceClient {
 
     fun simulateError(retryable: Boolean = true) {
         lastHandler?.onError(retryable)
-    }
-}
-
-// Fake EvaluationFetchCoordinator for testing
-class FakeEvaluationFetchCoordinator : EvaluationFetchCoordinator {
-    val fetchCalls = mutableListOf<FetchCall>()
-
-    data class FetchCall(
-        val evalKey: EvaluationKey,
-        val filters: EvaluationFilters?,
-        val reason: FetchReason
-    )
-
-    override suspend fun fetchIfNeeded(
-        evalKey: EvaluationKey,
-        filters: EvaluationFilters?,
-        reason: FetchReason
-    ): Boolean {
-        fetchCalls.add(FetchCall(evalKey, filters, reason))
-        return true
     }
 }
 

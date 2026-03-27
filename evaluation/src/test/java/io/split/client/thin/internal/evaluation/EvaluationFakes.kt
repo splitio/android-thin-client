@@ -28,7 +28,7 @@ class FakeSecureHttpClient(
     override suspend fun postEvents(payload: String): HttpResponse = FakeHttpResponse(200, null)
     override suspend fun postTelemetry(payload: String): HttpResponse = FakeHttpResponse(200, null)
     override suspend fun openStreaming(target: EvaluationTarget) = Unit
-    override suspend fun closeStreaming() = Unit
+    override suspend fun closeStreaming(target: EvaluationTarget) = Unit
 }
 
 class FakeHttpResponse(
@@ -123,5 +123,9 @@ class FakeEvaluationFetchCoordinator(
     override suspend fun fetchIfNeeded(evalKey: EvaluationKey, filters: EvaluationFilters?, reason: FetchReason): Boolean {
         fetchCalls.add(Triple(evalKey, filters, reason))
         return fetchIfNeededResult
+    }
+
+    override suspend fun refetchAll(filters: EvaluationFilters?, reason: FetchReason) {
+        // Stub - tests using this fake don't need refetchAll behavior
     }
 }

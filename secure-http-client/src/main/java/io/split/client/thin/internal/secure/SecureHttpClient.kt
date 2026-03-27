@@ -7,5 +7,5 @@ interface SecureHttpClient {
     suspend fun postEvents(payload: String): HttpResponse
     suspend fun postTelemetry(payload: String): HttpResponse
     suspend fun openStreaming(target: EvaluationTarget)
-    suspend fun closeStreaming()
+    suspend fun closeStreaming(target: EvaluationTarget)
 }

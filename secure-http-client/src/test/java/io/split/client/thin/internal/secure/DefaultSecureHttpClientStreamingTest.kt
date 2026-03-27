@@ -1,5 +1,6 @@
 package io.split.client.thin.internal.secure
 
+import io.split.client.thin.internal.streaming.StreamingManager
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -8,61 +9,67 @@ import org.junit.Test
 class DefaultSecureHttpClientStreamingTest {
 
     @Test
-    fun `openStreaming throws when controller is null`() = runTest {
-        val (client, _, _) = makeClient()
-        var thrown: Throwable? = null
-
-        try {
-            client.openStreaming(testDefaultTarget)
-        } catch (e: UnsupportedOperationException) {
-            thrown = e
-        }
-
-        assertTrue("Expected UnsupportedOperationException", thrown is UnsupportedOperationException)
-    }
-
-    @Test
-    fun `closeStreaming throws when controller is null`() = runTest {
-        val (client, _, _) = makeClient()
-        var thrown: Throwable? = null
-
-        try {
-            client.closeStreaming()
-        } catch (e: UnsupportedOperationException) {
-            thrown = e
-        }
-
-        assertTrue("Expected UnsupportedOperationException", thrown is UnsupportedOperationException)
-    }
-
-    @Test
-    fun `openStreaming delegates to controller`() = runTest {
-        val (client, _, _) = makeClient()
-        val controller = FakeStreamingController()
-        client.streamingController = controller
+    fun `openStreaming adds target matchingKey to active set and starts streaming`() = runTest {
+        val streamingManager = FakeStreamingManager()
+        val (client, _, _) = makeClient(streamingManager = streamingManager)
 
         client.openStreaming(testDefaultTarget)
 
-        assertEquals(1, controller.startCallCount)
+        assertEquals(1, streamingManager.startCallCount)
     }
 
     @Test
-    fun `closeStreaming delegates to controller`() = runTest {
-        val (client, _, _) = makeClient()
-        val controller = FakeStreamingController()
-        client.streamingController = controller
+    fun `openStreaming with no streaming manager configured is a no-op`() = runTest {
+        val (client, _, _) = makeClient(streamingManager = null)
 
-        client.closeStreaming()
+        // Should not throw
+        client.openStreaming(testDefaultTarget)
+    }
 
-        assertEquals(1, controller.stopCallCount)
+    @Test
+    fun `closeStreaming removes target and stops streaming when no more active targets`() = runTest {
+        val streamingManager = FakeStreamingManager()
+        val (client, _, _) = makeClient(streamingManager = streamingManager)
+
+        client.openStreaming(testDefaultTarget)
+        client.closeStreaming(testDefaultTarget)
+
+        assertEquals(1, streamingManager.stopAllCallCount)
+    }
+
+    @Test
+    fun `closeStreaming reconnects streaming when other targets remain active`() = runTest {
+        val target2 = EvaluationTarget("user-2", null, null)
+        val streamingManager = FakeStreamingManager()
+        val (client, _, _) = makeClient(streamingManager = streamingManager)
+
+        client.openStreaming(testDefaultTarget)
+        client.openStreaming(target2)
+        client.closeStreaming(testDefaultTarget)
+
+        // Should have reconnected (not stopped completely)
+        assertTrue(streamingManager.startCallCount >= 2)
+        assertEquals(0, streamingManager.stopAllCallCount)
+    }
+
+    @Test
+    fun `openStreaming triggers credential for active targets`() = runTest {
+        val authProvider = FakeAuthProvider()
+        val (client, _, _) = makeClient(authProvider = authProvider, streamingManager = FakeStreamingManager())
+
+        client.openStreaming(testDefaultTarget)
+
+        assertTrue(authProvider.credentialCallCount > 0)
     }
 }
 
-private class FakeStreamingController : StreamingController {
+internal class FakeStreamingManager : StreamingManager {
     var startCallCount = 0
     var stopCallCount = 0
     var pauseCallCount = 0
     var resumeCallCount = 0
+    var stopAllCallCount = 0
+    var lastTokenProvider: (suspend () -> String)? = null
 
     override suspend fun start() {
         startCallCount++
@@ -72,11 +79,15 @@ private class FakeStreamingController : StreamingController {
         stopCallCount++
     }
 
-    override suspend fun pause() {
+    override fun pause() {
         pauseCallCount++
     }
 
-    override suspend fun resume() {
+    override fun resume() {
         resumeCallCount++
+    }
+
+    override suspend fun stopAll() {
+        stopAllCallCount++
     }
 }

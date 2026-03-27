@@ -6,6 +6,7 @@ import io.split.client.thin.http.HttpRequestDescriptor
 import io.split.client.thin.http.RequestCategory
 import io.split.client.thin.http.RetryableHttpClient
 import io.split.client.thin.internal.auth.AuthProvider
+import io.split.client.thin.internal.streaming.StreamingManager
 import java.net.URI
 import java.net.URLEncoder
 
@@ -19,19 +20,26 @@ class DefaultSecureHttpClient(
     private val sdkKey: String,
     private val impressionsMode: Int? = null,
     private val sdkVersion: String = SDK_VERSION,
+    var streamingManager: StreamingManager? = null,
 ) : SecureHttpClient {
 
-    var streamingController: StreamingController? = null
+    private val activeTargets = mutableSetOf<EvaluationTarget>()
+    private val activeTargetsLock = Any()
+
+    suspend fun getStreamingToken(): String {
+        return authProvider.credential(effectiveTargets()).token
+    }
 
     override suspend fun fetchEvaluations(target: EvaluationTarget, filters: EvaluationFilters?): HttpResponse {
         val uri = buildEvaluationsUri(target, filters)
         val body = buildEvaluationsBody(target)
-        val token = authProvider.credential(target).token
+        val targets = effectiveTargets()
+        val token = authProvider.credential(targets).token
         val request = buildEvaluationsRequest(uri, body, token)
         val response = retryableHttpClient.execute(request, RequestCategory.EVALUATIONS)
         if (response.getHttpStatus() == HTTP_UNAUTHORIZED) {
-            authProvider.invalidate(target)
-            val freshToken = authProvider.credential(target).token
+            authProvider.invalidateAll(targets)
+            val freshToken = authProvider.credential(targets).token
             val retryRequest = buildEvaluationsRequest(uri, body, freshToken)
             return retryableHttpClient.execute(retryRequest, RequestCategory.EVALUATIONS)
         }
@@ -44,32 +52,54 @@ class DefaultSecureHttpClient(
     }
 
     override suspend fun postTelemetry(payload: String): HttpResponse {
-        return executeAuthenticated(defaultTarget, URI(telemetryUrl), HttpMethod.POST, payload, RequestCategory.TELEMETRY)
+        return executeAuthenticated(URI(telemetryUrl), HttpMethod.POST, payload, RequestCategory.TELEMETRY)
     }
 
     override suspend fun openStreaming(target: EvaluationTarget) {
-        streamingController?.start()
-            ?: throw UnsupportedOperationException("Streaming not configured")
+        val currentTargets = synchronized(activeTargetsLock) {
+            activeTargets.add(target)
+            activeTargets.toSet()
+        }
+        reauthorizeAndReconnect(currentTargets)
     }
 
-    override suspend fun closeStreaming() {
-        streamingController?.stop()
-            ?: throw UnsupportedOperationException("Streaming not configured")
+    override suspend fun closeStreaming(target: EvaluationTarget) {
+        val currentTargets = synchronized(activeTargetsLock) {
+            activeTargets.remove(target)
+            activeTargets.toSet()
+        }
+        if (currentTargets.isEmpty()) {
+            streamingManager?.stopAll()
+        } else {
+            reauthorizeAndReconnect(currentTargets)
+        }
+    }
+
+    private suspend fun reauthorizeAndReconnect(targets: Set<EvaluationTarget>) {
+        val manager = streamingManager ?: return
+        authProvider.invalidateAll(targets)
+        authProvider.credential(targets)
+        manager.start()
+    }
+
+    private fun effectiveTargets(): Set<EvaluationTarget> {
+        val active = synchronized(activeTargetsLock) { activeTargets.toSet() }
+        return active.ifEmpty { setOf(defaultTarget) }
     }
 
     private suspend fun executeAuthenticated(
-        target: EvaluationTarget,
         uri: URI,
         method: HttpMethod,
         body: String,
         category: RequestCategory,
     ): HttpResponse {
-        val token = authProvider.credential(target).token
+        val targets = effectiveTargets()
+        val token = authProvider.credential(targets).token
         val request = buildRequest(uri, method, body, token)
         val response = retryableHttpClient.execute(request, category)
         if (response.getHttpStatus() == HTTP_UNAUTHORIZED) {
-            authProvider.invalidate(target)
-            val freshToken = authProvider.credential(target).token
+            authProvider.invalidateAll(targets)
+            val freshToken = authProvider.credential(targets).token
             val retryRequest = buildRequest(uri, method, body, freshToken)
             return retryableHttpClient.execute(retryRequest, category)
         }

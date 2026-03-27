@@ -51,7 +51,7 @@ class DefaultSecureHttpClientPostEventsTest {
 
         client.postEvents("payload")
 
-        assertNull(auth.lastCredentialTarget)
+        assertEquals(0, auth.credentialCallCount)
     }
 
     @Test

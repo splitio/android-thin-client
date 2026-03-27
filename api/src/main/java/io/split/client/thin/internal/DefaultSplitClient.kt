@@ -14,7 +14,9 @@ import io.split.client.thin.internal.evaluation.EvaluationPeriodicScheduler
 import io.split.client.thin.internal.evaluation.EvaluationRepository
 import io.split.client.thin.internal.evaluation.StoredEvaluation
 import io.split.client.thin.internal.evaluation.toEvaluationKey
+import io.split.client.thin.internal.evaluation.toEvaluationTarget
 import io.split.client.thin.internal.secure.EvaluationFilters
+import io.split.client.thin.internal.secure.SecureHttpClient
 import io.split.client.thin.internal.sdkevents.SdkInternalEvent
 import io.split.client.thin.internal.sdkevents.SplitEventListenerAdapter
 import kotlinx.coroutines.CoroutineScope
@@ -29,6 +31,7 @@ internal class DefaultSplitClient(
     private val eventsManager: EventsManager<SplitEvent, SdkInternalEvent, Any?>,
     private val periodicScheduler: EvaluationPeriodicScheduler,
     private val scope: CoroutineScope,
+    private val secureHttpClient: SecureHttpClient? = null,
 ) : SplitClient {
 
     @Volatile
@@ -97,6 +100,7 @@ internal class DefaultSplitClient(
         flush()
         tracker.enableTracking(false)
         eventsManager.destroy()
+        secureHttpClient?.closeStreaming(target.toEvaluationKey().toEvaluationTarget())
     }
 
     override fun destroyAsync(callback: SplitVoidCallback) {

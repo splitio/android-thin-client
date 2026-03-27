@@ -3,12 +3,6 @@ package io.split.client.thin.internal.streaming
 import io.split.android.client.backoff.BackoffCounter
 import io.split.android.client.service.sseclient.sseclient.EventSourceClient
 import io.split.android.client.utils.logger.Logger
-import io.split.client.thin.Key
-import io.split.client.thin.internal.auth.AuthProvider
-import io.split.client.thin.internal.evaluation.EvaluationFetchCoordinator
-import io.split.client.thin.internal.evaluation.EvaluationKey
-import io.split.client.thin.internal.evaluation.FetchReason
-import io.split.client.thin.internal.secure.EvaluationTarget
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -21,13 +15,12 @@ import java.net.URI
 
 class StreamingConnectionManager(
     private val streamingUrl: String,
-    private val target: EvaluationTarget,
-    private val fetchCoordinator: EvaluationFetchCoordinator,
+    private val tokenProvider: suspend () -> String,
     private val eventSourceClientProvider: () -> EventSourceClient,
-    private val authProvider: AuthProvider<EvaluationTarget>,
     private val backoffCounter: BackoffCounter,
     private val scope: CoroutineScope,
-    private val onOccupancyZero: suspend (EvaluationTarget) -> Unit
+    private val onOccupancyZero: suspend () -> Unit,
+    private val onEvaluationFetchNotification: suspend () -> Unit,
 ) {
     private val stateMutex = Mutex()
     private var state: ConnectionState = ConnectionState.Stopped
@@ -90,8 +83,8 @@ class StreamingConnectionManager(
     private fun connect() {
         connectionJob = scope.launch {
             try {
-                val jwt = authProvider.credential(target)
-                val uri = URI("$streamingUrl?token=${jwt.token}")
+                val token = tokenProvider()
+                val uri = URI("$streamingUrl?token=$token")
 
                 // Create new EventSourceClient instance
                 val client = eventSourceClientProvider()
@@ -160,11 +153,7 @@ class StreamingConnectionManager(
         scope.launch {
             when (notification) {
                 is EvaluationUpdateNotification -> {
-                    val evalKey = EvaluationKey(
-                        key = Key(target.matchingKey, target.bucketingKey),
-                        attributes = target.attributes ?: emptyMap()
-                    )
-                    fetchCoordinator.fetchIfNeeded(evalKey, null, FetchReason.PUSH)
+                    onEvaluationFetchNotification.invoke()
                 }
                 is ThinControlNotification -> {
                     when (notification.controlType) {
@@ -179,7 +168,7 @@ class StreamingConnectionManager(
                 }
                 is ThinOccupancyNotification -> {
                     if (notification.publishers == 0) {
-                        onOccupancyZero(target)
+                        onOccupancyZero()
                         stop()
                     }
                 }

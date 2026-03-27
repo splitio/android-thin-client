@@ -10,6 +10,7 @@ import java.util.concurrent.ConcurrentHashMap
 internal class DefaultAuthProvider<T : AuthParamsProvider>(
     private val credentialFetcher: CredentialFetcher<T>,
     private val credentialStorage: CredentialStorage<T>,
+    private val compositeKeyBuilder: (Set<T>) -> T,
     private val onJwtRequestStarted: (target: T) -> Unit = {},
     private val onJwtReturnedFromStorage: (credential: JwtCredential, target: T) -> Unit = { _, _ -> },
     private val onJwtExpiredOrInvalid: (target: T) -> Unit = {},
@@ -20,20 +21,28 @@ internal class DefaultAuthProvider<T : AuthParamsProvider>(
     // Completion callbacks may run on different threads, so this map must be thread-safe.
     private val inFlight = ConcurrentHashMap<T, Deferred<JwtCredential>>()
 
-    override suspend fun credential(target: T): JwtCredential {
-        onJwtRequestStarted(target)
-        val stored = credentialStorage.getCredential(target)
+    override suspend fun credential(targets: Set<T>): JwtCredential {
+        val compositeKey = compositeKeyBuilder(targets)
+        onJwtRequestStarted(compositeKey)
+        val stored = credentialStorage.getCredential(compositeKey)
         if (stored != null && !stored.isExpired()) {
-            onJwtReturnedFromStorage(stored, target)
+            onJwtReturnedFromStorage(stored, compositeKey)
             return stored
         } else if (stored != null) {
-            onJwtExpiredOrInvalid(target)
+            onJwtExpiredOrInvalid(compositeKey)
         }
 
-        return fetchDeduplicated(target)
+        val credential = fetchDeduplicated(compositeKey)
+        targets.forEach { credentialStorage.saveCredential(credential, it) }
+        return credential
     }
 
-    override suspend fun invalidate(target: T) {
+    override suspend fun invalidateAll(targets: Set<T>) {
+        val compositeKey = compositeKeyBuilder(targets)
+        (targets + compositeKey).forEach { invalidate(it) }
+    }
+
+    private suspend fun invalidate(target: T) {
         mutex.withLock {
             inFlight.remove(target)
         }

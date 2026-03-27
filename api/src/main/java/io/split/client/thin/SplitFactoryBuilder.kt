@@ -3,26 +3,26 @@ package io.split.client.thin
 import android.os.Handler
 import android.os.Looper
 import androidx.lifecycle.ProcessLifecycleOwner
+import io.split.android.client.backoff.ExponentialBackoffCounter
 import io.split.android.client.network.HttpClientImpl
+import io.split.android.client.service.sseclient.EventStreamParser
+import io.split.android.client.service.sseclient.sseclient.EventSourceClientImpl
 import io.split.client.thin.http.createRetryableHttpClient
 import io.split.client.thin.internal.AsyncBridge
 import io.split.client.thin.internal.DefaultSplitFactory
 import io.split.client.thin.internal.auth.createAuthProvider
+import io.split.client.thin.internal.evaluation.FetchReason
 import io.split.client.thin.internal.evaluation.createEvaluationComponents
 import io.split.client.thin.internal.evaluation.toEvaluationKey
 import io.split.client.thin.internal.evaluation.toEvaluationTarget
 import io.split.client.thin.internal.lifecycle.DefaultLifecycleManager
+import io.split.client.thin.internal.lifecycle.LifecycleComponent
 import io.split.client.thin.internal.observer.AndroidLoggerAdapter
 import io.split.client.thin.internal.observer.DefaultCompositeObserver
 import io.split.client.thin.internal.observer.LoggerObserver
-import io.split.android.client.backoff.ExponentialBackoffCounter
-import io.split.android.client.service.sseclient.EventStreamParser
-import io.split.android.client.service.sseclient.sseclient.EventSourceClientImpl
 import io.split.client.thin.internal.secure.DefaultSecureHttpClient
 import io.split.client.thin.internal.secure.EvaluationTarget
-import io.split.client.thin.internal.secure.createSecureHttpClient
-import io.split.client.thin.internal.streaming.DefaultStreamingController
-import io.split.client.thin.internal.streaming.StreamingConnectionManager
+import io.split.client.thin.internal.streaming.DefaultStreamingManager
 import io.split.client.thin.internal.streaming.StreamingTransportImpl
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -59,10 +59,17 @@ object SplitFactoryBuilder {
             sdkKey = sdkKey.sdkKey,
             authUrl = endpoints?.authUrl ?: DEFAULT_AUTH_URL,
             compositeObserver = compositeObserver,
+            compositeKeyBuilder = { targets ->
+                EvaluationTarget(
+                    matchingKey = targets.joinToString(",") { it.matchingKey },
+                    bucketingKey = null,
+                    attributes = null,
+                )
+            },
         )
 
         val defaultEvaluationTarget = defaultTarget.toEvaluationKey().toEvaluationTarget()
-        val secureHttpClient = createSecureHttpClient(
+        val secureHttpClient = DefaultSecureHttpClient(
             authProvider = authProvider,
             retryableHttpClient = retryableHttpClient,
             defaultTarget = defaultEvaluationTarget,
@@ -72,33 +79,33 @@ object SplitFactoryBuilder {
             sdkKey = sdkKey.sdkKey,
         )
 
-        val (fetchCoordinator, evaluationRepository) = createEvaluationComponents(
-            secureHttpClient = secureHttpClient,
-            compositeObserver = compositeObserver,
-        )
+        var onFetchNotification: suspend () -> Unit = {}
         val syncMode = config?.sync?.mode ?: SplitClientConfig.SyncMode.STREAMING
-        if (syncMode == SplitClientConfig.SyncMode.STREAMING) {
-            val streamingUrl = endpoints?.streamingUrl ?: DEFAULT_STREAMING_URL
+        val streamingManager = if (syncMode == SplitClientConfig.SyncMode.STREAMING) {
             val streamingScope = CoroutineScope(SupervisorJob())
-            val streamingConnectionManager = StreamingConnectionManager(
-                streamingUrl = streamingUrl,
-                target = defaultEvaluationTarget,
-                fetchCoordinator = fetchCoordinator,
+            DefaultStreamingManager(
+                streamingUrl = endpoints?.streamingUrl ?: DEFAULT_STREAMING_URL,
+                tokenProvider = { secureHttpClient.getStreamingToken() },
                 eventSourceClientProvider = {
                     EventSourceClientImpl(
                         StreamingTransportImpl(retryableHttpClient),
                         EventStreamParser(),
                     )
                 },
-                authProvider = authProvider,
-                backoffCounter = ExponentialBackoffCounter(1, 60),
+                backoffCounterFactory = { ExponentialBackoffCounter(1, 60) },
                 scope = streamingScope,
                 onOccupancyZero = { /* TODO: handle occupancy zero */ },
-            )
-            (secureHttpClient as? DefaultSecureHttpClient)?.streamingController =
-                DefaultStreamingController(streamingConnectionManager)
-        }
+                onEvaluationFetchNotification = { onFetchNotification() },
+            ).also { secureHttpClient.streamingManager = it }
+        } else null
 
+        val (fetchCoordinator, evaluationRepository) = createEvaluationComponents(
+            secureHttpClient = secureHttpClient,
+            compositeObserver = compositeObserver,
+        )
+        if (streamingManager != null) {
+            onFetchNotification = { fetchCoordinator.refetchAll(null, FetchReason.PUSH) }
+        }
         val schedulerIntervalMillis = (config?.sync?.evaluationRefreshRate ?: 3600) * 1_000L
 
         val lifecycleManager = DefaultLifecycleManager(
@@ -114,6 +121,12 @@ object SplitFactoryBuilder {
                 }
             },
         )
+        streamingManager?.let { manager ->
+            lifecycleManager.register(object : LifecycleComponent {
+                override fun pause() = manager.pause()
+                override fun resume() = manager.resume()
+            })
+        }
 
         return DefaultSplitFactory(
             defaultTarget = defaultTarget,
@@ -125,6 +138,8 @@ object SplitFactoryBuilder {
             schedulerIntervalMillis = schedulerIntervalMillis,
             compositeObserver = compositeObserver,
             lifecycleManager = lifecycleManager,
+            secureHttpClient = secureHttpClient,
         )
     }
+
 }

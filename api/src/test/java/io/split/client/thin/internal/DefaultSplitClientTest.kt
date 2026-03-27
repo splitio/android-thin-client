@@ -7,6 +7,7 @@ import io.split.client.thin.Key
 import io.split.client.thin.SplitEvent
 import io.split.client.thin.SplitEventListener
 import io.split.client.thin.Target
+import io.split.android.client.network.HttpResponse
 import io.split.client.thin.internal.evaluation.EvaluationFetchCoordinator
 import io.split.client.thin.internal.evaluation.EvaluationKey
 import io.split.client.thin.internal.evaluation.EvaluationPeriodicScheduler
@@ -15,6 +16,8 @@ import io.split.client.thin.internal.evaluation.EvaluationRepository
 import io.split.client.thin.internal.evaluation.FetchReason
 import io.split.client.thin.internal.evaluation.StoredEvaluation
 import io.split.client.thin.internal.secure.EvaluationFilters
+import io.split.client.thin.internal.secure.EvaluationTarget
+import io.split.client.thin.internal.secure.SecureHttpClient
 import io.split.client.thin.internal.sdkevents.SdkInternalEvent
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
@@ -225,6 +228,33 @@ class DefaultSplitClientTest {
         verify(eventsManager).register(eq(SplitEvent.SDK_READY_TIMEOUT), any())
         verify(eventsManager).register(eq(SplitEvent.SDK_UPDATE), any())
     }
+
+    @Test
+    fun `destroy calls closeStreaming on secureHttpClient`() = runTest {
+        val secureHttpClient = FakeSecureHttpClient()
+        val client = DefaultSplitClient(
+            initialTarget = target,
+            tracker = tracker,
+            eventsManager = eventsManager,
+            evaluationRepository = evaluationRepository,
+            filters = null,
+            fallbackCalculator = null,
+            periodicScheduler = periodicScheduler,
+            scope = testScope,
+            secureHttpClient = secureHttpClient,
+        )
+
+        client.destroy()
+
+        assertEquals(1, secureHttpClient.closeStreamingCalls.size)
+        assertEquals("user-1", secureHttpClient.closeStreamingCalls[0].matchingKey)
+    }
+
+    @Test
+    fun `destroy does not call closeStreaming when no secureHttpClient`() = runTest {
+        // No exception expected — client with no secureHttpClient
+        client.destroy()
+    }
 }
 
 // Test fakes
@@ -265,8 +295,20 @@ class FakeEvaluationPeriodicScheduler : EvaluationPeriodicScheduler {
     override fun updateTarget(target: Target, filters: EvaluationFilters?) { updateTargetCalls.add(target to filters) }
 }
 
+class FakeSecureHttpClient : SecureHttpClient {
+    val openStreamingCalls = mutableListOf<EvaluationTarget>()
+    val closeStreamingCalls = mutableListOf<EvaluationTarget>()
+
+    override suspend fun fetchEvaluations(target: EvaluationTarget, filters: EvaluationFilters?): HttpResponse = error("not used")
+    override suspend fun postEvents(payload: String): HttpResponse = error("not used")
+    override suspend fun postTelemetry(payload: String): HttpResponse = error("not used")
+    override suspend fun openStreaming(target: EvaluationTarget) { openStreamingCalls.add(target) }
+    override suspend fun closeStreaming(target: EvaluationTarget) { closeStreamingCalls.add(target) }
+}
+
 class FakeEvaluationFetchCoordinator : EvaluationFetchCoordinator {
     override suspend fun fetchIfNeeded(evalKey: EvaluationKey, filters: EvaluationFilters?, reason: FetchReason): Boolean = false
+    override suspend fun refetchAll(filters: EvaluationFilters?, reason: FetchReason) {}
 }
 
 class FakeEvaluationRepository : EvaluationRepository {

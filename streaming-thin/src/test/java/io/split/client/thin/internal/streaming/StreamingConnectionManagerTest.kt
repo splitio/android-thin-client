@@ -1,10 +1,5 @@
 package io.split.client.thin.internal.streaming
 
-import io.split.client.thin.Key
-import io.split.client.thin.internal.auth.AuthProvider
-import io.split.client.thin.internal.auth.JwtCredential
-import io.split.client.thin.internal.evaluation.EvaluationKey
-import io.split.client.thin.internal.secure.EvaluationTarget
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -13,17 +8,6 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class StreamingConnectionManagerTest {
-
-    private val testTarget = EvaluationTarget(
-        matchingKey = "test-key",
-        bucketingKey = null,
-        attributes = null
-    )
-
-    private val testEvalKey = EvaluationKey(
-        key = Key(matchingKey = "test-key"),
-        attributes = emptyMap()
-    )
 
     @Test
     fun `start initiates connection`() = runBlocking {
@@ -146,12 +130,12 @@ class StreamingConnectionManagerTest {
     }
 
     @Test
-    fun `onMessage with EVALUATION_UPDATE triggers fetch`() = runBlocking {
+    fun `onMessage with EVALUATION_UPDATE triggers onEvaluationFetchNotification`() = runBlocking {
         val eventSourceClient = FakeEventSourceClient()
-        val fetchCoordinator = FakeEvaluationFetchCoordinator()
+        var fetchNotificationCount = 0
         val manager = createManager(
             eventSourceClientProvider = { eventSourceClient },
-            fetchCoordinator = fetchCoordinator
+            onEvaluationFetchNotification = { fetchNotificationCount++ }
         )
 
         manager.start()
@@ -166,10 +150,8 @@ class StreamingConnectionManagerTest {
         )
         delay(100)
 
-        // Should have triggered fetch
-        assertEquals(1, fetchCoordinator.fetchCalls.size)
-        assertEquals(testEvalKey, fetchCoordinator.fetchCalls[0].evalKey)
-        assertEquals(io.split.client.thin.internal.evaluation.FetchReason.PUSH, fetchCoordinator.fetchCalls[0].reason)
+        // Should have triggered fetch notification
+        assertEquals(1, fetchNotificationCount)
     }
 
     @Test
@@ -292,13 +274,9 @@ class StreamingConnectionManagerTest {
     fun `onMessage with OCCUPANCY publishers=0 triggers callback`() = runBlocking {
         val eventSourceClient = FakeEventSourceClient()
         var callbackInvoked = false
-        var callbackTarget: EvaluationTarget? = null
         val manager = createManager(
             eventSourceClientProvider = { eventSourceClient },
-            onOccupancyZero = { target ->
-                callbackInvoked = true
-                callbackTarget = target
-            }
+            onOccupancyZero = { callbackInvoked = true }
         )
 
         manager.start()
@@ -314,7 +292,6 @@ class StreamingConnectionManagerTest {
 
         // Should have triggered callback and stopped
         assertTrue(callbackInvoked)
-        assertEquals(testTarget, callbackTarget)
     }
 
     @Test
@@ -365,29 +342,18 @@ class StreamingConnectionManagerTest {
     // Helper to create StreamingConnectionManager with test doubles
     private fun createManager(
         eventSourceClientProvider: () -> FakeEventSourceClient = { FakeEventSourceClient() },
-        fetchCoordinator: FakeEvaluationFetchCoordinator = FakeEvaluationFetchCoordinator(),
         backoffCounter: FakeBackoffCounter = FakeBackoffCounter(),
-        onOccupancyZero: suspend (EvaluationTarget) -> Unit = {}
+        onOccupancyZero: suspend () -> Unit = {},
+        onEvaluationFetchNotification: suspend () -> Unit = {},
     ): StreamingConnectionManager {
-        val authProvider = object : AuthProvider<EvaluationTarget> {
-            override suspend fun credential(target: EvaluationTarget): JwtCredential {
-                return JwtCredential("test-token", 3600000, pushEnabled = true)
-            }
-
-            override suspend fun invalidate(target: EvaluationTarget) {
-                // No-op for tests
-            }
-        }
-
         return StreamingConnectionManager(
             streamingUrl = "https://streaming.test.io/sse",
-            target = testTarget,
-            fetchCoordinator = fetchCoordinator,
+            tokenProvider = { "test-token" },
             eventSourceClientProvider = eventSourceClientProvider,
-            authProvider = authProvider,
             backoffCounter = backoffCounter,
             scope = CoroutineScope(Dispatchers.Unconfined), // Use Unconfined for synchronous test execution
-            onOccupancyZero = onOccupancyZero
+            onOccupancyZero = onOccupancyZero,
+            onEvaluationFetchNotification = onEvaluationFetchNotification,
         )
     }
 }

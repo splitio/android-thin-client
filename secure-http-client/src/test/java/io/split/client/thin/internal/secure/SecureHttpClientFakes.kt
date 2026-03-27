@@ -6,6 +6,7 @@ import io.split.client.thin.http.RequestCategory
 import io.split.client.thin.http.RetryableHttpClient
 import io.split.client.thin.internal.auth.AuthProvider
 import io.split.client.thin.internal.auth.JwtCredential
+import io.split.client.thin.internal.streaming.StreamingManager
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.`when`
 
@@ -29,6 +30,7 @@ internal fun makeClient(
     impressionsMode: Int? = null,
     sdkVersion: String = "test-version",
     sdkKey: String = "test-sdk-key",
+    streamingManager: StreamingManager? = null,
 ): Triple<DefaultSecureHttpClient, FakeAuthProvider, FakeRetryableHttpClient> = Triple(
     DefaultSecureHttpClient(
         authProvider = authProvider,
@@ -40,6 +42,7 @@ internal fun makeClient(
         sdkKey = sdkKey,
         impressionsMode = impressionsMode,
         sdkVersion = sdkVersion,
+        streamingManager = streamingManager,
     ),
     authProvider,
     httpClient,
@@ -51,20 +54,20 @@ internal class FakeAuthProvider(
     val throwOnCredential: Throwable? = null,
 ) : AuthProvider<EvaluationTarget> {
 
-    var lastCredentialTarget: EvaluationTarget? = null
+    var credentialCallCount = 0
         private set
     var invalidateCallCount = 0
         private set
     private var credentialCallIndex = 0
 
-    override suspend fun credential(target: EvaluationTarget): JwtCredential {
-        lastCredentialTarget = target
+    override suspend fun credential(targets: Set<EvaluationTarget>): JwtCredential {
+        credentialCallCount++
         throwOnCredential?.let { throw it }
         return credentialSequence?.getOrElse(credentialCallIndex++) { credential } ?: credential
     }
 
-    override suspend fun invalidate(target: EvaluationTarget) {
-        invalidateCallCount++
+    override suspend fun invalidateAll(targets: Set<EvaluationTarget>) {
+        invalidateCallCount += targets.size
     }
 }
 

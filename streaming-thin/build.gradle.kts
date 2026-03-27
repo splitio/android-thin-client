@@ -31,10 +31,8 @@ android {
 dependencies {
     // Thin client modules
     implementation(project(":models"))
-    implementation(project(":evaluation"))
     implementation(project(":auth"))
     implementation(project(":retryable-http-client"))
-    implementation(project(":secure-http-client"))
 
     // android-client submodule dependencies
     implementation(project(":streaming"))  // EventSourceClient, EventStreamParser

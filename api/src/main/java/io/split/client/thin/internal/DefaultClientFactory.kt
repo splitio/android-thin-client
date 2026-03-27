@@ -10,13 +10,17 @@ import io.split.client.thin.internal.evaluation.EvaluationPeriodicScheduler
 import io.split.client.thin.internal.evaluation.EvaluationRepository
 import io.split.client.thin.internal.secure.EvaluationFilters
 import io.harness.events.EventsManagers
+import io.split.client.thin.internal.evaluation.toEvaluationKey
+import io.split.client.thin.internal.evaluation.toEvaluationTarget
 import io.split.client.thin.internal.lifecycle.LifecycleComponent
 import io.split.client.thin.internal.lifecycle.LifecycleManager
 import io.split.client.thin.internal.observer.CompositeObserver
 import io.split.client.thin.internal.sdkevents.EventManagerObserver
 import io.split.client.thin.internal.sdkevents.SplitEventDelivery
 import io.split.client.thin.internal.sdkevents.ThinClientEventsConfig
+import io.split.client.thin.internal.secure.SecureHttpClient
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 
 internal class DefaultClientFactory(
     private val compositeObserver: CompositeObserver,
@@ -27,6 +31,7 @@ internal class DefaultClientFactory(
     private val fetchCoordinator: EvaluationFetchCoordinator,
     private val schedulerIntervalMillis: Long,
     private val lifecycleManager: LifecycleManager? = null,
+    private val secureHttpClient: SecureHttpClient? = null,
     private val schedulerFactory: (EvaluationFetchCoordinator, Long) -> EvaluationPeriodicScheduler = { coordinator, intervalMillis ->
         DefaultEvaluationPeriodicScheduler(fetchCoordinator = coordinator, intervalMillis = intervalMillis)
     },
@@ -46,9 +51,13 @@ internal class DefaultClientFactory(
             override fun pause() = scheduler.pause()
             override fun resume() = scheduler.resume()
         })
+        secureHttpClient?.let { client ->
+            scope.launch { client.openStreaming(target.toEvaluationKey().toEvaluationTarget()) }
+        }
         return DefaultSplitClient(
             target, eventTracker.tracker,
-            evaluationRepository, filters, fallbackCalculator, eventsManager, scheduler, scope
+            evaluationRepository, filters, fallbackCalculator, eventsManager, scheduler, scope,
+            secureHttpClient = secureHttpClient,
         )
     }
 }
