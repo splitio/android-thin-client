@@ -4,6 +4,9 @@ import io.split.android.client.submitter.RecorderStorage
 import io.split.android.client.submitter.StoragePusher
 import io.split.android.client.tracker.TrackerEvent
 
+/**
+ * In memory storage for events. Soon to be backed by persistent storage.
+ */
 class EventsStorage : RecorderStorage<TrackerEvent>, StoragePusher<TrackerEvent> {
 
     private val queue = mutableListOf<TrackerEvent>()

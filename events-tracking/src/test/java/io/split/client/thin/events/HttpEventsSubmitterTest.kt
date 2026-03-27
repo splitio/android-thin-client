@@ -66,14 +66,14 @@ class HttpEventsSubmitterTest {
     }
 
     @Test
-    fun `exception is retryable for 5xx errors`() {
+    fun `exception is not retryable for 5xx errors`() {
         shouldSucceed = false
         statusCode = 503
 
         try {
             submitter.execute("""[{"key":"test"}]""")
         } catch (e: RecorderException) {
-            assertTrue(e.isRetryable)
+            assertTrue(!e.isRetryable)
         }
     }
 

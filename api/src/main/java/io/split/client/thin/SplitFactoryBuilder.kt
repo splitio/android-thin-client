@@ -33,6 +33,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 
+// TODO: move these constants
+private const val EVENTS_MAX_QUEUE_SIZE = 5000
+private const val EVENTS_BATCH_SIZE = 500
+private const val EVENTS_MAX_QUEUE_SIZE_IN_BYTES = 5_242_880L
+
 /**
  * Builder for creating a [SplitFactory] instance.
  */
@@ -92,16 +97,16 @@ object SplitFactoryBuilder {
         val eventsRecorderTask = EventsRecorderTask(
             storage = eventsStorage,
             submitter = httpEventsSubmitter,
-            batchSize = 500
+            batchSize = EVENTS_BATCH_SIZE
         )
         val taskExecutor = CoroutineSplitTaskExecutor(factoryScope)
         val storageAdapter = InBytesSizableStorageAdapter(eventsStorage)
-        val syncHelper = RecorderSyncHelperImpl<io.split.android.client.submitter.InBytesSizable>(
-            SplitTaskType.GENERIC_TASK,
-            storageAdapter,
-            5000,
-            5_242_880L,
-            taskExecutor
+        val syncHelper = RecorderSyncHelperImpl(
+            /* taskType = */ SplitTaskType.GENERIC_TASK,
+            /* storage = */ storageAdapter,
+            /* maxQueueSize = */ EVENTS_MAX_QUEUE_SIZE,
+            /* maxQueueSizeInBytes = */ EVENTS_MAX_QUEUE_SIZE_IN_BYTES,
+            /* splitTaskExecutor = */ taskExecutor
         )
         val eventsCoordinator = DefaultEventSubmissionCoordinator(
             scope = factoryScope,

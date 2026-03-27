@@ -2,7 +2,6 @@ package io.split.client.thin.internal
 
 import io.split.android.client.fallback.FallbackTreatmentsCalculator
 import io.split.android.client.fallback.FallbackTreatmentsCalculatorImpl
-import io.split.client.thin.internal.toInternal
 import io.split.client.thin.SplitClient
 import io.split.client.thin.SplitClientConfig
 import io.split.client.thin.SplitFactory
@@ -17,10 +16,10 @@ import io.split.client.thin.internal.evaluation.EvaluationRepository
 import io.split.client.thin.internal.evaluation.toEvaluationKey
 import io.split.client.thin.internal.lifecycle.LifecycleComponent
 import io.split.client.thin.internal.lifecycle.LifecycleManager
-import io.split.client.thin.internal.secure.EvaluationFilters
 import io.split.client.thin.internal.observer.DefaultCompositeObserver
 import io.split.client.thin.internal.observer.ObservableEvent
 import io.split.client.thin.internal.observer.ObservableEventType
+import io.split.client.thin.internal.secure.EvaluationFilters
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob

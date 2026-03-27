@@ -23,8 +23,7 @@ class EventsPeriodicScheduler(
     }
 
     fun pause() {
-        job?.cancel()
-        job = null
+        stop()
     }
 
     fun resume() {

@@ -14,11 +14,10 @@ class HttpEventsSubmitter(
         val response = runBlocking(Dispatchers.IO) { postEvents(data) }
 
         if (!response.isSuccess) {
-            val isRetryable = response.httpStatus >= 500
             throw RecorderException(
-                "Events submission failed with status ${response.httpStatus}",
-                response.httpStatus,
-                isRetryable
+                /* message = */ "Events submission failed with status ${response.httpStatus}",
+                /* httpStatus = */ response.httpStatus,
+                /* retryable = */ false // Always false; to be managed by retryable http client policy.
             )
         }
     }
