@@ -129,10 +129,7 @@ class DefaultStreamingManagerTest {
         advanceUntilIdle()
 
         eventSourceClient.simulateMessage(
-            mapOf(
-                "channel" to "evaluations",
-                "data" to """{"type":"EVALUATION_UPDATE","changeNumber":123}"""
-            )
+            mapOf("data" to """{"channel":"evaluations","data":"{\"type\":\"EVALUATION_UPDATE\",\"changeNumber\":123}","timestamp":1000}""")
         )
         advanceUntilIdle()
 

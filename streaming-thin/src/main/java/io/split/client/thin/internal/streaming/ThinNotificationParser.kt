@@ -27,12 +27,8 @@ internal class ThinNotificationParser(
             when {
                 raw.data.contains("\"type\":\"EVALUATION_UPDATE\"") -> parseEvaluationUpdate(raw)
                 raw.data.contains("\"type\":\"CONTROL\"") -> parseControl(raw)
-                raw.data.contains("\"type\":\"OCCUPANCY\"") -> parseOccupancy(raw)
                 raw.data.contains("\"type\":\"ERROR\"") -> parseError(raw)
-                else -> {
-                    Logger.w("Unknown notification type: ${raw.data}")
-                    null
-                }
+                else -> parseOccupancy(raw)
             }
         } catch (e: Exception) {
             Logger.e("Failed to parse notification: ${e.message}")
@@ -73,7 +69,7 @@ internal class ThinNotificationParser(
     private fun parseOccupancy(raw: RawThinNotification): ThinOccupancyNotification? {
         return try {
             val dto = json.decodeFromString<OccupancyDataDto>(raw.data)
-            ThinOccupancyNotification(dto.publishers, raw.channel, raw.timestamp)
+            ThinOccupancyNotification(dto.metrics.publishers, raw.channel, raw.timestamp)
         } catch (e: SerializationException) {
             Logger.e("Failed to parse OCCUPANCY: ${e.message}")
             null

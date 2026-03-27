@@ -149,7 +149,7 @@ class ThinNotificationParserTest {
     fun `parse returns ThinOccupancyNotification for valid OCCUPANCY`() {
         val raw = RawThinNotification(
             channel = "occupancy-channel",
-            data = """{"type":"OCCUPANCY","publishers":3}""",
+            data = """{"metrics":{"publishers":3}}""",
             timestamp = 3000L
         )
 
@@ -168,7 +168,7 @@ class ThinNotificationParserTest {
     fun `parse returns ThinOccupancyNotification for OCCUPANCY with zero publishers`() {
         val raw = RawThinNotification(
             channel = "occupancy",
-            data = """{"type":"OCCUPANCY","publishers":0}""",
+            data = """{"metrics":{"publishers":0}}""",
             timestamp = 4000L
         )
 

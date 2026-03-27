@@ -26,7 +26,11 @@ internal data class ControlDataDto(
 
 @Serializable
 internal data class OccupancyDataDto(
-    @SerialName("type") val type: String,
+    @SerialName("metrics") val metrics: OccupancyMetricsDto
+)
+
+@Serializable
+internal data class OccupancyMetricsDto(
     @SerialName("publishers") val publishers: Int
 )
 

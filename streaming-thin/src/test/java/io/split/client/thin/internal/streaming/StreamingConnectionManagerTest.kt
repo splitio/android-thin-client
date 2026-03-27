@@ -138,10 +138,7 @@ class StreamingConnectionManagerTest {
         advanceUntilIdle()
 
         eventSourceClient.simulateMessage(
-            mapOf(
-                "channel" to "evaluations",
-                "data" to """{"type":"EVALUATION_UPDATE","changeNumber":123}"""
-            )
+            mapOf("data" to """{"channel":"evaluations","data":"{\"type\":\"EVALUATION_UPDATE\",\"changeNumber\":123}","timestamp":1000}""")
         )
         advanceUntilIdle()
 
@@ -166,7 +163,7 @@ class StreamingConnectionManagerTest {
         connectCount = 0
 
         eventSourceClient.simulateMessage(
-            mapOf("data" to """{"type":"CONTROL","controlType":"STREAMING_RESUMED"}""")
+            mapOf("data" to """{"channel":"control_pri","data":"{\"type\":\"CONTROL\",\"controlType\":\"STREAMING_RESUMED\"}","timestamp":1000}""")
         )
         advanceUntilIdle()
 
@@ -189,7 +186,7 @@ class StreamingConnectionManagerTest {
         advanceUntilIdle()
 
         eventSourceClient1.simulateMessage(
-            mapOf("data" to """{"type":"CONTROL","controlType":"STREAMING_PAUSED"}""")
+            mapOf("data" to """{"channel":"control_pri","data":"{\"type\":\"CONTROL\",\"controlType\":\"STREAMING_PAUSED\"}","timestamp":1000}""")
         )
         advanceUntilIdle()
 
@@ -212,7 +209,7 @@ class StreamingConnectionManagerTest {
         advanceUntilIdle()
 
         eventSourceClient.simulateMessage(
-            mapOf("data" to """{"type":"CONTROL","controlType":"STREAMING_DISABLED"}""")
+            mapOf("data" to """{"channel":"control_pri","data":"{\"type\":\"CONTROL\",\"controlType\":\"STREAMING_DISABLED\"}","timestamp":1000}""")
         )
         advanceUntilIdle()
 
@@ -235,7 +232,7 @@ class StreamingConnectionManagerTest {
         assertEquals(1, connectCount)
 
         firstClient.simulateMessage(
-            mapOf("data" to """{"type":"CONTROL","controlType":"STREAMING_RESET"}""")
+            mapOf("data" to """{"channel":"control_pri","data":"{\"type\":\"CONTROL\",\"controlType\":\"STREAMING_RESET\"}","timestamp":1000}""")
         )
         advanceUntilIdle()
 
@@ -256,7 +253,7 @@ class StreamingConnectionManagerTest {
         advanceUntilIdle()
 
         eventSourceClient.simulateMessage(
-            mapOf("data" to """{"type":"OCCUPANCY","publishers":0}""")
+            mapOf("data" to """{"channel":"[?occupancy=metrics.publishers]control_pri","data":"{\"metrics\":{\"publishers\":0}}","timestamp":1000}""")
         )
         advanceUntilIdle()
 
@@ -276,7 +273,7 @@ class StreamingConnectionManagerTest {
         advanceUntilIdle()
 
         eventSourceClient.simulateMessage(
-            mapOf("data" to """{"type":"OCCUPANCY","publishers":5}""")
+            mapOf("data" to """{"channel":"[?occupancy=metrics.publishers]control_pri","data":"{\"metrics\":{\"publishers\":5}}","timestamp":1000}""")
         )
         advanceUntilIdle()
 
@@ -303,14 +300,35 @@ class StreamingConnectionManagerTest {
         assertTrue(connectCount >= 2)
     }
 
+    @Test
+    fun `connect builds URL with v=1_1, accessToken, and channel params`() = runTest {
+        val eventSourceClient = FakeEventSourceClient()
+        val manager = createManager(
+            eventSourceClientProvider = { eventSourceClient },
+            channelExtractor = { listOf("evaluations_abc", "[?occupancy=metrics.publishers]control_pri") },
+        )
+
+        manager.start()
+        advanceUntilIdle()
+
+        val uri = eventSourceClient.lastUri.toString()
+        assertTrue("URL should contain v=1.1", uri.contains("v=1.1"))
+        assertTrue("URL should contain accessToken", uri.contains("accessToken=test-token"))
+        assertTrue("URL should contain channel", uri.contains("channel="))
+        assertTrue("URL should contain evaluations_abc channel", uri.contains("evaluations_abc"))
+        assertFalse("URL should not use ?token= param", uri.contains("?token="))
+    }
+
     private fun TestScope.createManager(
         eventSourceClientProvider: () -> FakeEventSourceClient = { FakeEventSourceClient() },
         backoffCounter: FakeBackoffCounter = FakeBackoffCounter(),
         onOccupancyZero: suspend () -> Unit = {},
         onEvaluationFetchNotification: suspend () -> Unit = {},
+        channelExtractor: (String) -> List<String> = { listOf("evaluations", "[?occupancy=metrics.publishers]control_pri") },
     ): StreamingConnectionManager = StreamingConnectionManager(
         streamingUrl = "https://streaming.test.io/sse",
         tokenProvider = { "test-token" },
+        channelExtractor = channelExtractor,
         eventSourceClientProvider = eventSourceClientProvider,
         backoffCounter = backoffCounter,
         scope = this,

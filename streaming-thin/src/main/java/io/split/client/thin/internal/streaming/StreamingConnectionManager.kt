@@ -17,6 +17,7 @@ import java.net.URI
 class StreamingConnectionManager(
     private val streamingUrl: String,
     private val tokenProvider: suspend () -> String,
+    private val channelExtractor: (String) -> List<String> = SseJwtParser()::parse,
     private val eventSourceClientProvider: () -> EventSourceClient,
     private val backoffCounter: BackoffCounter,
     private val scope: CoroutineScope,
@@ -86,7 +87,8 @@ class StreamingConnectionManager(
         connectionJob = scope.launch {
             try {
                 val token = tokenProvider()
-                val uri = URI("$streamingUrl?token=$token")
+                val channels = channelExtractor(token)
+                val uri = URI("$streamingUrl?v=1.1&channel=${channels.joinToString(",")}&accessToken=$token")
 
                 // Create new EventSourceClient instance
                 val client = eventSourceClientProvider()
@@ -145,11 +147,8 @@ class StreamingConnectionManager(
     }
 
     private fun handleMessage(event: Map<String, String>) {
-        val data = event["data"] ?: return
-        val channel = event["channel"]
-        val timestamp = System.currentTimeMillis()
-
-        val raw = RawThinNotification(channel, data, timestamp)
+        val jsonData = event["data"] ?: return
+        val raw = notificationParser.parseRaw(jsonData) ?: return
         val notification = notificationParser.parse(raw) ?: return
 
         scope.launch {
