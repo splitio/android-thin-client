@@ -31,6 +31,7 @@ include(":retryable-http-client")
 include(":secure-http-client")
 include(":events-tracking")
 include(":evaluation")
+include(":persistence")
 include(":e2e")
 // include(":sdk")
 

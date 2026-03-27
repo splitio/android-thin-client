@@ -144,6 +144,11 @@ val shadowClassesJar by tasks.registering(ShadowJar::class) {
     relocate("io.split.android.engine", "io.split.client.thin.repackaged.io.split.android.engine")
     relocate("io.harness.events", "io.split.client.thin.repackaged.io.harness.events")
 
+    // Relocate Room and SQLite to avoid conflicts with android-client's Room 2.4.3
+    relocate("androidx.room", "io.split.client.thin.repackaged.androidx.room")
+    relocate("androidx.sqlite", "io.split.client.thin.repackaged.androidx.sqlite")
+    relocate("androidx.arch.core", "io.split.client.thin.repackaged.androidx.arch.core")
+
     // Merge META-INF/services files - required for ServiceLoader to discover relocated providers
     mergeServiceFiles()
 
@@ -237,7 +242,10 @@ tasks.register("verifyRepackaging") {
                     val path = entry.name
                     if (path.startsWith("io/split/android/client/") ||
                         path.startsWith("io/split/android/engine/") ||
-                        path.startsWith("io/harness/events/")) {
+                        path.startsWith("io/harness/events/") ||
+                        (path.startsWith("androidx/room/") && !path.startsWith("io/split/client/thin/repackaged/")) ||
+                        (path.startsWith("androidx/sqlite/") && !path.startsWith("io/split/client/thin/repackaged/")) ||
+                        (path.startsWith("androidx/arch/core/") && !path.startsWith("io/split/client/thin/repackaged/"))) {
                         logger.error("FORBIDDEN class found: $path")
                         foundForbidden = true
                     }
