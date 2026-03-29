@@ -31,9 +31,6 @@ android {
 }
 
 dependencies {
-    implementation(project(":models"))
-    implementation(project(":evaluation"))
-    implementation(project(":tracker"))
     implementation("androidx.room:room-runtime:2.4.3")
     implementation("androidx.lifecycle:lifecycle-livedata:2.5.1")
     annotationProcessor("androidx.room:room-compiler:2.4.3")

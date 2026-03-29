@@ -1,50 +1,56 @@
 package io.split.client.thin.internal.persistence
 
-import io.split.client.thin.internal.evaluation.StoredEvaluation
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
-
 class RoomEvaluationPersistence(
-    private val dao: EvaluationDao
+    private val evaluationDao: EvaluationDao,
+    private val metadataDao: EvaluationMetadataDao
 ) : PersistentEvaluationStorage {
 
-    private val json = Json { ignoreUnknownKeys = true }
-
     override fun loadForKey(matchingKey: String): PersistentEvaluationData? {
-        val entities = dao.getByKey(matchingKey)
+        val metadata = metadataDao.getByKey(matchingKey) ?: return null
+        val entities = evaluationDao.getByKey(matchingKey)
+
         if (entities.isEmpty()) {
+            metadataDao.deleteByKey(matchingKey)
             return null
         }
 
-        val changeNumber = entities.firstOrNull()?.changeNumber ?: return null
-        val evaluations = entities.map { entity ->
-            val dto = json.decodeFromString<StoredEvaluationDto>(entity.body)
-            dto.toStoredEvaluation()
-        }
-
-        return PersistentEvaluationData(changeNumber, evaluations)
+        val evaluationJsons = entities.map { it.body }
+        return PersistentEvaluationData(metadata.changeNumber, evaluationJsons)
     }
 
     override fun persistForKey(
         matchingKey: String,
         changeNumber: Long,
-        evaluations: List<StoredEvaluation>
+        evaluations: List<SerializedEvaluation>
     ) {
-        val entities = evaluations.map { stored ->
-            val dto = StoredEvaluationDto.fromStoredEvaluation(stored)
+        if (evaluations.isEmpty()) {
+            metadataDao.deleteByKey(matchingKey)
+            evaluationDao.deleteByKey(matchingKey)
+            return
+        }
+
+        metadataDao.insert(
+            EvaluationMetadataEntity(
+                matchingKey,
+                changeNumber,
+                System.currentTimeMillis()
+            )
+        )
+
+        val entities = evaluations.map { serialized ->
             EvaluationEntity(
                 matchingKey,
-                stored.result.flag,
-                json.encodeToString(dto),
-                changeNumber,
+                serialized.flagName,
+                serialized.json,
                 System.currentTimeMillis()
             )
         }
 
-        dao.replaceForKey(matchingKey, entities)
+        evaluationDao.replaceForKey(matchingKey, entities)
     }
 
     override fun clearForKey(matchingKey: String) {
-        dao.deleteByKey(matchingKey)
+        metadataDao.deleteByKey(matchingKey)
+        evaluationDao.deleteByKey(matchingKey)
     }
 }

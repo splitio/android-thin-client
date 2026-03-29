@@ -3,8 +3,6 @@ package io.split.client.thin.internal.persistence
 import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
-import io.split.client.thin.EvaluationResult
-import io.split.client.thin.internal.evaluation.StoredEvaluation
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -28,7 +26,10 @@ class RoomEvaluationPersistenceTest {
         database = Room.inMemoryDatabaseBuilder(context, ThinClientDatabase::class.java)
             .allowMainThreadQueries()
             .build()
-        persistence = RoomEvaluationPersistence(database.evaluationDao())
+        persistence = RoomEvaluationPersistence(
+            database.evaluationDao(),
+            database.evaluationMetadataDao()
+        )
     }
 
     @After
@@ -44,27 +45,12 @@ class RoomEvaluationPersistenceTest {
 
     @Test
     fun `persistForKey and loadForKey round trip`() {
+        val flag1Json = """{"result":{"flag":"flag1","treatment":"on","config":"{\"color\":\"blue\"}","label":"matched","changeNumber":100},"flagSets":["set1","set2"]}"""
+        val flag2Json = """{"result":{"flag":"flag2","treatment":"off","config":null,"label":"default","changeNumber":100},"flagSets":[]}"""
+
         val evaluations = listOf(
-            StoredEvaluation(
-                result = EvaluationResult(
-                    flag = "flag1",
-                    treatment = "on",
-                    config = """{"color":"blue"}""",
-                    label = "matched",
-                    changeNumber = 100L
-                ),
-                flagSets = setOf("set1", "set2")
-            ),
-            StoredEvaluation(
-                result = EvaluationResult(
-                    flag = "flag2",
-                    treatment = "off",
-                    config = null,
-                    label = "default",
-                    changeNumber = 100L
-                ),
-                flagSets = emptySet()
-            )
+            SerializedEvaluation("flag1", flag1Json),
+            SerializedEvaluation("flag2", flag2Json)
         )
 
         persistence.persistForKey("user1", 100L, evaluations)
@@ -72,55 +58,35 @@ class RoomEvaluationPersistenceTest {
         val loaded = persistence.loadForKey("user1")
         assertEquals(100L, loaded?.changeNumber)
         assertEquals(2, loaded?.evaluations?.size)
-
-        val flag1 = loaded?.evaluations?.find { it.result.flag == "flag1" }
-        assertEquals("on", flag1?.result?.treatment)
-        assertEquals("""{"color":"blue"}""", flag1?.result?.config)
-        assertEquals("matched", flag1?.result?.label)
-        assertEquals(setOf("set1", "set2"), flag1?.flagSets)
-
-        val flag2 = loaded?.evaluations?.find { it.result.flag == "flag2" }
-        assertEquals("off", flag2?.result?.treatment)
-        assertNull(flag2?.result?.config)
-        assertEquals(emptySet(), flag2?.flagSets)
+        assertTrue(loaded?.evaluations?.contains(flag1Json) == true)
+        assertTrue(loaded?.evaluations?.contains(flag2Json) == true)
     }
 
     @Test
     fun `persistForKey replaces existing data`() {
-        val initial = listOf(
-            StoredEvaluation(
-                result = EvaluationResult("flag1", "on", null, null, 100L),
-                flagSets = emptySet()
-            )
-        )
+        val flag1Json = """{"result":{"flag":"flag1","treatment":"on","config":null,"label":null,"changeNumber":100},"flagSets":[]}"""
+        val initial = listOf(SerializedEvaluation("flag1", flag1Json))
         persistence.persistForKey("user1", 100L, initial)
 
+        val flag2Json = """{"result":{"flag":"flag2","treatment":"off","config":null,"label":null,"changeNumber":200},"flagSets":[]}"""
+        val flag3Json = """{"result":{"flag":"flag3","treatment":"control","config":null,"label":null,"changeNumber":200},"flagSets":[]}"""
         val updated = listOf(
-            StoredEvaluation(
-                result = EvaluationResult("flag2", "off", null, null, 200L),
-                flagSets = emptySet()
-            ),
-            StoredEvaluation(
-                result = EvaluationResult("flag3", "control", null, null, 200L),
-                flagSets = emptySet()
-            )
+            SerializedEvaluation("flag2", flag2Json),
+            SerializedEvaluation("flag3", flag3Json)
         )
         persistence.persistForKey("user1", 200L, updated)
 
         val loaded = persistence.loadForKey("user1")
         assertEquals(200L, loaded?.changeNumber)
         assertEquals(2, loaded?.evaluations?.size)
-        assertEquals(setOf("flag2", "flag3"), loaded?.evaluations?.map { it.result.flag }?.toSet())
+        assertTrue(loaded?.evaluations?.contains(flag2Json) == true)
+        assertTrue(loaded?.evaluations?.contains(flag3Json) == true)
     }
 
     @Test
     fun `clearForKey removes all data for key`() {
-        persistence.persistForKey("user1", 100L, listOf(
-            StoredEvaluation(
-                result = EvaluationResult("flag1", "on", null, null, 100L),
-                flagSets = emptySet()
-            )
-        ))
+        val flag1Json = """{"result":{"flag":"flag1","treatment":"on","config":null,"label":null,"changeNumber":100},"flagSets":[]}"""
+        persistence.persistForKey("user1", 100L, listOf(SerializedEvaluation("flag1", flag1Json)))
 
         persistence.clearForKey("user1")
 
@@ -130,37 +96,49 @@ class RoomEvaluationPersistenceTest {
 
     @Test
     fun `multiple keys are isolated`() {
-        val user1Evals = listOf(
-            StoredEvaluation(
-                result = EvaluationResult("flag1", "on", null, null, 100L),
-                flagSets = emptySet()
-            )
-        )
-        val user2Evals = listOf(
-            StoredEvaluation(
-                result = EvaluationResult("flag2", "off", null, null, 200L),
-                flagSets = emptySet()
-            )
-        )
+        val flag1Json = """{"result":{"flag":"flag1","treatment":"on","config":null,"label":null,"changeNumber":100},"flagSets":[]}"""
+        val flag2Json = """{"result":{"flag":"flag2","treatment":"off","config":null,"label":null,"changeNumber":200},"flagSets":[]}"""
+
+        val user1Evals = listOf(SerializedEvaluation("flag1", flag1Json))
+        val user2Evals = listOf(SerializedEvaluation("flag2", flag2Json))
 
         persistence.persistForKey("user1", 100L, user1Evals)
         persistence.persistForKey("user2", 200L, user2Evals)
 
         val loaded1 = persistence.loadForKey("user1")
         assertEquals(100L, loaded1?.changeNumber)
-        assertEquals("flag1", loaded1?.evaluations?.first()?.result?.flag)
+        assertTrue(loaded1?.evaluations?.contains(flag1Json) == true)
 
         val loaded2 = persistence.loadForKey("user2")
         assertEquals(200L, loaded2?.changeNumber)
-        assertEquals("flag2", loaded2?.evaluations?.first()?.result?.flag)
+        assertTrue(loaded2?.evaluations?.contains(flag2Json) == true)
     }
 
     @Test
-    fun `empty evaluation list results in null on load`() {
-        persistence.persistForKey("user1", 100L, emptyList())
+    fun `empty evaluation list clears both metadata and evaluations`() {
+        val flag1Json = """{"result":{"flag":"flag1","treatment":"on","config":null,"label":null,"changeNumber":100},"flagSets":[]}"""
+        persistence.persistForKey("user1", 100L, listOf(SerializedEvaluation("flag1", flag1Json)))
+
+        persistence.persistForKey("user1", 200L, emptyList())
 
         val loaded = persistence.loadForKey("user1")
-        // Can't persist changeNumber without entities due to schema design
         assertNull(loaded)
+    }
+
+    @Test
+    fun `changeNumber is stored once per matchingKey`() {
+        val flag1Json = """{"result":{"flag":"flag1","treatment":"on","config":null,"label":null,"changeNumber":100},"flagSets":[]}"""
+        val flag2Json = """{"result":{"flag":"flag2","treatment":"off","config":null,"label":null,"changeNumber":100},"flagSets":[]}"""
+
+        persistence.persistForKey("user1", 12345L, listOf(
+            SerializedEvaluation("flag1", flag1Json),
+            SerializedEvaluation("flag2", flag2Json)
+        ))
+
+        val metadataCount = database.evaluationMetadataDao().getByKey("user1")
+        assertEquals(12345L, metadataCount?.changeNumber)
+
+        val evaluationEntities = database.evaluationDao().getByKey("user1")
+        assertEquals(2, evaluationEntities.size)
     }
 }

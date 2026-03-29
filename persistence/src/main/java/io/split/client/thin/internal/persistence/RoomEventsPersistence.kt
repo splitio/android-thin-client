@@ -1,37 +1,27 @@
 package io.split.client.thin.internal.persistence
 
-import io.split.android.client.tracker.TrackerEvent
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
-
 class RoomEventsPersistence(
     private val dao: EventDao
 ) : PersistentEventsStorage {
 
-    private val json = Json { ignoreUnknownKeys = true }
-
-    override fun push(event: TrackerEvent) {
-        val dto = TrackerEventDto.fromTrackerEvent(event)
+    override fun push(eventJson: String) {
         val entity = EventEntity(
-            0, // Auto-generated
-            json.encodeToString(dto),
-            event.timestamp
+            0,
+            eventJson,
+            System.currentTimeMillis()
         )
         dao.insert(entity)
     }
 
-    override fun pop(count: Int): List<TrackerEvent> {
+    override fun pop(count: Int): List<String> {
         val entities = dao.getOldest(count)
-        val events = entities.map { entity ->
-            val dto = json.decodeFromString<TrackerEventDto>(entity.body)
-            dto.toTrackerEvent()
-        }
+        val eventJsons = entities.map { it.body }
 
         if (entities.isNotEmpty()) {
             dao.delete(entities)
         }
 
-        return events
+        return eventJsons
     }
 
     override fun clear() {

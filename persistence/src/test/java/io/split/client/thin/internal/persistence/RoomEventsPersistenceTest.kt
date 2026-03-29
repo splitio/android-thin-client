@@ -3,7 +3,6 @@ package io.split.client.thin.internal.persistence
 import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
-import io.split.android.client.tracker.TrackerEvent
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -36,85 +35,60 @@ class RoomEventsPersistenceTest {
 
     @Test
     fun `push adds event to storage`() {
-        val event = TrackerEvent().apply {
-            trafficType = "user"
-            eventType = "click"
-            key = "user1"
-            value = 1.0
-            timestamp = System.currentTimeMillis()
-            properties = mapOf("button" to "submit")
-            sizeInBytes = 100
-        }
+        val eventJson = """{"trafficType":"user","eventType":"click","key":"user1","value":1.0,"timestamp":1234567890,"properties":{"button":"submit"},"sizeInBytes":100}"""
 
-        persistence.push(event)
+        persistence.push(eventJson)
 
         assertEquals(1, persistence.count())
     }
 
     @Test
     fun `push multiple events`() {
-        val event1 = createEvent("click", "user1", 1.0)
-        val event2 = createEvent("view", "user2", 2.0)
-        val event3 = createEvent("purchase", "user3", 3.0)
+        val event1Json = createEventJson("click", "user1", 1.0)
+        val event2Json = createEventJson("view", "user2", 2.0)
+        val event3Json = createEventJson("purchase", "user3", 3.0)
 
-        persistence.push(event1)
-        persistence.push(event2)
-        persistence.push(event3)
+        persistence.push(event1Json)
+        persistence.push(event2Json)
+        persistence.push(event3Json)
 
         assertEquals(3, persistence.count())
     }
 
     @Test
     fun `pop returns events in FIFO order`() {
-        val event1 = createEvent("click", "user1", 1.0)
-        val event2 = createEvent("view", "user2", 2.0)
-        val event3 = createEvent("purchase", "user3", 3.0)
+        val event1Json = createEventJson("click", "user1", 1.0)
+        val event2Json = createEventJson("view", "user2", 2.0)
+        val event3Json = createEventJson("purchase", "user3", 3.0)
 
-        persistence.push(event1)
+        persistence.push(event1Json)
         Thread.sleep(10)
-        persistence.push(event2)
+        persistence.push(event2Json)
         Thread.sleep(10)
-        persistence.push(event3)
+        persistence.push(event3Json)
 
         val popped = persistence.pop(2)
         assertEquals(2, popped.size)
-        assertEquals("click", popped[0].eventType)
-        assertEquals("view", popped[1].eventType)
+        assertTrue(popped[0].contains("\"eventType\":\"click\""))
+        assertTrue(popped[1].contains("\"eventType\":\"view\""))
         assertEquals(1, persistence.count())
     }
 
     @Test
     fun `pop and push round trip preserves event data`() {
-        val original = TrackerEvent().apply {
-            trafficType = "user"
-            eventType = "purchase"
-            key = "user123"
-            value = 99.99
-            timestamp = System.currentTimeMillis()
-            properties = mapOf("item" to "widget", "quantity" to 5)
-            sizeInBytes = 150
-        }
+        val eventJson = """{"trafficType":"user","eventType":"purchase","key":"user123","value":99.99,"timestamp":1234567890,"properties":{"item":"widget","quantity":5},"sizeInBytes":150}"""
 
-        persistence.push(original)
+        persistence.push(eventJson)
         val popped = persistence.pop(1)
 
         assertEquals(1, popped.size)
-        val restored = popped[0]
-        assertEquals(original.trafficType, restored.trafficType)
-        assertEquals(original.eventType, restored.eventType)
-        assertEquals(original.key, restored.key)
-        assertEquals(original.value, restored.value, 0.001)
-        assertEquals(original.timestamp, restored.timestamp)
-        // Gson deserializes integers as doubles in Map<String, Object>
-        assertEquals("widget", restored.properties["item"])
-        assertEquals(5.0, restored.properties["quantity"])
-        assertEquals(original.sizeInBytes, restored.sizeInBytes)
+        assertEquals(eventJson, popped[0])
     }
 
     @Test
     fun `pop with limit larger than available returns all`() {
-        persistence.push(createEvent("click", "user1", 1.0))
-        persistence.push(createEvent("view", "user2", 2.0))
+        persistence.push(createEventJson("click", "user1", 1.0))
+        persistence.push(createEventJson("view", "user2", 2.0))
 
         val popped = persistence.pop(10)
         assertEquals(2, popped.size)
@@ -129,9 +103,9 @@ class RoomEventsPersistenceTest {
 
     @Test
     fun `clear removes all events`() {
-        persistence.push(createEvent("click", "user1", 1.0))
-        persistence.push(createEvent("view", "user2", 2.0))
-        persistence.push(createEvent("purchase", "user3", 3.0))
+        persistence.push(createEventJson("click", "user1", 1.0))
+        persistence.push(createEventJson("view", "user2", 2.0))
+        persistence.push(createEventJson("purchase", "user3", 3.0))
 
         persistence.clear()
 
@@ -142,10 +116,10 @@ class RoomEventsPersistenceTest {
     fun `count returns accurate number`() {
         assertEquals(0, persistence.count())
 
-        persistence.push(createEvent("click", "user1", 1.0))
+        persistence.push(createEventJson("click", "user1", 1.0))
         assertEquals(1, persistence.count())
 
-        persistence.push(createEvent("view", "user2", 2.0))
+        persistence.push(createEventJson("view", "user2", 2.0))
         assertEquals(2, persistence.count())
 
         persistence.pop(1)
@@ -155,15 +129,7 @@ class RoomEventsPersistenceTest {
         assertEquals(0, persistence.count())
     }
 
-    private fun createEvent(eventType: String, key: String, value: Double): TrackerEvent {
-        return TrackerEvent().apply {
-            this.trafficType = "user"
-            this.eventType = eventType
-            this.key = key
-            this.value = value
-            this.timestamp = System.currentTimeMillis()
-            this.properties = emptyMap()
-            this.sizeInBytes = 50
-        }
+    private fun createEventJson(eventType: String, key: String, value: Double): String {
+        return """{"trafficType":"user","eventType":"$eventType","key":"$key","value":$value,"timestamp":${System.currentTimeMillis()},"properties":{},"sizeInBytes":50}"""
     }
 }

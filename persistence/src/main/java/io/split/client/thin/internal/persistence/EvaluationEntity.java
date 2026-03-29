@@ -11,14 +11,12 @@ public class EvaluationEntity {
     public final String flagName;
     @NonNull
     public final String body;
-    public final long changeNumber;
     public final long updatedAt;
 
-    public EvaluationEntity(@NonNull String matchingKey, @NonNull String flagName, @NonNull String body, long changeNumber, long updatedAt) {
+    public EvaluationEntity(@NonNull String matchingKey, @NonNull String flagName, @NonNull String body, long updatedAt) {
         this.matchingKey = matchingKey;
         this.flagName = flagName;
         this.body = body;
-        this.changeNumber = changeNumber;
         this.updatedAt = updatedAt;
     }
 }
