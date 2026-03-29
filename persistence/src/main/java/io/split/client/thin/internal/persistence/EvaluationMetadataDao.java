@@ -11,9 +11,9 @@ public interface EvaluationMetadataDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     void insert(EvaluationMetadataEntity entity);
 
-    @Query("SELECT * FROM evaluation_metadata WHERE matchingKey = :matchingKey")
-    EvaluationMetadataEntity getByKey(String matchingKey);
+    @Query("SELECT * FROM evaluation_metadata WHERE evaluationKey = :evaluationKey")
+    EvaluationMetadataEntity getByKey(String evaluationKey);
 
-    @Query("DELETE FROM evaluation_metadata WHERE matchingKey = :matchingKey")
-    void deleteByKey(String matchingKey);
+    @Query("DELETE FROM evaluation_metadata WHERE evaluationKey = :evaluationKey")
+    void deleteByKey(String evaluationKey);
 }

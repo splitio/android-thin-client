@@ -14,15 +14,15 @@ public interface EvaluationDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     void insert(List<EvaluationEntity> entities);
 
-    @Query("SELECT * FROM evaluations WHERE matchingKey = :matchingKey")
-    List<EvaluationEntity> getByKey(String matchingKey);
+    @Query("SELECT * FROM evaluations WHERE evaluationKey = :evaluationKey")
+    List<EvaluationEntity> getByKey(String evaluationKey);
 
-    @Query("DELETE FROM evaluations WHERE matchingKey = :matchingKey")
-    void deleteByKey(String matchingKey);
+    @Query("DELETE FROM evaluations WHERE evaluationKey = :evaluationKey")
+    void deleteByKey(String evaluationKey);
 
     @Transaction
-    default void replaceForKey(String matchingKey, List<EvaluationEntity> entities) {
-        deleteByKey(matchingKey);
+    default void replaceForKey(String evaluationKey, List<EvaluationEntity> entities) {
+        deleteByKey(evaluationKey);
         insert(entities);
     }
 }

@@ -46,7 +46,7 @@ class EvaluationDaoTest {
 
         val results = dao.getByKey("user1")
         assertEquals(1, results.size)
-        assertEquals("user1", results[0].matchingKey)
+        assertEquals("user1", results[0].evaluationKey)
         assertEquals("feature_flag", results[0].flagName)
         assertEquals("""{"treatment":"on"}""", results[0].body)
     }
@@ -94,7 +94,7 @@ class EvaluationDaoTest {
 
         val results = dao.getByKey("user1")
         assertEquals(1, results.size)
-        assertEquals("user1", results[0].matchingKey)
+        assertEquals("user1", results[0].evaluationKey)
     }
 
     @Test

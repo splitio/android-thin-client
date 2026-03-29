@@ -8,12 +8,12 @@ import androidx.room.PrimaryKey;
 public class EvaluationMetadataEntity {
     @PrimaryKey
     @NonNull
-    public final String matchingKey;
+    public final String evaluationKey;
     public final long changeNumber;
     public final long updatedAt;
 
-    public EvaluationMetadataEntity(@NonNull String matchingKey, long changeNumber, long updatedAt) {
-        this.matchingKey = matchingKey;
+    public EvaluationMetadataEntity(@NonNull String evaluationKey, long changeNumber, long updatedAt) {
+        this.evaluationKey = evaluationKey;
         this.changeNumber = changeNumber;
         this.updatedAt = updatedAt;
     }
