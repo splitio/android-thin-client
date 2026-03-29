@@ -4,17 +4,18 @@ import androidx.annotation.NonNull;
 import androidx.room.Entity;
 import androidx.room.PrimaryKey;
 
-@Entity(tableName = "evaluation_metadata")
-public class EvaluationMetadataEntity {
+@Entity(tableName = "attributes")
+public class AttributesEntity {
     @PrimaryKey
     @NonNull
     public final String key;
-    public final long changeNumber;
+    @NonNull
+    public final String json;
     public final long updatedAt;
 
-    public EvaluationMetadataEntity(@NonNull String key, long changeNumber, long updatedAt) {
+    public AttributesEntity(@NonNull String key, @NonNull String json, long updatedAt) {
         this.key = key;
-        this.changeNumber = changeNumber;
+        this.json = json;
         this.updatedAt = updatedAt;
     }
 }

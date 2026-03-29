@@ -5,26 +5,39 @@ Room-based persistent storage for the Android thin client SDK.
 ## Purpose
 
 Provides local database storage for:
-- **Evaluations**: Cached flag evaluation results per matching key
+- **Evaluations**: Cached flag evaluation results per key
+- **Attributes**: Attribute sets associated with keys, enabling `EvaluationKey` reconstruction
 - **Events**: Queued tracking events awaiting upload
 
 ## Design Philosophy
 
-This module is a **dumb storage layer** that accepts and returns pre-serialized JSON strings. Serialization/deserialization happens in the caller (API module), keeping this module focused purely on persistence.
+This module is a **dumb storage layer** that accepts and returns pre-serialized strings. The consumer is responsible for:
+- Serializing `Key` objects (matchingKey + bucketingKey) to strings
+- Stringifying attributes to JSON
+- Deserializing when loading from persistence
+
+This keeps the module focused purely on persistence without domain knowledge.
 
 ## Schema
 
 ### Evaluations
 
-**`evaluation_metadata` table** — Stores changeNumber once per matchingKey:
-- `matchingKey` (PK) — User key
+**`evaluation_metadata` table** — Stores changeNumber once per key:
+- `key` (PK) — Serialized Key (matchingKey + bucketingKey)
 - `changeNumber` — Server's `till` value for this key
 - `updatedAt` — Last update timestamp
 
 **`evaluations` table** — Stores individual flag evaluations:
-- `matchingKey`, `flagName` (composite PK) — Unique per flag per user
+- `key`, `flagName` (composite PK) — Unique per flag per key
 - `body` — Pre-serialized JSON string
 - `updatedAt` — Last update timestamp
+
+**`attributes` table** — Stores attributes associated with a key:
+- `key` (PK) — Same serialized Key used in evaluations/metadata tables
+- `json` — Stringified attributes JSON
+- `updatedAt` — Last update timestamp
+
+The `key` column is shared across all three evaluation-related tables, allowing the consumer to JOIN and reconstruct full `EvaluationKey` objects (Key + attributes).
 
 ### Events
 
@@ -37,7 +50,7 @@ This module is a **dumb storage layer** that accepts and returns pre-serialized 
 
 ### Interfaces
 
-- `PersistentEvaluationStorage` — Load/persist/clear cached evaluations by matching key (string-based API)
+- `PersistentEvaluationStorage` — Load/persist/clear cached evaluations by key (string-based API)
 - `PersistentEventsStorage` — Push/pop/count queued tracker events (string-based API)
 - `SerializedEvaluation` — Wrapper for (flagName, json) pairs
 
@@ -46,12 +59,19 @@ This module is a **dumb storage layer** that accepts and returns pre-serialized 
 - `RoomEvaluationPersistence` — Room-backed evaluation storage with metadata table
 - `RoomEventsPersistence` — Room-backed event queue storage
 
+### Entities
+
+- `EvaluationEntity` — Evaluation record with key, flagName, and body
+- `EvaluationMetadataEntity` — Metadata for each key with changeNumber
+- `AttributesEntity` — Attributes associated with a key
+- `EventEntity` — Event queue record
+
 ## Dependencies
 
 - **AndroidX Room** (2.4.3) — Database layer
 - **Kotlinx Coroutines** (1.8.1) — Async operations
 
-**No domain dependencies** — This module does not depend on `models`, `evaluation`, or `tracker`.
+**No domain dependencies**
 
 ## Build
 
@@ -66,15 +86,31 @@ Module is consumed internally by the `api` module. The API module handles serial
 
 **Example:**
 ```kotlin
-// Caller serializes before persisting
+// Consumer serializes Key before persisting
+val key = Key("user-123", "bucket-456")
+val serializedKey = serializeKey(key)  // e.g., JSON: {"matchingKey":"user-123","bucketingKey":"bucket-456"}
+
+// Consumer serializes evaluations
 val serialized = evaluations.map { eval ->
     SerializedEvaluation(eval.result.flag, json.encodeToString(eval))
 }
-persistence.persistForKey("user1", 12345L, serialized)
 
-// Caller deserializes after loading
-val data = persistence.loadForKey("user1")
+persistence.persistForKey(serializedKey, 12345L, serialized)
+
+// Consumer deserializes after loading
+val data = persistence.loadForKey(serializedKey)
 val evaluations = data?.evaluations?.map { jsonString ->
     json.decodeFromString<StoredEvaluation>(jsonString)
 }
+```
+
+**Attributes storage:**
+```kotlin
+// Consumer stores attributes for a key
+val attributesJson = """{"plan":"premium","role":"admin"}"""
+attributesDao.insert(AttributesEntity(serializedKey, attributesJson, System.currentTimeMillis()))
+
+// When loading, consumer reads attributes alongside evaluations to rebuild EvaluationKey
+val attributes = attributesDao.getByKey(serializedKey)
+val evalKey = EvaluationKey(deserializeKey(serializedKey), deserializeAttributes(attributes?.json))
 ```

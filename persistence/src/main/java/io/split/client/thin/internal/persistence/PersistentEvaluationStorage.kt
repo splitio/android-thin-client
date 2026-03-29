@@ -11,7 +11,7 @@ data class PersistentEvaluationData(
 )
 
 interface PersistentEvaluationStorage {
-    fun loadForKey(evaluationKey: String): PersistentEvaluationData?
-    fun persistForKey(evaluationKey: String, changeNumber: Long, evaluations: List<SerializedEvaluation>)
-    fun clearForKey(evaluationKey: String)
+    fun loadForKey(key: String): PersistentEvaluationData?
+    fun persistForKey(key: String, changeNumber: Long, evaluations: List<SerializedEvaluation>)
+    fun clearForKey(key: String)
 }

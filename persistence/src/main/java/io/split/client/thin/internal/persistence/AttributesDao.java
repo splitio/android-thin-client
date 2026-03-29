@@ -6,14 +6,14 @@ import androidx.room.OnConflictStrategy;
 import androidx.room.Query;
 
 @Dao
-public interface EvaluationMetadataDao {
+public interface AttributesDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    void insert(EvaluationMetadataEntity entity);
+    void insert(AttributesEntity entity);
 
-    @Query("SELECT * FROM evaluation_metadata WHERE key = :key")
-    EvaluationMetadataEntity getByKey(String key);
+    @Query("SELECT * FROM attributes WHERE key = :key")
+    AttributesEntity getByKey(String key);
 
-    @Query("DELETE FROM evaluation_metadata WHERE key = :key")
+    @Query("DELETE FROM attributes WHERE key = :key")
     void deleteByKey(String key);
 }

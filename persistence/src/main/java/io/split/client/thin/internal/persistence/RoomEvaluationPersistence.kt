@@ -5,12 +5,12 @@ class RoomEvaluationPersistence(
     private val metadataDao: EvaluationMetadataDao
 ) : PersistentEvaluationStorage {
 
-    override fun loadForKey(evaluationKey: String): PersistentEvaluationData? {
-        val metadata = metadataDao.getByKey(evaluationKey) ?: return null
-        val entities = evaluationDao.getByKey(evaluationKey)
+    override fun loadForKey(key: String): PersistentEvaluationData? {
+        val metadata = metadataDao.getByKey(key) ?: return null
+        val entities = evaluationDao.getByKey(key)
 
         if (entities.isEmpty()) {
-            metadataDao.deleteByKey(evaluationKey)
+            metadataDao.deleteByKey(key)
             return null
         }
 
@@ -19,19 +19,19 @@ class RoomEvaluationPersistence(
     }
 
     override fun persistForKey(
-        evaluationKey: String,
+        key: String,
         changeNumber: Long,
         evaluations: List<SerializedEvaluation>
     ) {
         if (evaluations.isEmpty()) {
-            metadataDao.deleteByKey(evaluationKey)
-            evaluationDao.deleteByKey(evaluationKey)
+            metadataDao.deleteByKey(key)
+            evaluationDao.deleteByKey(key)
             return
         }
 
         metadataDao.insert(
             EvaluationMetadataEntity(
-                evaluationKey,
+                key,
                 changeNumber,
                 System.currentTimeMillis()
             )
@@ -39,18 +39,18 @@ class RoomEvaluationPersistence(
 
         val entities = evaluations.map { serialized ->
             EvaluationEntity(
-                evaluationKey,
+                key,
                 serialized.flagName,
                 serialized.json,
                 System.currentTimeMillis()
             )
         }
 
-        evaluationDao.replaceForKey(evaluationKey, entities)
+        evaluationDao.replaceForKey(key, entities)
     }
 
-    override fun clearForKey(evaluationKey: String) {
-        metadataDao.deleteByKey(evaluationKey)
-        evaluationDao.deleteByKey(evaluationKey)
+    override fun clearForKey(key: String) {
+        metadataDao.deleteByKey(key)
+        evaluationDao.deleteByKey(key)
     }
 }
