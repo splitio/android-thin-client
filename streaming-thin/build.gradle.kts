@@ -5,7 +5,9 @@ plugins {
 
 android {
     namespace = "io.split.client.thin.streaming"
-    compileSdk = 33
+    compileSdk {
+        version = release(36)
+    }
 
     defaultConfig {
         minSdk = 21

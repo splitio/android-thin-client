@@ -3,10 +3,7 @@ package io.split.client.thin
 import android.os.Handler
 import android.os.Looper
 import androidx.lifecycle.ProcessLifecycleOwner
-import io.split.android.client.backoff.ExponentialBackoffCounter
 import io.split.android.client.network.HttpClientImpl
-import io.split.android.client.service.sseclient.EventStreamParser
-import io.split.android.client.service.sseclient.sseclient.EventSourceClientImpl
 import io.split.client.thin.http.createRetryableHttpClient
 import io.split.client.thin.internal.AsyncBridge
 import io.split.client.thin.internal.DefaultSplitFactory
@@ -22,10 +19,8 @@ import io.split.client.thin.internal.observer.DefaultCompositeObserver
 import io.split.client.thin.internal.observer.LoggerObserver
 import io.split.client.thin.internal.secure.EvaluationTarget
 import io.split.client.thin.internal.secure.createSecureHttpClient
-import io.split.client.thin.internal.streaming.DefaultStreamingManager
-import io.split.client.thin.internal.streaming.StreamingTransportImpl
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.SupervisorJob
+import io.split.client.thin.internal.streaming.StreamingComponents
+import io.split.client.thin.internal.streaming.createStreamingComponents
 
 /**
  * Builder for creating a [SplitFactory] instance.
@@ -70,13 +65,12 @@ object SplitFactoryBuilder {
 
         val defaultEvaluationTarget = defaultTarget.toEvaluationKey().toEvaluationTarget()
 
-        var onFetchNotification: suspend () -> Unit = {}
         val syncMode = config?.sync?.mode ?: SplitClientConfig.SyncMode.STREAMING
 
         // Track latest streaming targets for multi-user composite JWT in the tokenProvider.
-        // Updated atomically before streamingManager.start() is called so the token is always fresh.
+        // Updated atomically before streaming is started so the token is always fresh.
         var latestStreamingTargets: Set<EvaluationTarget> = setOf(defaultEvaluationTarget)
-        var streamingManager: DefaultStreamingManager? = null
+        var streamingComponents: StreamingComponents? = null
 
         val secureHttpClient = createSecureHttpClient(
             authProvider = authProvider,
@@ -88,35 +82,22 @@ object SplitFactoryBuilder {
             sdkKey = sdkKey.sdkKey,
             onStreamingTargetsChanged = { targets ->
                 latestStreamingTargets = targets
-                streamingManager?.start()
+                streamingComponents?.startTrigger()
             },
-            onStreamingEmpty = { streamingManager?.stopAll() },
+            onStreamingEmpty = { streamingComponents?.manager?.stopAll() },
         )
-
-        if (syncMode == SplitClientConfig.SyncMode.STREAMING) {
-            val streamingScope = CoroutineScope(SupervisorJob())
-            streamingManager = DefaultStreamingManager(
-                streamingUrl = endpoints?.streamingUrl ?: DEFAULT_STREAMING_URL,
-                tokenProvider = { authProvider.credential(latestStreamingTargets).token },
-                eventSourceClientProvider = {
-                    EventSourceClientImpl(
-                        StreamingTransportImpl(retryableHttpClient),
-                        EventStreamParser(),
-                    )
-                },
-                backoffCounterFactory = { ExponentialBackoffCounter(1, 60) },
-                scope = streamingScope,
-                onOccupancyZero = { /* TODO: handle occupancy zero */ },
-                onEvaluationFetchNotification = { onFetchNotification() },
-            )
-        }
 
         val (fetchCoordinator, evaluationRepository) = createEvaluationComponents(
             secureHttpClient = secureHttpClient,
             compositeObserver = compositeObserver,
         )
-        if (streamingManager != null) {
-            onFetchNotification = { fetchCoordinator.refetchAll(null, FetchReason.PUSH) }
+        if (syncMode == SplitClientConfig.SyncMode.STREAMING) {
+            streamingComponents = createStreamingComponents(
+                streamingUrl = endpoints?.streamingUrl ?: DEFAULT_STREAMING_URL,
+                retryableHttpClient = retryableHttpClient,
+                tokenProvider = { authProvider.credential(latestStreamingTargets).token },
+                onEvaluationFetchNotification = { fetchCoordinator.refetchAll(null, FetchReason.PUSH) },
+            )
         }
         val schedulerIntervalMillis = (config?.sync?.evaluationRefreshRate ?: 3600) * 1_000L
 
@@ -133,10 +114,10 @@ object SplitFactoryBuilder {
                 }
             },
         )
-        streamingManager?.let { manager ->
+        streamingComponents?.let { components ->
             lifecycleManager.register(object : LifecycleComponent {
-                override fun pause() = manager.pause()
-                override fun resume() = manager.resume()
+                override fun pause() = components.manager.pause()
+                override fun resume() = components.manager.resume()
             })
         }
 
