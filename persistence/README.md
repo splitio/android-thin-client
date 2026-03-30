@@ -5,15 +5,14 @@ Room-based persistent storage for the Android thin client SDK.
 ## Purpose
 
 Provides local database storage for:
-- **Evaluations**: Cached flag evaluation results per key
-- **Attributes**: Attribute sets associated with keys, enabling `EvaluationKey` reconstruction
+- **Evaluations**: Cached flag evaluation results per target
 - **Events**: Queued tracking events awaiting upload
 
 ## Design Philosophy
 
 This module is a **dumb storage layer** that accepts and returns pre-serialized strings. The consumer is responsible for:
-- Serializing `Key` objects (matchingKey + bucketingKey) to strings
-- Stringifying attributes to JSON
+- Computing a deterministic key string per target (e.g., a hash of Key + Attributes)
+- Serializing evaluations to JSON strings
 - Deserializing when loading from persistence
 
 This keeps the module focused purely on persistence without domain knowledge.
@@ -31,6 +30,7 @@ This keeps the module focused purely on persistence without domain knowledge.
 - `body` — Pre-serialized JSON string
 - `updatedAt` — Last update timestamp
 
+Different attribute combinations for the same user produce different key values, so they are stored as separate entries.
 
 ### Events
 
@@ -87,12 +87,11 @@ val serialized = evaluations.map { eval ->
     SerializedEvaluation(eval.result.flag, json.encodeToString(eval))
 }
 
-persistence.persistForKey(serializedKey, 12345L, serialized)
+persistence.persistForKey(targetHash, 12345L, serialized)
 
 // Consumer deserializes after loading
-val data = persistence.loadForKey(serializedKey)
+val data = persistence.loadForKey(targetHash)
 val evaluations = data?.evaluations?.map { jsonString ->
     json.decodeFromString<StoredEvaluation>(jsonString)
 }
 ```
-

@@ -7,12 +7,11 @@ import io.split.client.thin.events.EventsStorage
 import io.split.client.thin.internal.persistence.RoomEvaluationPersistence
 import io.split.client.thin.internal.persistence.RoomEventsPersistence
 import io.split.client.thin.internal.persistence.ThinClientDatabase
-import io.split.client.thin.internal.persistence.domain.evaluation.AttributesSerializer
 import io.split.client.thin.internal.persistence.domain.evaluation.DefaultEvaluationPersistenceManager
-import io.split.client.thin.internal.persistence.domain.evaluation.EvaluationKeySerializer
 import io.split.client.thin.internal.persistence.domain.evaluation.EvaluationPersistenceCallbacks
 import io.split.client.thin.internal.persistence.domain.evaluation.EvaluationPersistenceManager
 import io.split.client.thin.internal.persistence.domain.evaluation.StoredEvaluationSerializer
+import io.split.client.thin.internal.persistence.domain.evaluation.TargetHasher
 import io.split.client.thin.internal.persistence.domain.events.EventsPersistenceCallbacks
 import io.split.client.thin.internal.persistence.domain.events.PersistentEventsStorage
 import io.split.client.thin.internal.persistence.domain.events.TrackerEventSerializer
@@ -39,8 +38,7 @@ fun createPersistenceDomainComponents(
 
     val database = ThinClientDatabase.build(context, config.prefix)
 
-    val keySerializer = EvaluationKeySerializer()
-    val attributesSerializer = AttributesSerializer()
+    val targetHasher = TargetHasher()
     val evalSerializer = StoredEvaluationSerializer()
     val eventSerializer = TrackerEventSerializer()
 
@@ -49,10 +47,8 @@ fun createPersistenceDomainComponents(
             evaluationDao = database.evaluationDao(),
             metadataDao = database.evaluationMetadataDao()
         ),
-        attributesDao = database.attributesDao(),
         callbacks = evaluationCallbacks,
-        keySerializer = keySerializer,
-        attributesSerializer = attributesSerializer,
+        targetHasher = targetHasher,
         evalSerializer = evalSerializer,
         scope = scope
     )

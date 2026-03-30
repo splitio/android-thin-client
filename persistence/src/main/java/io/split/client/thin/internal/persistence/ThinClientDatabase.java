@@ -6,7 +6,7 @@ import androidx.room.Database;
 import androidx.room.Room;
 import androidx.room.RoomDatabase;
 
-@Database(entities = {EvaluationEntity.class, EventEntity.class, GeneralInfoEntity.class}, version = 2, exportSchema = false)
+@Database(entities = {EvaluationEntity.class, EventEntity.class, GeneralInfoEntity.class}, version = 1, exportSchema = false)
 public abstract class ThinClientDatabase extends RoomDatabase {
 
     public abstract EvaluationDao evaluationDao();

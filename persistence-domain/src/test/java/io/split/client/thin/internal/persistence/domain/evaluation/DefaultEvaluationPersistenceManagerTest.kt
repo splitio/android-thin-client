@@ -5,8 +5,6 @@ import io.split.client.thin.Key
 import io.split.client.thin.internal.evaluation.EvaluationChange
 import io.split.client.thin.internal.evaluation.EvaluationKey
 import io.split.client.thin.internal.evaluation.StoredEvaluation
-import io.split.client.thin.internal.persistence.AttributesDao
-import io.split.client.thin.internal.persistence.AttributesEntity
 import io.split.client.thin.internal.persistence.PersistentEvaluationData
 import io.split.client.thin.internal.persistence.PersistentEvaluationStorage
 import io.split.client.thin.internal.persistence.SerializedEvaluation
@@ -15,10 +13,10 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
-import org.mockito.ArgumentCaptor
 import org.mockito.ArgumentMatchers.anyLong
 import org.mockito.ArgumentMatchers.anyString
 import org.mockito.Mockito.mock
@@ -30,18 +28,15 @@ import org.mockito.Mockito.`when`
 class DefaultEvaluationPersistenceManagerTest {
 
     private lateinit var persistentStorage: PersistentEvaluationStorage
-    private lateinit var attributesDao: AttributesDao
     private lateinit var callbacks: EvaluationPersistenceCallbacks
-    private lateinit var keySerializer: EvaluationKeySerializer
-    private lateinit var attributesSerializer: AttributesSerializer
+    private lateinit var targetHasher: TargetHasher
     private lateinit var evalSerializer: StoredEvaluationSerializer
     private lateinit var scope: TestScope
     private lateinit var manager: DefaultEvaluationPersistenceManager
 
     private val testKey = Key(matchingKey = "user1", bucketingKey = null)
     private val testEvalKey = EvaluationKey(key = testKey, attributes = mapOf("age" to 30L))
-    private val keyJson = """{"matchingKey":"user1"}"""
-    private val attrsJson = """{"age":30}"""
+    private val testHash = "testhash"
 
     private fun makeStoredEvaluation(flag: String = "my_flag"): StoredEvaluation =
         StoredEvaluation(
@@ -52,32 +47,28 @@ class DefaultEvaluationPersistenceManagerTest {
     @Before
     fun setUp() {
         persistentStorage = mock(PersistentEvaluationStorage::class.java)
-        attributesDao = mock(AttributesDao::class.java)
         callbacks = mock(EvaluationPersistenceCallbacks::class.java)
-        keySerializer = mock(EvaluationKeySerializer::class.java)
-        attributesSerializer = mock(AttributesSerializer::class.java)
+        targetHasher = mock(TargetHasher::class.java)
         evalSerializer = mock(StoredEvaluationSerializer::class.java)
         scope = TestScope()
         manager = DefaultEvaluationPersistenceManager(
-            persistentStorage, attributesDao, callbacks, keySerializer, attributesSerializer, evalSerializer, scope
+            persistentStorage, callbacks, targetHasher, evalSerializer, scope
         )
 
-        `when`(keySerializer.serialize(testKey)).thenReturn(keyJson)
-        `when`(keySerializer.deserialize(keyJson)).thenReturn(testKey)
+        `when`(targetHasher.hash(testEvalKey)).thenReturn(testHash)
     }
 
     // --- loadLocal tests ---
 
     @Test
     fun `loadLocal returns null when no persisted data`() = scope.runTest {
-        `when`(persistentStorage.loadForKey(keyJson)).thenReturn(null)
+        `when`(persistentStorage.loadForKey(testHash)).thenReturn(null)
 
         val result = manager.loadLocal(testEvalKey)
 
         assertNull(result)
         verify(callbacks).onLoadStarted()
         verify(callbacks, never()).onLoadSucceeded(anyLong())
-        // onEvalStorageUpdated should not be called when no data
     }
 
     @Test
@@ -85,18 +76,30 @@ class DefaultEvaluationPersistenceManagerTest {
         val evalJson = """{"result":{"flag":"my_flag","treatment":"on"},"flagSets":["set1"]}"""
         val storedEval = makeStoredEvaluation()
         val persistedData = PersistentEvaluationData(changeNumber = 42L, evaluations = listOf(evalJson))
-        val attrsEntity = AttributesEntity(keyJson, attrsJson, 1000L)
 
-        `when`(persistentStorage.loadForKey(keyJson)).thenReturn(persistedData)
-        `when`(attributesDao.getByKey(keyJson)).thenReturn(attrsEntity)
-        `when`(attributesSerializer.deserialize(attrsJson)).thenReturn(mapOf("age" to 30L))
+        `when`(persistentStorage.loadForKey(testHash)).thenReturn(persistedData)
         `when`(evalSerializer.deserialize(evalJson)).thenReturn(storedEval)
 
         val result = manager.loadLocal(testEvalKey)
 
-        val expectedKey = EvaluationKey(key = testKey, attributes = mapOf("age" to 30L))
-        val expected = EvaluationChange(evaluationKey = expectedKey, changeNumber = 42L, evaluations = listOf(storedEval))
+        val expected = EvaluationChange(evaluationKey = testEvalKey, changeNumber = 42L, evaluations = listOf(storedEval))
         assertEquals(expected, result)
+    }
+
+    @Test
+    fun `loadLocal uses caller evalKey directly without reconstructing attributes`() = scope.runTest {
+        val evalJson = """{"result":{"flag":"my_flag","treatment":"on"},"flagSets":["set1"]}"""
+        val storedEval = makeStoredEvaluation()
+        val persistedData = PersistentEvaluationData(changeNumber = 42L, evaluations = listOf(evalJson))
+
+        `when`(persistentStorage.loadForKey(testHash)).thenReturn(persistedData)
+        `when`(evalSerializer.deserialize(evalJson)).thenReturn(storedEval)
+
+        val result = manager.loadLocal(testEvalKey)
+
+        // The returned EvaluationKey should be exactly the caller's evalKey
+        assertEquals(testEvalKey, result?.evaluationKey)
+        assertEquals(testEvalKey.attributes, result?.evaluationKey?.attributes)
     }
 
     @Test
@@ -104,43 +107,21 @@ class DefaultEvaluationPersistenceManagerTest {
         val evalJson = """{"result":{"flag":"my_flag","treatment":"on"},"flagSets":["set1"]}"""
         val storedEval = makeStoredEvaluation()
         val persistedData = PersistentEvaluationData(changeNumber = 42L, evaluations = listOf(evalJson))
-        val attrsEntity = AttributesEntity(keyJson, attrsJson, 1000L)
 
-        `when`(persistentStorage.loadForKey(keyJson)).thenReturn(persistedData)
-        `when`(attributesDao.getByKey(keyJson)).thenReturn(attrsEntity)
-        `when`(attributesSerializer.deserialize(attrsJson)).thenReturn(mapOf("age" to 30L))
+        `when`(persistentStorage.loadForKey(testHash)).thenReturn(persistedData)
         `when`(evalSerializer.deserialize(evalJson)).thenReturn(storedEval)
 
         manager.loadLocal(testEvalKey)
 
         verify(callbacks).onLoadStarted()
-        verify(callbacks).onLoadSucceeded(1000L)
+        verify(callbacks).onLoadSucceeded(anyLong())
         verify(callbacks, never()).onLoadFailed(anyString())
-        val expectedKey = EvaluationKey(key = testKey, attributes = mapOf("age" to 30L))
-        verify(callbacks).onEvalStorageUpdated(expectedKey, 42L, listOf(storedEval))
-    }
-
-    @Test
-    fun `loadLocal uses emptyMap for attributes when attributes entity is null`() = scope.runTest {
-        val evalJson = """{"result":{"flag":"my_flag","treatment":"on"},"flagSets":["set1"]}"""
-        val storedEval = makeStoredEvaluation()
-        val persistedData = PersistentEvaluationData(changeNumber = 10L, evaluations = listOf(evalJson))
-
-        `when`(persistentStorage.loadForKey(keyJson)).thenReturn(persistedData)
-        `when`(attributesDao.getByKey(keyJson)).thenReturn(null)
-        `when`(evalSerializer.deserialize(evalJson)).thenReturn(storedEval)
-
-        val result = manager.loadLocal(testEvalKey)
-
-        val expectedKey = EvaluationKey(key = testKey, attributes = emptyMap())
-        val expected = EvaluationChange(evaluationKey = expectedKey, changeNumber = 10L, evaluations = listOf(storedEval))
-        assertEquals(expected, result)
-        verify(attributesSerializer, never()).deserialize(anyString())
+        verify(callbacks).onEvalStorageUpdated(testEvalKey, 42L, listOf(storedEval))
     }
 
     @Test
     fun `loadLocal calls onLoadFailed on exception and returns null`() = scope.runTest {
-        `when`(persistentStorage.loadForKey(keyJson)).thenThrow(RuntimeException("db error"))
+        `when`(persistentStorage.loadForKey(testHash)).thenThrow(RuntimeException("db error"))
 
         val result = manager.loadLocal(testEvalKey)
 
@@ -153,40 +134,22 @@ class DefaultEvaluationPersistenceManagerTest {
     // --- persistAsync tests ---
 
     @Test
-    fun `persistAsync serializes and persists evaluations`() = scope.runTest {
+    fun `persistAsync serializes and persists evaluations using hash key`() = scope.runTest {
         val storedEval = makeStoredEvaluation()
         val evalJson = """{"result":{"flag":"my_flag","treatment":"on"},"flagSets":["set1"]}"""
-        `when`(attributesSerializer.serialize(testEvalKey.attributes)).thenReturn(attrsJson)
         `when`(evalSerializer.serialize(storedEval)).thenReturn(evalJson)
 
         manager.persistAsync(testEvalKey, 42L, listOf(storedEval))
         advanceUntilIdle()
 
         val expectedSerializedEval = SerializedEvaluation(flagName = storedEval.result.flag, json = evalJson)
-        verify(persistentStorage).persistForKey(keyJson, 42L, listOf(expectedSerializedEval))
-    }
-
-    @Test
-    fun `persistAsync inserts attributes entity with correct key and json`() = scope.runTest {
-        val storedEval = makeStoredEvaluation()
-        val evalJson = """{"result":{"flag":"my_flag","treatment":"on"},"flagSets":["set1"]}"""
-        `when`(attributesSerializer.serialize(testEvalKey.attributes)).thenReturn(attrsJson)
-        `when`(evalSerializer.serialize(storedEval)).thenReturn(evalJson)
-
-        manager.persistAsync(testEvalKey, 42L, listOf(storedEval))
-        advanceUntilIdle()
-
-        val captor: ArgumentCaptor<AttributesEntity> = ArgumentCaptor.forClass(AttributesEntity::class.java)
-        verify(attributesDao).insert(captor.capture())
-        assertEquals(keyJson, captor.value.key)
-        assertEquals(attrsJson, captor.value.json)
+        verify(persistentStorage).persistForKey(testHash, 42L, listOf(expectedSerializedEval))
     }
 
     @Test
     fun `persistAsync calls onWriteScheduled and onWriteSucceeded`() = scope.runTest {
         val storedEval = makeStoredEvaluation()
         val evalJson = """{"result":{"flag":"my_flag","treatment":"on"},"flagSets":["set1"]}"""
-        `when`(attributesSerializer.serialize(testEvalKey.attributes)).thenReturn(attrsJson)
         `when`(evalSerializer.serialize(storedEval)).thenReturn(evalJson)
 
         manager.persistAsync(testEvalKey, 42L, listOf(storedEval))
@@ -199,7 +162,7 @@ class DefaultEvaluationPersistenceManagerTest {
     @Test
     fun `persistAsync calls onWriteFailed on exception`() = scope.runTest {
         val storedEval = makeStoredEvaluation()
-        `when`(attributesSerializer.serialize(testEvalKey.attributes)).thenThrow(RuntimeException("write error"))
+        `when`(evalSerializer.serialize(storedEval)).thenThrow(RuntimeException("write error"))
 
         manager.persistAsync(testEvalKey, 42L, listOf(storedEval))
         advanceUntilIdle()
