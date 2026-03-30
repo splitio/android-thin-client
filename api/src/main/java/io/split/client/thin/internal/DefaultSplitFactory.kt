@@ -2,17 +2,19 @@ package io.split.client.thin.internal
 
 import io.split.android.client.fallback.FallbackTreatmentsCalculator
 import io.split.android.client.fallback.FallbackTreatmentsCalculatorImpl
-import io.split.client.thin.internal.toInternal
 import io.split.client.thin.SplitClient
 import io.split.client.thin.SplitClientConfig
 import io.split.client.thin.SplitFactory
 import io.split.client.thin.SplitManager
 import io.split.client.thin.SplitVoidCallback
 import io.split.client.thin.Target
+import io.split.client.thin.events.EventSubmissionCoordinator
+import io.split.client.thin.events.EventsPeriodicScheduler
 import io.split.client.thin.internal.evaluation.DefaultEvaluationPeriodicScheduler
 import io.split.client.thin.internal.evaluation.EvaluationFetchCoordinator
 import io.split.client.thin.internal.evaluation.EvaluationRepository
 import io.split.client.thin.internal.evaluation.toEvaluationKey
+import io.split.client.thin.internal.lifecycle.LifecycleComponent
 import io.split.client.thin.internal.lifecycle.LifecycleManager
 import io.split.client.thin.internal.secure.EvaluationFilters
 import io.split.client.thin.internal.secure.SecureHttpClient
@@ -34,6 +36,8 @@ internal class DefaultSplitFactory(
     private val filters: EvaluationFilters?,
     private val fetchCoordinator: EvaluationFetchCoordinator,
     private val schedulerIntervalMillis: Long,
+    private val eventsScheduler: EventsPeriodicScheduler? = null,
+    private val eventsCoordinator: EventSubmissionCoordinator? = null,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
     private val compositeObserver: DefaultCompositeObserver = DefaultCompositeObserver(),
     private val lifecycleManager: LifecycleManager? = null,
@@ -85,6 +89,16 @@ internal class DefaultSplitFactory(
                 )
             }
         }
+
+        eventsScheduler?.start()
+
+        // Register events scheduler with lifecycle manager
+        eventsScheduler?.let { scheduler ->
+            lifecycleManager?.register(object : LifecycleComponent {
+                override fun pause() = scheduler.pause()
+                override fun resume() = scheduler.resume()
+            })
+        }
     }
 
     override fun getClient(target: Target?): SplitClient {
@@ -96,6 +110,8 @@ internal class DefaultSplitFactory(
     }
 
     override suspend fun destroy() {
+        eventsScheduler?.stop()
+        eventsCoordinator?.flush()
         lifecycleManager?.destroy()
         compositeObserver.unregisterAll()
         clientManager.destroyAll()

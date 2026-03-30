@@ -55,12 +55,47 @@ class DefaultSecureHttpClientPostEventsTest {
     }
 
     @Test
+    fun `Content-Type header is set to application json`() = runTest {
+        val (client, _, http) = makeClient()
+
+        client.postEvents("payload")
+
+        assertEquals("application/json", http.lastRequest?.headers?.get("Content-Type"))
+    }
+
+    @Test
+    fun `Accept header is set to application json`() = runTest {
+        val (client, _, http) = makeClient()
+
+        client.postEvents("payload")
+
+        assertEquals("application/json", http.lastRequest?.headers?.get("Accept"))
+    }
+
+    @Test
+    fun `SplitSDKVersion header sent on events`() = runTest {
+        val (client, _, http) = makeClient(sdkVersion = "1.2.3")
+
+        client.postEvents("payload")
+
+        assertEquals("android-thin-1.2.3", http.lastRequest?.headers?.get("SplitSDKVersion"))
+    }
+
+    @Test
+    fun `X-Harness-FME-SDK-Thin-Version header sent on events`() = runTest {
+        val (client, _, http) = makeClient(sdkVersion = "2.0.0")
+
+        client.postEvents("payload")
+
+        assertEquals("android-thin-2.0.0", http.lastRequest?.headers?.get("X-Harness-FME-SDK-Thin-Version"))
+    }
+
+    @Test
     fun `SDK version headers not sent on events`() = runTest {
         val (client, _, http) = makeClient()
 
         client.postEvents("payload")
 
-        assertNull(http.lastRequest?.headers?.get("X-Harness-FME-SDK-Thin-Version"))
         assertNull(http.lastRequest?.headers?.get("X-Harness-FME-SDK-Thin-Spec"))
     }
 

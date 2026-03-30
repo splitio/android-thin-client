@@ -45,6 +45,8 @@ listOf<String>(
     "events",
     "streaming",
     "streaming-support",
+    "executor",
+    "submitter",
 ).forEach {
     include(":$it")
     project(":$it").projectDir = file("android-client/$it")

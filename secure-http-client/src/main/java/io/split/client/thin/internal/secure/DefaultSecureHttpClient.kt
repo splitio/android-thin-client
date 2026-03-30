@@ -102,7 +102,13 @@ internal class DefaultSecureHttpClient(
             uri = uri,
             method = method,
             body = body,
-            headers = mapOf("Authorization" to "Bearer $token"),
+            headers = mapOf(
+                "Authorization" to "Bearer $token",
+                "Content-Type" to "application/json",
+                "Accept" to "application/json",
+                "SplitSDKVersion" to "android-thin-$sdkVersion",
+                "X-Harness-FME-SDK-Thin-Version" to "android-thin-$sdkVersion",
+            ),
         )
     }
 

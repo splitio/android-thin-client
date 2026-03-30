@@ -4,8 +4,20 @@ import android.os.Handler
 import android.os.Looper
 import androidx.lifecycle.ProcessLifecycleOwner
 import io.split.android.client.network.HttpClientImpl
+import io.split.android.client.service.executor.SplitTaskType
+import io.split.android.client.submitter.RecorderSyncHelperImpl
+import io.split.client.thin.events.CoroutineSplitTaskExecutor
+import io.split.client.thin.events.DefaultEventSubmissionCoordinator
+import io.split.client.thin.events.EventsPeriodicScheduler
+import io.split.client.thin.events.EventsPushHandler
+import io.split.client.thin.events.EventsRecorderTask
+import io.split.client.thin.events.EventsStorage
+import io.split.client.thin.events.HttpEventsSubmitter
+import io.split.client.thin.events.InBytesSizableStorageAdapter
 import io.split.client.thin.http.createRetryableHttpClient
 import io.split.client.thin.internal.AsyncBridge
+import io.split.client.thin.internal.DefaultClientFactory
+import io.split.client.thin.internal.DefaultClientManager
 import io.split.client.thin.internal.DefaultSplitFactory
 import io.split.client.thin.internal.auth.createAuthProvider
 import io.split.client.thin.internal.evaluation.FetchReason
@@ -21,6 +33,14 @@ import io.split.client.thin.internal.secure.EvaluationTarget
 import io.split.client.thin.internal.secure.createSecureHttpClient
 import io.split.client.thin.internal.streaming.StreamingComponents
 import io.split.client.thin.internal.streaming.createStreamingComponents
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+
+// TODO: move these constants
+private const val EVENTS_MAX_QUEUE_SIZE = 5000
+private const val EVENTS_BATCH_SIZE = 500
+private const val EVENTS_MAX_QUEUE_SIZE_IN_BYTES = 5_242_880L
 
 /**
  * Builder for creating a [SplitFactory] instance.
@@ -101,6 +121,38 @@ object SplitFactoryBuilder {
         }
         val schedulerIntervalMillis = (config?.sync?.evaluationRefreshRate ?: 3600) * 1_000L
 
+        // Single factory-level scope for all async operations
+        val factoryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+        // Event tracking components
+        val eventsStorage = EventsStorage()
+        val httpEventsSubmitter = HttpEventsSubmitter(secureHttpClient::postEvents)
+        val eventsRecorderTask = EventsRecorderTask(
+            storage = eventsStorage,
+            submitter = httpEventsSubmitter,
+            batchSize = EVENTS_BATCH_SIZE
+        )
+        val taskExecutor = CoroutineSplitTaskExecutor(factoryScope)
+        val storageAdapter = InBytesSizableStorageAdapter(eventsStorage)
+        val syncHelper = RecorderSyncHelperImpl(
+            /* taskType = */ SplitTaskType.GENERIC_TASK,
+            /* storage = */ storageAdapter,
+            /* maxQueueSize = */ EVENTS_MAX_QUEUE_SIZE,
+            /* maxQueueSizeInBytes = */ EVENTS_MAX_QUEUE_SIZE_IN_BYTES,
+            /* splitTaskExecutor = */ taskExecutor
+        )
+        val eventsCoordinator = DefaultEventSubmissionCoordinator(
+            scope = factoryScope,
+            task = { eventsRecorderTask.execute() }
+        )
+        val pushRateMillis = (config?.sync?.pushRate ?: 1800) * 1_000L
+        val eventsScheduler = EventsPeriodicScheduler(
+            scope = factoryScope,
+            coordinator = eventsCoordinator,
+            pushRateMillis = pushRateMillis
+        )
+        val eventsPushHandler = EventsPushHandler(syncHelper, eventsCoordinator)
+
         val lifecycleManager = DefaultLifecycleManager(
             compositeObserver = compositeObserver,
             observerRegistrar = { observer ->
@@ -129,9 +181,27 @@ object SplitFactoryBuilder {
             filters = null,
             fetchCoordinator = fetchCoordinator,
             schedulerIntervalMillis = schedulerIntervalMillis,
+            eventsScheduler = eventsScheduler,
+            eventsCoordinator = eventsCoordinator,
+            scope = factoryScope,
             compositeObserver = compositeObserver,
             lifecycleManager = lifecycleManager,
             secureHttpClient = secureHttpClient,
+            clientManager = DefaultClientManager(
+                factoryScope,
+                DefaultClientFactory(
+                    compositeObserver = compositeObserver,
+                    scope = factoryScope,
+                    evaluationRepository = evaluationRepository,
+                    filters = null,
+                    fallbackCalculator = DefaultSplitFactory.buildFallbackCalculator(config),
+                    fetchCoordinator = fetchCoordinator,
+                    schedulerIntervalMillis = schedulerIntervalMillis,
+                    onEventPush = eventsPushHandler,
+                    flushFn = { eventsCoordinator.flush() },
+                    lifecycleManager = lifecycleManager,
+                )
+            ),
         )
     }
 

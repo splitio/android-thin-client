@@ -1,6 +1,8 @@
 package io.split.client.thin.internal
 
+import io.harness.events.EventsManagers
 import io.split.android.client.fallback.FallbackTreatmentsCalculator
+import io.split.android.client.tracker.DefaultTracker
 import io.split.client.thin.SplitClient
 import io.split.client.thin.Target
 import io.split.client.thin.events.EventTracker
@@ -8,8 +10,6 @@ import io.split.client.thin.internal.evaluation.DefaultEvaluationPeriodicSchedul
 import io.split.client.thin.internal.evaluation.EvaluationFetchCoordinator
 import io.split.client.thin.internal.evaluation.EvaluationPeriodicScheduler
 import io.split.client.thin.internal.evaluation.EvaluationRepository
-import io.split.client.thin.internal.secure.EvaluationFilters
-import io.harness.events.EventsManagers
 import io.split.client.thin.internal.evaluation.toEvaluationKey
 import io.split.client.thin.internal.evaluation.toEvaluationTarget
 import io.split.client.thin.internal.lifecycle.LifecycleComponent
@@ -18,6 +18,7 @@ import io.split.client.thin.internal.observer.CompositeObserver
 import io.split.client.thin.internal.sdkevents.EventManagerObserver
 import io.split.client.thin.internal.sdkevents.SplitEventDelivery
 import io.split.client.thin.internal.sdkevents.ThinClientEventsConfig
+import io.split.client.thin.internal.secure.EvaluationFilters
 import io.split.client.thin.internal.secure.SecureHttpClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -30,6 +31,8 @@ internal class DefaultClientFactory(
     private val fallbackCalculator: FallbackTreatmentsCalculator?,
     private val fetchCoordinator: EvaluationFetchCoordinator,
     private val schedulerIntervalMillis: Long,
+    private val onEventPush: DefaultTracker.OnEventPush = DefaultTracker.OnEventPush { },
+    private val flushFn: suspend () -> Unit = {},
     private val lifecycleManager: LifecycleManager? = null,
     private val secureHttpClient: SecureHttpClient? = null,
     private val schedulerFactory: (EvaluationFetchCoordinator, Long) -> EvaluationPeriodicScheduler = { coordinator, intervalMillis ->
@@ -38,7 +41,7 @@ internal class DefaultClientFactory(
 ) : (Target) -> SplitClient {
 
     override fun invoke(target: Target): SplitClient {
-        val eventTracker = EventTracker.create()
+        val eventTracker = EventTracker.create(onEventPush)
         val eventsManager = EventsManagers.create(
             ThinClientEventsConfig.create(),
             SplitEventDelivery(scope),
@@ -55,8 +58,15 @@ internal class DefaultClientFactory(
             scope.launch { client.openStreaming(target.toEvaluationKey().toEvaluationTarget()) }
         }
         return DefaultSplitClient(
-            target, eventTracker.tracker,
-            evaluationRepository, filters, fallbackCalculator, eventsManager, scheduler, scope,
+            initialTarget = target,
+            tracker = eventTracker.tracker,
+            evaluationRepository = evaluationRepository,
+            filters = filters,
+            fallbackCalculator = fallbackCalculator,
+            eventsManager = eventsManager,
+            periodicScheduler = scheduler,
+            flushOperation = flushFn,
+            scope = scope,
             secureHttpClient = secureHttpClient,
         )
     }
