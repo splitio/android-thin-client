@@ -36,7 +36,7 @@ Bridges `EventSourceClient.StreamingTransport` (from android-client) to `Retryab
 | Type | Description |
 |------|-------------|
 | `EvaluationUpdateNotification` | Flag definitions changed; triggers a re-fetch |
-| `ThinControlNotification` | Server control signals (`RESUMED`, `PAUSED`, `DISABLED`, `RESET`) |
+| `ThinControlNotification` | Server control signals (`STREAMING_RESUMED`, `STREAMING_PAUSED`, `STREAMING_DISABLED`, `STREAMING_RESET`) |
 | `ThinOccupancyNotification` | Publisher count on the channel |
 | `ThinStreamingError` | Server-side error with code and message |
 

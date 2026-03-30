@@ -42,7 +42,7 @@ class DefaultSecureHttpClientStreamingTest {
     }
 
     @Test
-    fun `openStreaming does not invalidate existing credentials`() = runTest {
+    fun `openStreaming invalidates credentials for a new target`() = runTest {
         val authProvider = FakeAuthProvider()
         val (client, _, _) = makeClient(
             authProvider = authProvider,
@@ -51,7 +51,22 @@ class DefaultSecureHttpClientStreamingTest {
 
         client.openStreaming(testDefaultTarget)
 
-        assertEquals(0, authProvider.invalidateCallCount)
+        assertEquals(1, authProvider.invalidateCallCount)
+    }
+
+    @Test
+    fun `openStreaming does not invalidate credentials for an already-registered target`() = runTest {
+        val authProvider = FakeAuthProvider()
+        val (client, _, _) = makeClient(
+            authProvider = authProvider,
+            onStreamingTargetsChanged = { _ -> }
+        )
+
+        client.openStreaming(testDefaultTarget)
+        val countAfterFirst = authProvider.invalidateCallCount
+        client.openStreaming(testDefaultTarget) // same target again
+
+        assertEquals(countAfterFirst, authProvider.invalidateCallCount)
     }
 
     @Test

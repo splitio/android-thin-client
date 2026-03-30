@@ -76,7 +76,7 @@ object SplitFactoryBuilder {
             compositeObserver = compositeObserver,
             compositeKeyBuilder = { targets ->
                 EvaluationTarget(
-                    matchingKey = targets.joinToString(",") { it.matchingKey },
+                    matchingKey = targets.map { it.matchingKey }.sorted().joinToString(","),
                     bucketingKey = null,
                     attributes = null,
                 )

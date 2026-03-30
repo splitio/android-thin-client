@@ -6,8 +6,7 @@ import org.junit.Test
 
 class NoOpSecureStorageTest {
 
-    private val storage = NoOpSecureStorage<String>()
-    private val target = "user-1"
+    private val storage = NoOpSecureStorage()
     private val credential = JwtCredential(
         token = "test-token",
         expiresAt = System.currentTimeMillis() / 1000 + 3600,
@@ -16,22 +15,22 @@ class NoOpSecureStorageTest {
 
     @Test
     fun `getCredential always returns null`() = runTest {
-        assertNull(storage.getCredential(target))
+        assertNull(storage.getCredential())
     }
 
     @Test
     fun `getCredential returns null even after saveCredential`() = runTest {
-        storage.saveCredential(credential, target)
-        assertNull(storage.getCredential(target))
+        storage.saveCredential(credential)
+        assertNull(storage.getCredential())
     }
 
     @Test
     fun `removeCredential is a no-op and does not throw`() = runTest {
-        storage.removeCredential(target)
+        storage.removeCredential()
     }
 
     @Test
     fun `saveCredential is a no-op and does not throw`() = runTest {
-        storage.saveCredential(credential, target)
+        storage.saveCredential(credential)
     }
 }

@@ -67,8 +67,8 @@ internal class FakeAuthProvider(
         return credentialSequence?.getOrElse(credentialCallIndex++) { credential } ?: credential
     }
 
-    override suspend fun invalidateAll(targets: Set<EvaluationTarget>) {
-        invalidateCallCount += targets.size
+    override suspend fun invalidateAll() {
+        invalidateCallCount++
     }
 }
 

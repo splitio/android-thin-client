@@ -9,7 +9,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 internal class DefaultAuthProvider<T : AuthParamsProvider>(
     private val credentialFetcher: CredentialFetcher<T>,
-    private val credentialStorage: CredentialStorage<T>,
+    private val credentialStorage: CredentialStorage,
     private val compositeKeyBuilder: (Set<T>) -> T,
     private val onJwtRequestStarted: (target: T) -> Unit = {},
     private val onJwtReturnedFromStorage: (credential: JwtCredential, target: T) -> Unit = { _, _ -> },
@@ -22,9 +22,9 @@ internal class DefaultAuthProvider<T : AuthParamsProvider>(
     private val inFlight = ConcurrentHashMap<T, Deferred<JwtCredential>>()
 
     override suspend fun credential(targets: Set<T>): JwtCredential {
-        val compositeKey = compositeKeyBuilder(targets)
+        val compositeKey = compositeKeyBuilder(targets.sortedBy { it.getUsers() }.toSet())
         onJwtRequestStarted(compositeKey)
-        val stored = credentialStorage.getCredential(compositeKey)
+        val stored = credentialStorage.getCredential()
         if (stored != null && !stored.isExpired()) {
             onJwtReturnedFromStorage(stored, compositeKey)
             return stored
@@ -32,21 +32,14 @@ internal class DefaultAuthProvider<T : AuthParamsProvider>(
             onJwtExpiredOrInvalid(compositeKey)
         }
 
-        val credential = fetchDeduplicated(compositeKey)
-        targets.forEach { credentialStorage.saveCredential(credential, it) }
-        return credential
+        return fetchDeduplicated(compositeKey)
     }
 
-    override suspend fun invalidateAll(targets: Set<T>) {
-        val compositeKey = compositeKeyBuilder(targets)
-        (targets + compositeKey).forEach { invalidate(it) }
-    }
-
-    private suspend fun invalidate(target: T) {
+    override suspend fun invalidateAll() {
         mutex.withLock {
-            inFlight.remove(target)
+            inFlight.clear()
         }
-        credentialStorage.removeCredential(target)
+        credentialStorage.removeCredential()
     }
 
     private suspend fun fetchDeduplicated(target: T): JwtCredential = coroutineScope {
@@ -54,7 +47,7 @@ internal class DefaultAuthProvider<T : AuthParamsProvider>(
             inFlight.getOrPut(target) {
                 async {
                     val credential = credentialFetcher.fetchCredential(target)
-                    credentialStorage.saveCredential(credential, target)
+                    credentialStorage.saveCredential(credential)
                     onJwtStored(credential, target)
                     credential
                 }.also { newDeferred ->

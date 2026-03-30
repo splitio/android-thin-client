@@ -12,7 +12,7 @@ fun <T : AuthParamsProvider> createAuthProvider(
     compositeObserver: CompositeObserver,
     compositeKeyBuilder: (Set<T>) -> T,
 ): AuthProvider<T> {
-    val storage = InMemoryCredentialStorage<T>()
+    val storage = InMemoryCredentialStorage()
     val fetcher = DefaultCredentialFetcher<T>(
         retryableHttpClient = retryableHttpClient,
         sdkKey = sdkKey,

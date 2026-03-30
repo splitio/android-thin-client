@@ -29,12 +29,16 @@ internal class DefaultSecureHttpClient(
     override suspend fun fetchEvaluations(target: EvaluationTarget, filters: EvaluationFilters?): HttpResponse {
         val uri = buildEvaluationsUri(target, filters)
         val body = buildEvaluationsBody(target)
+        val isNewTarget = synchronized(activeTargetsLock) { activeTargets.add(target) }
+        if (isNewTarget) {
+            authProvider.invalidateAll()
+        }
         val targets = effectiveTargets()
         val token = authProvider.credential(targets).token
         val request = buildEvaluationsRequest(uri, body, token)
         val response = retryableHttpClient.execute(request, RequestCategory.EVALUATIONS)
         if (response.getHttpStatus() == HTTP_UNAUTHORIZED) {
-            authProvider.invalidateAll(targets)
+            authProvider.invalidateAll()
             val freshToken = authProvider.credential(targets).token
             val retryRequest = buildEvaluationsRequest(uri, body, freshToken)
             return retryableHttpClient.execute(retryRequest, RequestCategory.EVALUATIONS)
@@ -52,9 +56,12 @@ internal class DefaultSecureHttpClient(
     }
 
     override suspend fun openStreaming(target: EvaluationTarget) {
-        val currentTargets = synchronized(activeTargetsLock) {
-            activeTargets.add(target)
-            activeTargets.toSet()
+        val (currentTargets, isNew) = synchronized(activeTargetsLock) {
+            val added = activeTargets.add(target)
+            Pair(activeTargets.toSet(), added)
+        }
+        if (isNew) {
+            authProvider.invalidateAll()
         }
         authProvider.credential(currentTargets)
         onStreamingTargetsChanged?.invoke(currentTargets)
@@ -89,7 +96,7 @@ internal class DefaultSecureHttpClient(
         val request = buildRequest(uri, method, body, token)
         val response = retryableHttpClient.execute(request, category)
         if (response.getHttpStatus() == HTTP_UNAUTHORIZED) {
-            authProvider.invalidateAll(targets)
+            authProvider.invalidateAll()
             val freshToken = authProvider.credential(targets).token
             val retryRequest = buildRequest(uri, method, body, freshToken)
             return retryableHttpClient.execute(retryRequest, category)

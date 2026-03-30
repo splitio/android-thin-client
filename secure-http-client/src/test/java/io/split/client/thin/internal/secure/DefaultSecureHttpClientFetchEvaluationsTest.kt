@@ -219,6 +219,29 @@ class DefaultSecureHttpClientFetchEvaluationsTest {
     }
 
     @Test
+    fun `fetchEvaluations invalidates JWT when a new target is seen`() = runTest {
+        val auth = FakeAuthProvider()
+        val (client, _, _) = makeClient(auth)
+        val newTarget = EvaluationTarget("user-new", null, null)
+
+        client.fetchEvaluations(newTarget, null)
+
+        assertEquals(1, auth.invalidateCallCount)
+    }
+
+    @Test
+    fun `fetchEvaluations does not invalidate JWT for a previously seen target`() = runTest {
+        val auth = FakeAuthProvider()
+        val (client, _, _) = makeClient(auth)
+
+        client.fetchEvaluations(testDefaultTarget, null)
+        val countAfterFirst = auth.invalidateCallCount
+        client.fetchEvaluations(testDefaultTarget, null)
+
+        assertEquals(countAfterFirst, auth.invalidateCallCount)
+    }
+
+    @Test
     fun `on 401 invalidates and retries once`() = runTest {
         val firstToken = JwtCredential("first-token", 9999999L, false)
         val secondToken = JwtCredential("second-token", 9999999L, false)
@@ -228,7 +251,7 @@ class DefaultSecureHttpClientFetchEvaluationsTest {
 
         client.fetchEvaluations(testDefaultTarget, testDefaultFilters)
 
-        assertEquals(1, auth.invalidateCallCount)
+        assertEquals(2, auth.invalidateCallCount) // once for new target, once for 401
         assertEquals(2, http.executeCallCount)
         assertEquals("Bearer second-token", http.requests[1].headers["Authorization"])
     }
