@@ -12,7 +12,7 @@ import kotlinx.coroutines.launch
  * Container for streaming manager and its control callbacks.
  *
  * @property manager The configured streaming manager instance
- * @property startTrigger Callback to invoke when streaming should start (e.g., when targets change)
+ * @property startTrigger Callback to invoke to start the streaming connection
  */
 data class StreamingComponents(
     val manager: DefaultStreamingManager,
@@ -35,8 +35,9 @@ data class StreamingComponents(
 fun createStreamingComponents(
     streamingUrl: String,
     retryableHttpClient: RetryableHttpClient,
-    tokenProvider: suspend () -> String,
+    tokenProvider: suspend () -> StreamingToken,
     onEvaluationFetchNotification: suspend () -> Unit,
+    onPushDisabled: suspend () -> Unit = {},
 ): StreamingComponents {
     val streamingScope = CoroutineScope(SupervisorJob())
 
@@ -53,6 +54,7 @@ fun createStreamingComponents(
         scope = streamingScope,
         onOccupancyZero = { /* TODO: handle occupancy zero */ },
         onEvaluationFetchNotification = onEvaluationFetchNotification,
+        onPushDisabled = onPushDisabled,
     )
 
     return StreamingComponents(

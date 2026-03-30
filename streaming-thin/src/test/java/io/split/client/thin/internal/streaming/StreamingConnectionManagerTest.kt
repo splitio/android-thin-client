@@ -142,7 +142,8 @@ class StreamingConnectionManagerTest {
         )
         advanceUntilIdle()
 
-        assertEquals(1, fetchNotificationCount)
+        // 1 from onOpen (catch-up fetch) + 1 from the push notification
+        assertEquals(2, fetchNotificationCount)
     }
 
     @Test
@@ -327,7 +328,7 @@ class StreamingConnectionManagerTest {
         channelExtractor: (String) -> List<String> = { listOf("evaluations", "[?occupancy=metrics.publishers]control_pri") },
     ): StreamingConnectionManager = StreamingConnectionManager(
         streamingUrl = "https://streaming.test.io/sse",
-        tokenProvider = { "test-token" },
+        tokenProvider = { StreamingToken("test-token") },
         channelExtractor = channelExtractor,
         eventSourceClientProvider = eventSourceClientProvider,
         backoffCounter = backoffCounter,

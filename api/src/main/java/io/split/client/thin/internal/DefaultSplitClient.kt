@@ -96,6 +96,10 @@ internal class DefaultSplitClient(
         )
     }
 
+    fun startPolling() {
+        periodicScheduler.start(target, filters)
+    }
+
     override suspend fun destroy() {
         periodicScheduler.stop()
         flush()

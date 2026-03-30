@@ -22,6 +22,7 @@ import io.split.client.thin.internal.secure.EvaluationFilters
 import io.split.client.thin.internal.secure.SecureHttpClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicBoolean
 
 internal class DefaultClientFactory(
     private val compositeObserver: CompositeObserver,
@@ -35,6 +36,7 @@ internal class DefaultClientFactory(
     private val flushFn: suspend () -> Unit = {},
     private val lifecycleManager: LifecycleManager? = null,
     private val secureHttpClient: SecureHttpClient? = null,
+    private val pollingEnabled: AtomicBoolean = AtomicBoolean(true),
     private val schedulerFactory: (EvaluationFetchCoordinator, Long) -> EvaluationPeriodicScheduler = { coordinator, intervalMillis ->
         DefaultEvaluationPeriodicScheduler(fetchCoordinator = coordinator, intervalMillis = intervalMillis)
     },
@@ -49,7 +51,9 @@ internal class DefaultClientFactory(
         val eventManagerObserver = EventManagerObserver(eventsManager)
         compositeObserver.register(eventManagerObserver)
         val scheduler = schedulerFactory(fetchCoordinator, schedulerIntervalMillis)
-        scheduler.start(target, filters)
+        if (pollingEnabled.get()) {
+            scheduler.start(target, filters)
+        }
         lifecycleManager?.register(object : LifecycleComponent {
             override fun pause() = scheduler.pause()
             override fun resume() = scheduler.resume()

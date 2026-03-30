@@ -107,7 +107,7 @@ class DefaultStreamingManagerTest {
         var tokenRequests = 0
         val manager = createManager(tokenProvider = {
             tokenRequests++
-            "test-token-$tokenRequests"
+            StreamingToken("test-token-$tokenRequests")
         })
 
         manager.start()
@@ -133,11 +133,12 @@ class DefaultStreamingManagerTest {
         )
         advanceUntilIdle()
 
-        assertEquals(1, notificationCount)
+        // 1 from onOpen (catch-up fetch) + 1 from the push notification
+        assertEquals(2, notificationCount)
     }
 
     private fun TestScope.createManager(
-        tokenProvider: suspend () -> String = { "test-token" },
+        tokenProvider: suspend () -> StreamingToken = { StreamingToken("test-token") },
         eventSourceClientProvider: () -> FakeEventSourceClient = { FakeEventSourceClient() },
         onOccupancyZero: suspend () -> Unit = {},
         onEvaluationFetchNotification: suspend () -> Unit = {},

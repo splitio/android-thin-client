@@ -23,4 +23,10 @@ internal interface ClientManager {
      * Destroys all registered clients and clears the internal registry.
      */
     suspend fun destroyAll()
+
+    /**
+     * Starts polling for all existing clients and ensures future clients also start polling.
+     * Used when switching from streaming to polling (e.g., when server returns pushEnabled=false).
+     */
+    fun startAllPolling()
 }

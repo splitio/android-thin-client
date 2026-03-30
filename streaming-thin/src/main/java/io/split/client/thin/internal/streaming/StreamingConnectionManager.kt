@@ -14,15 +14,22 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.net.URI
 
+data class StreamingToken(
+    val token: String,
+    val connDelaySeconds: Long = 0,
+    val pushEnabled: Boolean = true,
+)
+
 class StreamingConnectionManager(
     private val streamingUrl: String,
-    private val tokenProvider: suspend () -> String,
+    private val tokenProvider: suspend () -> StreamingToken,
     private val channelExtractor: (String) -> List<String> = SseJwtParser()::parse,
     private val eventSourceClientProvider: () -> EventSourceClient,
     private val backoffCounter: BackoffCounter,
     private val scope: CoroutineScope,
     private val onOccupancyZero: suspend () -> Unit,
     private val onEvaluationFetchNotification: suspend () -> Unit,
+    private val onPushDisabled: suspend () -> Unit = {},
     private val connectionDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
     private val stateMutex = Mutex()
@@ -86,7 +93,16 @@ class StreamingConnectionManager(
     private fun connect() {
         connectionJob = scope.launch {
             try {
-                val token = tokenProvider()
+                val streamingToken = tokenProvider()
+                if (!streamingToken.pushEnabled) {
+                    stop()
+                    onPushDisabled()
+                    return@launch
+                }
+                if (streamingToken.connDelaySeconds > 0) {
+                    delay(streamingToken.connDelaySeconds * 1_000L)
+                }
+                val token = streamingToken.token
                 val channels = channelExtractor(token)
                 val uri = URI("$streamingUrl?v=1.1&channel=${channels.joinToString(",")}&accessToken=$token")
 
@@ -108,6 +124,7 @@ class StreamingConnectionManager(
     private fun createEventHandler() = object : EventSourceClient.EventHandler {
         override fun onOpen() {
             backoffCounter.resetCounter()
+            scope.launch { onEvaluationFetchNotification() }
         }
 
         override fun onMessage(event: Map<String, String>) {

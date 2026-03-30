@@ -218,6 +218,8 @@ private class FakeClientManager : ClientManager {
     override suspend fun destroyAll() {
         destroyAllCalled = true
     }
+
+    override fun startAllPolling() {}
 }
 
 private class FakeAsyncBridge : AsyncBridgeLike {

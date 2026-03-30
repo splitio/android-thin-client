@@ -19,7 +19,7 @@ class StreamingFactoryTest {
             retryableHttpClient = fakeRetryableHttpClient,
             tokenProvider = {
                 tokenProviderCalled = true
-                "fake-jwt-token"
+                StreamingToken("fake-jwt-token")
             },
             onEvaluationFetchNotification = {
                 fetchNotificationCalled = true
@@ -41,7 +41,7 @@ class StreamingFactoryTest {
             retryableHttpClient = fakeRetryableHttpClient,
             tokenProvider = {
                 tokenProviderCallCount++
-                "jwt-token-$tokenProviderCallCount"
+                StreamingToken("jwt-token-$tokenProviderCallCount")
             },
             onEvaluationFetchNotification = { },
         )
@@ -61,7 +61,7 @@ class StreamingFactoryTest {
         val components = createStreamingComponents(
             streamingUrl = "https://streaming.example.com/sse",
             retryableHttpClient = fakeRetryableHttpClient,
-            tokenProvider = { "jwt-token" },
+            tokenProvider = { StreamingToken("jwt-token") },
             onEvaluationFetchNotification = { },
         )
 
@@ -84,7 +84,7 @@ class StreamingFactoryTest {
         val components = createStreamingComponents(
             streamingUrl = "https://streaming.example.com/sse",
             retryableHttpClient = fakeRetryableHttpClient,
-            tokenProvider = { "jwt-token" },
+            tokenProvider = { StreamingToken("jwt-token") },
             onEvaluationFetchNotification = {
                 fetchNotificationCallCount++
             },

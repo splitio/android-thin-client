@@ -5,10 +5,12 @@ import io.split.client.thin.SplitClient
 import io.split.client.thin.Target
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicBoolean
 
 internal class DefaultClientManager(
     private val scope: CoroutineScope,
     private val clientFactory: (Target) -> SplitClient,
+    private val pollingEnabled: AtomicBoolean = AtomicBoolean(true),
 ) : ClientManager {
 
     private val clients = HashMap<Key, SplitClient>()
@@ -50,6 +52,13 @@ internal class DefaultClientManager(
             clients.remove(key)
         } ?: return
         client.destroy()
+    }
+
+    override fun startAllPolling() {
+        pollingEnabled.set(true)
+        synchronized(lock) { clients.values.toList() }
+            .filterIsInstance<DefaultSplitClient>()
+            .forEach { it.startPolling() }
     }
 
     override suspend fun destroyAll() {

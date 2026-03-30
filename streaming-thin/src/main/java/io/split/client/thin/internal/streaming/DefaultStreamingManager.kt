@@ -11,12 +11,13 @@ import kotlinx.coroutines.sync.withLock
 
 class DefaultStreamingManager(
     private val streamingUrl: String,
-    private val tokenProvider: suspend () -> String,
+    private val tokenProvider: suspend () -> StreamingToken,
     private val eventSourceClientProvider: () -> EventSourceClient,
     private val backoffCounterFactory: () -> BackoffCounter,
     private val scope: CoroutineScope,
     private val onOccupancyZero: suspend () -> Unit,
     private val onEvaluationFetchNotification: suspend () -> Unit,
+    private val onPushDisabled: suspend () -> Unit = {},
     private val connectionDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : StreamingManager {
 
@@ -71,6 +72,7 @@ class DefaultStreamingManager(
             connectionDispatcher = connectionDispatcher,
             onOccupancyZero = onOccupancyZero,
             onEvaluationFetchNotification = onEvaluationFetchNotification,
+            onPushDisabled = onPushDisabled,
         )
     }
 }

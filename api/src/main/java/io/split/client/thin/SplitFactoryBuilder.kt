@@ -32,10 +32,12 @@ import io.split.client.thin.internal.observer.LoggerObserver
 import io.split.client.thin.internal.secure.EvaluationTarget
 import io.split.client.thin.internal.secure.createSecureHttpClient
 import io.split.client.thin.internal.streaming.StreamingComponents
+import io.split.client.thin.internal.streaming.StreamingToken
 import io.split.client.thin.internal.streaming.createStreamingComponents
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import java.util.concurrent.atomic.AtomicBoolean
 
 // TODO: move these constants
 private const val EVENTS_MAX_QUEUE_SIZE = 5000
@@ -86,6 +88,7 @@ object SplitFactoryBuilder {
         val defaultEvaluationTarget = defaultTarget.toEvaluationKey().toEvaluationTarget()
 
         val syncMode = config?.sync?.mode ?: SplitClientConfig.SyncMode.STREAMING
+        val pollingEnabled = AtomicBoolean(syncMode == SplitClientConfig.SyncMode.POLLING)
 
         // Track latest streaming targets for multi-user composite JWT in the tokenProvider.
         // Updated atomically before streaming is started so the token is always fresh.
@@ -102,7 +105,6 @@ object SplitFactoryBuilder {
             sdkKey = sdkKey.sdkKey,
             onStreamingTargetsChanged = { targets ->
                 latestStreamingTargets = targets
-                streamingComponents?.startTrigger()
             },
             onStreamingEmpty = { streamingComponents?.manager?.stopAll() },
         )
@@ -111,14 +113,6 @@ object SplitFactoryBuilder {
             secureHttpClient = secureHttpClient,
             compositeObserver = compositeObserver,
         )
-        if (syncMode == SplitClientConfig.SyncMode.STREAMING) {
-            streamingComponents = createStreamingComponents(
-                streamingUrl = endpoints?.streamingUrl ?: DEFAULT_STREAMING_URL,
-                retryableHttpClient = retryableHttpClient,
-                tokenProvider = { authProvider.credential(latestStreamingTargets).token },
-                onEvaluationFetchNotification = { fetchCoordinator.refetchAll(null, FetchReason.PUSH) },
-            )
-        }
         val schedulerIntervalMillis = (config?.sync?.evaluationRefreshRate ?: 3600) * 1_000L
 
         // Single factory-level scope for all async operations
@@ -166,12 +160,49 @@ object SplitFactoryBuilder {
                 }
             },
         )
+
+        val clientManager = DefaultClientManager(
+            scope = factoryScope,
+            clientFactory = DefaultClientFactory(
+                compositeObserver = compositeObserver,
+                scope = factoryScope,
+                evaluationRepository = evaluationRepository,
+                filters = null,
+                fallbackCalculator = DefaultSplitFactory.buildFallbackCalculator(config),
+                fetchCoordinator = fetchCoordinator,
+                schedulerIntervalMillis = schedulerIntervalMillis,
+                onEventPush = eventsPushHandler,
+                flushFn = { eventsCoordinator.flush() },
+                lifecycleManager = lifecycleManager,
+                pollingEnabled = pollingEnabled,
+            ),
+            pollingEnabled = pollingEnabled,
+        )
+
+        if (syncMode == SplitClientConfig.SyncMode.STREAMING) {
+            streamingComponents = createStreamingComponents(
+                streamingUrl = endpoints?.streamingUrl ?: DEFAULT_STREAMING_URL,
+                retryableHttpClient = retryableHttpClient,
+                tokenProvider = {
+                    val cred = authProvider.credential(latestStreamingTargets)
+                    StreamingToken(cred.token, cred.connDelaySeconds, cred.pushEnabled)
+                },
+                onEvaluationFetchNotification = { fetchCoordinator.refetchAll(null, FetchReason.PUSH) },
+                onPushDisabled = {
+                    fetchCoordinator.refetchAll(null, FetchReason.PERIODIC)
+                    clientManager.startAllPolling()
+                },
+            )
+        }
+
         streamingComponents?.let { components ->
             lifecycleManager.register(object : LifecycleComponent {
                 override fun pause() = components.manager.pause()
                 override fun resume() = components.manager.resume()
             })
         }
+
+        streamingComponents?.startTrigger()
 
         return DefaultSplitFactory(
             defaultTarget = defaultTarget,
@@ -187,21 +218,7 @@ object SplitFactoryBuilder {
             compositeObserver = compositeObserver,
             lifecycleManager = lifecycleManager,
             secureHttpClient = secureHttpClient,
-            clientManager = DefaultClientManager(
-                factoryScope,
-                DefaultClientFactory(
-                    compositeObserver = compositeObserver,
-                    scope = factoryScope,
-                    evaluationRepository = evaluationRepository,
-                    filters = null,
-                    fallbackCalculator = DefaultSplitFactory.buildFallbackCalculator(config),
-                    fetchCoordinator = fetchCoordinator,
-                    schedulerIntervalMillis = schedulerIntervalMillis,
-                    onEventPush = eventsPushHandler,
-                    flushFn = { eventsCoordinator.flush() },
-                    lifecycleManager = lifecycleManager,
-                )
-            ),
+            clientManager = clientManager,
         )
     }
 
