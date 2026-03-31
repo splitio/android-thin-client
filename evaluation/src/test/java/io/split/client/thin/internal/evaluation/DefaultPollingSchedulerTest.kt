@@ -1,8 +1,5 @@
 package io.split.client.thin.internal.evaluation
 
-import io.split.client.thin.Key
-import io.split.client.thin.Target
-import io.split.client.thin.internal.secure.EvaluationFilters
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
@@ -12,17 +9,15 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
-class DefaultEvaluationPeriodicSchedulerTest {
+class DefaultPollingSchedulerTest {
 
-    private val target = Target(Key("user-1"))
-    private val evalKey = target.toEvaluationKey()
     private val intervalMs = 60_000L
 
     private fun TestScope.makeScheduler(
         coordinator: FakeEvaluationFetchCoordinator = FakeEvaluationFetchCoordinator(),
         interval: Long = intervalMs,
-    ): Pair<DefaultEvaluationPeriodicScheduler, FakeEvaluationFetchCoordinator> {
-        val scheduler = DefaultEvaluationPeriodicScheduler(
+    ): Pair<DefaultPollingScheduler, FakeEvaluationFetchCoordinator> {
+        val scheduler = DefaultPollingScheduler(
             fetchCoordinator = coordinator,
             intervalMillis = interval,
             scope = this,
@@ -34,12 +29,11 @@ class DefaultEvaluationPeriodicSchedulerTest {
     fun `start begins polling after interval`() = runTest {
         val (scheduler, coordinator) = makeScheduler()
 
-        scheduler.start(target, null)
+        scheduler.start()
         advanceTimeBy(intervalMs + 1)
 
-        assertTrue(coordinator.fetchCalls.isNotEmpty())
-        assertEquals(FetchReason.PERIODIC, coordinator.fetchCalls[0].third)
-        assertEquals(evalKey, coordinator.fetchCalls[0].first)
+        assertTrue(coordinator.refetchAllCalls.isNotEmpty())
+        assertEquals(FetchReason.PERIODIC, coordinator.refetchAllCalls[0].second)
 
         scheduler.stop()
     }
@@ -48,10 +42,10 @@ class DefaultEvaluationPeriodicSchedulerTest {
     fun `start does not poll immediately before first interval`() = runTest {
         val (scheduler, coordinator) = makeScheduler()
 
-        scheduler.start(target, null)
+        scheduler.start()
         advanceTimeBy(intervalMs - 1)
 
-        assertTrue(coordinator.fetchCalls.isEmpty())
+        assertTrue(coordinator.refetchAllCalls.isEmpty())
 
         scheduler.stop()
     }
@@ -60,27 +54,27 @@ class DefaultEvaluationPeriodicSchedulerTest {
     fun `stop cancels polling`() = runTest {
         val (scheduler, coordinator) = makeScheduler()
 
-        scheduler.start(target, null)
+        scheduler.start()
         advanceTimeBy(intervalMs + 1)
-        val countAfterFirst = coordinator.fetchCalls.size
+        val countAfterFirst = coordinator.refetchAllCalls.size
         scheduler.stop()
         advanceTimeBy(intervalMs * 3)
 
         // No additional polls after stop
-        assertEquals(countAfterFirst, coordinator.fetchCalls.size)
+        assertEquals(countAfterFirst, coordinator.refetchAllCalls.size)
     }
 
     @Test
     fun `pause stops polling`() = runTest {
         val (scheduler, coordinator) = makeScheduler()
 
-        scheduler.start(target, null)
+        scheduler.start()
         advanceTimeBy(intervalMs + 1)
-        val countAfterFirst = coordinator.fetchCalls.size
+        val countAfterFirst = coordinator.refetchAllCalls.size
         scheduler.pause()
         advanceTimeBy(intervalMs * 3)
 
-        assertEquals(countAfterFirst, coordinator.fetchCalls.size)
+        assertEquals(countAfterFirst, coordinator.refetchAllCalls.size)
 
         scheduler.stop()
     }
@@ -89,31 +83,15 @@ class DefaultEvaluationPeriodicSchedulerTest {
     fun `resume restarts polling after pause`() = runTest {
         val (scheduler, coordinator) = makeScheduler()
 
-        scheduler.start(target, null)
+        scheduler.start()
         advanceTimeBy(intervalMs + 1)
         scheduler.pause()
         advanceTimeBy(intervalMs * 3)
-        val countBeforeResume = coordinator.fetchCalls.size
+        val countBeforeResume = coordinator.refetchAllCalls.size
         scheduler.resume()
         advanceTimeBy(intervalMs + 1)
 
-        assertTrue(coordinator.fetchCalls.size > countBeforeResume)
-
-        scheduler.stop()
-    }
-
-    @Test
-    fun `updateTarget affects next poll`() = runTest {
-        val (scheduler, coordinator) = makeScheduler()
-        val newTarget = Target(Key("user-2"))
-        val newEvalKey = newTarget.toEvaluationKey()
-
-        scheduler.start(target, null)
-        scheduler.updateTarget(newTarget, null)
-        advanceTimeBy(intervalMs + 1)
-
-        val lastCall = coordinator.fetchCalls.lastOrNull()
-        assertEquals(newEvalKey, lastCall?.first)
+        assertTrue(coordinator.refetchAllCalls.size > countBeforeResume)
 
         scheduler.stop()
     }
@@ -122,10 +100,10 @@ class DefaultEvaluationPeriodicSchedulerTest {
     fun `uses FetchReason PERIODIC`() = runTest {
         val (scheduler, coordinator) = makeScheduler()
 
-        scheduler.start(target, null)
+        scheduler.start()
         advanceTimeBy(intervalMs + 1)
 
-        assertEquals(FetchReason.PERIODIC, coordinator.fetchCalls.last().third)
+        assertEquals(FetchReason.PERIODIC, coordinator.refetchAllCalls.last().second)
 
         scheduler.stop()
     }
@@ -134,10 +112,22 @@ class DefaultEvaluationPeriodicSchedulerTest {
     fun `polls at regular intervals`() = runTest {
         val (scheduler, coordinator) = makeScheduler()
 
-        scheduler.start(target, null)
+        scheduler.start()
         advanceTimeBy(intervalMs * 3 + 1)
 
-        assertEquals(3, coordinator.fetchCalls.size)
+        assertEquals(3, coordinator.refetchAllCalls.size)
+
+        scheduler.stop()
+    }
+
+    @Test
+    fun `calls refetchAll with null filters`() = runTest {
+        val (scheduler, coordinator) = makeScheduler()
+
+        scheduler.start()
+        advanceTimeBy(intervalMs + 1)
+
+        assertEquals(null, coordinator.refetchAllCalls.last().first)
 
         scheduler.stop()
     }

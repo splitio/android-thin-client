@@ -59,7 +59,6 @@ class DefaultSplitFactoryTest {
             evaluationRepository = FakeEvaluationRepository(),
             filters = null,
             fetchCoordinator = FakeEvaluationFetchCoordinator(),
-            schedulerIntervalMillis = 3_600_000L,
             clientManager = fakeClientManager,
         )
     }
@@ -115,8 +114,7 @@ class DefaultSplitFactoryTest {
             evaluationRepository = fakeRepository,
             filters = null,
             fetchCoordinator = FakeEvaluationFetchCoordinator(),
-            schedulerIntervalMillis = 3_600_000L,
-            clientManager = fakeClientManager,
+                        clientManager = fakeClientManager,
         )
 
         assertEquals(setOf("flag-a", "flag-b"), testFactory.getManager().flagNames.toSet())
@@ -142,8 +140,7 @@ class DefaultSplitFactoryTest {
             evaluationRepository = FakeEvaluationRepository(),
             filters = null,
             fetchCoordinator = FakeEvaluationFetchCoordinator(),
-            schedulerIntervalMillis = 3_600_000L,
-            scope = testScope,
+                        scope = testScope,
             clientManager = customManager,
         )
 
@@ -170,8 +167,7 @@ class DefaultSplitFactoryTest {
             evaluationRepository = FakeEvaluationRepository(),
             filters = null,
             fetchCoordinator = FakeEvaluationFetchCoordinator(),
-            schedulerIntervalMillis = 3_600_000L,
-            scope = testScope,
+                        scope = testScope,
             clientManager = customManager,
         )
 
@@ -192,8 +188,7 @@ class DefaultSplitFactoryTest {
             evaluationRepository = FakeEvaluationRepository(),
             filters = null,
             fetchCoordinator = FakeEvaluationFetchCoordinator(),
-            schedulerIntervalMillis = 3_600_000L,
-            scope = testScope,
+                        scope = testScope,
         )
 
         factoryWithDefaultManager.destroy()
@@ -218,8 +213,6 @@ private class FakeClientManager : ClientManager {
     override suspend fun destroyAll() {
         destroyAllCalled = true
     }
-
-    override fun startAllPolling() {}
 }
 
 private class FakeAsyncBridge : AsyncBridgeLike {
@@ -333,8 +326,7 @@ class SdkReadyTimeoutTest {
             evaluationRepository = FakeEvaluationRepository(),
             filters = null,
             fetchCoordinator = FakeEvaluationFetchCoordinator(),
-            schedulerIntervalMillis = 3_600_000L,
-            scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
+                        scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
             compositeObserver = compositeObserver,
             clientManager = FakeClientManager(),
         )
@@ -359,8 +351,7 @@ class SdkReadyTimeoutTest {
             evaluationRepository = FakeEvaluationRepository(),
             filters = null,
             fetchCoordinator = FakeEvaluationFetchCoordinator(),
-            schedulerIntervalMillis = 3_600_000L,
-            scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
+                        scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
             compositeObserver = compositeObserver,
             clientManager = FakeClientManager(),
         )

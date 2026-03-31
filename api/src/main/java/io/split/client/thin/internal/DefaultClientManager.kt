@@ -8,12 +8,10 @@ import io.split.client.thin.internal.evaluation.toEvaluationTarget
 import io.split.client.thin.internal.auth.AuthProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
-import java.util.concurrent.atomic.AtomicBoolean
 
 internal class DefaultClientManager(
     private val scope: CoroutineScope,
     private val clientFactory: (Target) -> SplitClient,
-    private val pollingEnabled: AtomicBoolean = AtomicBoolean(true),
     private val authProvider: AuthProvider? = null,
     private val onTargetsEmpty: (suspend () -> Unit)? = null,
 ) : ClientManager {
@@ -67,13 +65,6 @@ internal class DefaultClientManager(
                 onTargetsEmpty?.invoke()
             }
         }
-    }
-
-    override fun startAllPolling() {
-        pollingEnabled.set(true)
-        synchronized(lock) { clients.values.toList() }
-            .filterIsInstance<DefaultSplitClient>()
-            .forEach { it.startPolling() }
     }
 
     override suspend fun destroyAll() {

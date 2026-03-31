@@ -117,6 +117,7 @@ class FakeEvaluationFetchCoordinator(
 ) : EvaluationFetchCoordinator {
 
     val fetchCalls = mutableListOf<Triple<EvaluationKey, EvaluationFilters?, FetchReason>>()
+    val refetchAllCalls = mutableListOf<Pair<EvaluationFilters?, FetchReason>>()
 
     override suspend fun fetchIfNeeded(evalKey: EvaluationKey, filters: EvaluationFilters?, reason: FetchReason): Boolean {
         fetchCalls.add(Triple(evalKey, filters, reason))
@@ -124,6 +125,6 @@ class FakeEvaluationFetchCoordinator(
     }
 
     override suspend fun refetchAll(filters: EvaluationFilters?, reason: FetchReason) {
-        // Stub - tests using this fake don't need refetchAll behavior
+        refetchAllCalls.add(filters to reason)
     }
 }

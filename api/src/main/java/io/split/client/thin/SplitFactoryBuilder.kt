@@ -20,7 +20,9 @@ import io.split.client.thin.internal.DefaultClientFactory
 import io.split.client.thin.internal.DefaultClientManager
 import io.split.client.thin.internal.DefaultSplitFactory
 import io.split.client.thin.internal.auth.createAuthProvider
+import io.split.client.thin.internal.evaluation.DefaultPollingScheduler
 import io.split.client.thin.internal.evaluation.FetchReason
+import io.split.client.thin.internal.evaluation.PollingScheduler
 import io.split.client.thin.internal.evaluation.createEvaluationComponents
 import io.split.client.thin.internal.evaluation.toEvaluationKey
 import io.split.client.thin.internal.evaluation.toEvaluationTarget
@@ -37,7 +39,6 @@ import io.split.client.thin.internal.streaming.createStreamingComponents
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import java.util.concurrent.atomic.AtomicBoolean
 
 // TODO: move these constants
 private const val EVENTS_MAX_QUEUE_SIZE = 5000
@@ -83,7 +84,6 @@ object SplitFactoryBuilder {
         )
 
         val syncMode = config?.sync?.mode ?: SplitClientConfig.SyncMode.STREAMING
-        val pollingEnabled = AtomicBoolean(syncMode == SplitClientConfig.SyncMode.POLLING)
 
         var streamingComponents: StreamingComponents? = null
 
@@ -156,17 +156,33 @@ object SplitFactoryBuilder {
                 evaluationRepository = evaluationRepository,
                 filters = null,
                 fallbackCalculator = DefaultSplitFactory.buildFallbackCalculator(config),
-                fetchCoordinator = fetchCoordinator,
-                schedulerIntervalMillis = schedulerIntervalMillis,
                 onEventPush = eventsPushHandler,
                 flushFn = { eventsCoordinator.flush() },
-                lifecycleManager = lifecycleManager,
-                pollingEnabled = pollingEnabled,
             ),
-            pollingEnabled = pollingEnabled,
             authProvider = authProvider,
             onTargetsEmpty = { streamingComponents?.manager?.stopAll() },
         )
+
+        // Factory function for creating polling scheduler
+        fun createPollingScheduler(): PollingScheduler {
+            return DefaultPollingScheduler(
+                fetchCoordinator = fetchCoordinator,
+                intervalMillis = schedulerIntervalMillis,
+                scope = factoryScope,
+                onPollTrigger = { interval ->
+                    compositeObserver.notifyEvent(
+                        io.split.client.thin.internal.observer.ObservableEvent(
+                            type = io.split.client.thin.internal.observer.ObservableEventType.POLL_TRIGGER,
+                            properties = mapOf("rate" to "${interval / 1000}s")
+                        )
+                    )
+                }
+            )
+        }
+
+        // Polling scheduler - created on-demand
+        var pollingScheduler: PollingScheduler? = null
+        val schedulerLock = Any()
 
         if (syncMode == SplitClientConfig.SyncMode.STREAMING) {
             streamingComponents = createStreamingComponents(
@@ -179,9 +195,24 @@ object SplitFactoryBuilder {
                 onEvaluationFetchNotification = { fetchCoordinator.refetchAll(null, FetchReason.PUSH) },
                 onPushDisabled = {
                     fetchCoordinator.refetchAll(null, FetchReason.PERIODIC)
-                    clientManager.startAllPolling()
+                    synchronized(schedulerLock) {
+                        if (pollingScheduler == null) {
+                            pollingScheduler = createPollingScheduler()
+                            val scheduler = pollingScheduler!!
+                            // Register with lifecycle manager
+                            lifecycleManager.register(object : LifecycleComponent {
+                                override fun pause() = scheduler.pause()
+                                override fun resume() = scheduler.resume()
+                            })
+                        }
+                        pollingScheduler!!.start()
+                    }
                 },
             )
+        } else {
+            // Polling mode - create and start immediately
+            pollingScheduler = createPollingScheduler()
+            pollingScheduler!!.start()
         }
 
         streamingComponents?.let { components ->
@@ -189,6 +220,16 @@ object SplitFactoryBuilder {
                 override fun pause() = components.manager.pause()
                 override fun resume() = components.manager.resume()
             })
+        }
+
+        // Register polling scheduler with lifecycle manager (if created for polling mode)
+        if (syncMode == SplitClientConfig.SyncMode.POLLING) {
+            pollingScheduler?.let { scheduler ->
+                lifecycleManager.register(object : LifecycleComponent {
+                    override fun pause() = scheduler.pause()
+                    override fun resume() = scheduler.resume()
+                })
+            }
         }
 
         streamingComponents?.startTrigger()
@@ -200,7 +241,7 @@ object SplitFactoryBuilder {
             evaluationRepository = evaluationRepository,
             filters = null,
             fetchCoordinator = fetchCoordinator,
-            schedulerIntervalMillis = schedulerIntervalMillis,
+            pollingScheduler = pollingScheduler,
             eventsScheduler = eventsScheduler,
             eventsCoordinator = eventsCoordinator,
             scope = factoryScope,
