@@ -31,6 +31,8 @@ import io.split.client.thin.internal.lifecycle.LifecycleComponent
 import io.split.client.thin.internal.observer.AndroidLoggerAdapter
 import io.split.client.thin.internal.observer.DefaultCompositeObserver
 import io.split.client.thin.internal.observer.LoggerObserver
+import io.split.client.thin.internal.observer.ObservableEvent
+import io.split.client.thin.internal.observer.ObservableEventType
 import io.split.client.thin.internal.secure.EvaluationTarget
 import io.split.client.thin.internal.secure.createSecureHttpClient
 import io.split.client.thin.internal.streaming.StreamingComponents
@@ -163,29 +165,36 @@ object SplitFactoryBuilder {
             onTargetsEmpty = { streamingComponents?.manager?.stopAll() },
         )
 
-        // Factory function for creating polling scheduler
-        fun createPollingScheduler(): PollingScheduler {
-            return DefaultPollingScheduler(
+        // Polling scheduler - created on-demand
+        var pollingScheduler: PollingScheduler? = null
+        val schedulerLock = Any()
+
+        // Helper to create and register scheduler
+        fun getOrCreateScheduler(): PollingScheduler = synchronized(schedulerLock) {
+            pollingScheduler ?: DefaultPollingScheduler(
                 fetchCoordinator = fetchCoordinator,
                 intervalMillis = schedulerIntervalMillis,
                 scope = factoryScope,
                 onPollTrigger = { interval ->
                     compositeObserver.notifyEvent(
-                        io.split.client.thin.internal.observer.ObservableEvent(
-                            type = io.split.client.thin.internal.observer.ObservableEventType.POLL_TRIGGER,
+                        ObservableEvent(
+                            type = ObservableEventType.POLL_TRIGGER,
                             properties = mapOf("rate" to "${interval / 1000}s")
                         )
                     )
                 }
-            )
+            ).also { scheduler ->
+                pollingScheduler = scheduler
+                // Register with lifecycle manager
+                lifecycleManager.register(object : LifecycleComponent {
+                    override fun pause() = scheduler.pause()
+                    override fun resume() = scheduler.resume()
+                })
+            }
         }
 
-        // Polling scheduler - created on-demand
-        var pollingScheduler: PollingScheduler? = null
-        val schedulerLock = Any()
-
         if (syncMode == SplitClientConfig.SyncMode.STREAMING) {
-            streamingComponents = createStreamingComponents(
+            createStreamingComponents(
                 streamingUrl = endpoints?.streamingUrl ?: DEFAULT_STREAMING_URL,
                 retryableHttpClient = retryableHttpClient,
                 tokenProvider = {
@@ -195,44 +204,22 @@ object SplitFactoryBuilder {
                 onEvaluationFetchNotification = { fetchCoordinator.refetchAll(null, FetchReason.PUSH) },
                 onPushDisabled = {
                     fetchCoordinator.refetchAll(null, FetchReason.PERIODIC)
-                    synchronized(schedulerLock) {
-                        if (pollingScheduler == null) {
-                            pollingScheduler = createPollingScheduler()
-                            val scheduler = pollingScheduler!!
-                            // Register with lifecycle manager
-                            lifecycleManager.register(object : LifecycleComponent {
-                                override fun pause() = scheduler.pause()
-                                override fun resume() = scheduler.resume()
-                            })
-                        }
-                        pollingScheduler!!.start()
-                    }
+                    getOrCreateScheduler().start()
                 },
-            )
+            ).apply {
+                // Register with lifecycle manager
+                lifecycleManager.register(object : LifecycleComponent {
+                    override fun pause() = manager.pause()
+                    override fun resume() = manager.resume()
+                })
+            }.apply {
+                // start
+                startTrigger()
+            }
         } else {
             // Polling mode - create and start immediately
-            pollingScheduler = createPollingScheduler()
-            pollingScheduler!!.start()
+            getOrCreateScheduler().start()
         }
-
-        streamingComponents?.let { components ->
-            lifecycleManager.register(object : LifecycleComponent {
-                override fun pause() = components.manager.pause()
-                override fun resume() = components.manager.resume()
-            })
-        }
-
-        // Register polling scheduler with lifecycle manager (if created for polling mode)
-        if (syncMode == SplitClientConfig.SyncMode.POLLING) {
-            pollingScheduler?.let { scheduler ->
-                lifecycleManager.register(object : LifecycleComponent {
-                    override fun pause() = scheduler.pause()
-                    override fun resume() = scheduler.resume()
-                })
-            }
-        }
-
-        streamingComponents?.startTrigger()
 
         return DefaultSplitFactory(
             defaultTarget = defaultTarget,
