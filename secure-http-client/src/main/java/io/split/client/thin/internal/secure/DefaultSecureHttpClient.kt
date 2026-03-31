@@ -13,33 +13,23 @@ import java.net.URLEncoder
 internal class DefaultSecureHttpClient(
     private val authProvider: AuthProvider<EvaluationTarget>,
     private val retryableHttpClient: RetryableHttpClient,
-    private val defaultTarget: EvaluationTarget,
     private val evaluationsUrl: String,
     private val eventsUrl: String,
     private val telemetryUrl: String,
     private val sdkKey: String,
     private val impressionsMode: Int? = null,
     private val sdkVersion: String = SDK_VERSION,
-    private val onStreamingEmpty: (suspend () -> Unit)? = null,
 ) : SecureHttpClient {
-
-    private val activeTargets = mutableSetOf<EvaluationTarget>()
-    private val activeTargetsLock = Any()
 
     override suspend fun fetchEvaluations(target: EvaluationTarget, filters: EvaluationFilters?): HttpResponse {
         val uri = buildEvaluationsUri(target, filters)
         val body = buildEvaluationsBody(target)
-        val isNewTarget = synchronized(activeTargetsLock) { activeTargets.add(target) }
-        if (isNewTarget) {
-            authProvider.invalidateAll()
-        }
-        val targets = effectiveTargets()
-        val token = authProvider.credential(targets).token
+        val token = authProvider.credential().token
         val request = buildEvaluationsRequest(uri, body, token)
         val response = retryableHttpClient.execute(request, RequestCategory.EVALUATIONS)
         if (response.getHttpStatus() == HTTP_UNAUTHORIZED) {
             authProvider.invalidateAll()
-            val freshToken = authProvider.credential(targets).token
+            val freshToken = authProvider.credential().token
             val retryRequest = buildEvaluationsRequest(uri, body, freshToken)
             return retryableHttpClient.execute(retryRequest, RequestCategory.EVALUATIONS)
         }
@@ -55,46 +45,18 @@ internal class DefaultSecureHttpClient(
         return executeAuthenticated(URI(telemetryUrl), HttpMethod.POST, payload, RequestCategory.TELEMETRY)
     }
 
-    override suspend fun openStreaming(target: EvaluationTarget) {
-        val isNew = synchronized(activeTargetsLock) { activeTargets.add(target) }
-        if (isNew) {
-            authProvider.invalidateAll()
-        }
-        authProvider.credential(effectiveTargets())
-    }
-
-    override suspend fun closeStreaming(target: EvaluationTarget) {
-        val isEmpty = synchronized(activeTargetsLock) {
-            activeTargets.remove(target)
-            activeTargets.isEmpty()
-        }
-        if (isEmpty) {
-            onStreamingEmpty?.invoke()
-        }
-    }
-
-    override suspend fun credentialForActiveTargets(): JwtCredential {
-        return authProvider.credential(effectiveTargets())
-    }
-
-    private fun effectiveTargets(): Set<EvaluationTarget> {
-        val active = synchronized(activeTargetsLock) { activeTargets.toSet() }
-        return active.ifEmpty { setOf(defaultTarget) }
-    }
-
     private suspend fun executeAuthenticated(
         uri: URI,
         method: HttpMethod,
         body: String,
         category: RequestCategory,
     ): HttpResponse {
-        val targets = effectiveTargets()
-        val token = authProvider.credential(targets).token
+        val token = authProvider.credential().token
         val request = buildRequest(uri, method, body, token)
         val response = retryableHttpClient.execute(request, category)
         if (response.getHttpStatus() == HTTP_UNAUTHORIZED) {
             authProvider.invalidateAll()
-            val freshToken = authProvider.credential(targets).token
+            val freshToken = authProvider.credential().token
             val retryRequest = buildRequest(uri, method, body, freshToken)
             return retryableHttpClient.execute(retryRequest, category)
         }

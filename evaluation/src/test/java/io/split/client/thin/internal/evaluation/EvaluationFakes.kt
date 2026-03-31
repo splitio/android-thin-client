@@ -1,7 +1,6 @@
 package io.split.client.thin.internal.evaluation
 
 import io.split.android.client.network.HttpResponse
-import io.split.client.thin.internal.auth.JwtCredential
 import io.split.client.thin.internal.observer.CompositeObserver
 import io.split.client.thin.internal.observer.ObservableEvent
 import io.split.client.thin.internal.observer.Observer
@@ -28,9 +27,6 @@ class FakeSecureHttpClient(
 
     override suspend fun postEvents(payload: String): HttpResponse = FakeHttpResponse(200, null)
     override suspend fun postTelemetry(payload: String): HttpResponse = FakeHttpResponse(200, null)
-    override suspend fun openStreaming(target: EvaluationTarget) = Unit
-    override suspend fun closeStreaming(target: EvaluationTarget) = Unit
-    override suspend fun credentialForActiveTargets(): JwtCredential = JwtCredential("fake-token", Long.MAX_VALUE, true)
 }
 
 class FakeHttpResponse(

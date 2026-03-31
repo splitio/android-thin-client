@@ -8,7 +8,6 @@ import io.split.client.thin.internal.observer.CompositeObserver
 import io.split.client.thin.internal.observer.ObservableEvent
 import io.split.client.thin.internal.observer.Observer
 import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -71,43 +70,6 @@ class DefaultClientFactoryTest {
         assertEquals(1, compositeObserver.registeredObservers.size)
     }
 
-    @Test
-    fun `invoke calls openStreaming on secureHttpClient`() = TestScope().runTest {
-        val secureHttpClient = FakeSecureHttpClient()
-        val factory = DefaultClientFactory(
-            FakeCompositeObserver(),
-            this,
-            evaluationRepository = FakeEvaluationRepository(),
-            filters = null,
-            fallbackCalculator = null,
-            fetchCoordinator = FakeEvaluationFetchCoordinator(),
-            schedulerIntervalMillis = 3_600_000L,
-            secureHttpClient = secureHttpClient,
-        )
-
-        factory(Target(Key("user-1")))
-        testScheduler.advanceUntilIdle()
-
-        assertEquals(1, secureHttpClient.openStreamingCalls.size)
-        assertEquals("user-1", secureHttpClient.openStreamingCalls[0].matchingKey)
-    }
-
-    @Test
-    fun `invoke does not call openStreaming when no secureHttpClient`() {
-        val factory = DefaultClientFactory(
-            FakeCompositeObserver(),
-            TestScope(),
-            evaluationRepository = FakeEvaluationRepository(),
-            filters = null,
-            fallbackCalculator = null,
-            fetchCoordinator = FakeEvaluationFetchCoordinator(),
-            schedulerIntervalMillis = 3_600_000L,
-            secureHttpClient = null,
-        )
-
-        // Should not throw
-        factory(Target(Key("user-1")))
-    }
 }
 
 private class FakeCompositeObserver : CompositeObserver {

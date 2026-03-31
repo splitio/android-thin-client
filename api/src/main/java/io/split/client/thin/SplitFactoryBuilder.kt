@@ -71,6 +71,8 @@ object SplitFactoryBuilder {
         val retryableHttpClient = createRetryableHttpClient(httpClient, compositeObserver)
         val endpoints = config?.sync?.serviceEndpoints
 
+        val defaultEvaluationTarget = defaultTarget.toEvaluationKey().toEvaluationTarget()
+
         val authProvider = createAuthProvider<EvaluationTarget>(
             retryableHttpClient = retryableHttpClient,
             sdkKey = sdkKey.sdkKey,
@@ -83,9 +85,8 @@ object SplitFactoryBuilder {
                     attributes = null,
                 )
             },
+            defaultTarget = defaultEvaluationTarget,
         )
-
-        val defaultEvaluationTarget = defaultTarget.toEvaluationKey().toEvaluationTarget()
 
         val syncMode = config?.sync?.mode ?: SplitClientConfig.SyncMode.STREAMING
         val pollingEnabled = AtomicBoolean(syncMode == SplitClientConfig.SyncMode.POLLING)
@@ -95,12 +96,10 @@ object SplitFactoryBuilder {
         val secureHttpClient = createSecureHttpClient(
             authProvider = authProvider,
             retryableHttpClient = retryableHttpClient,
-            defaultTarget = defaultEvaluationTarget,
             evaluationsUrl = endpoints?.evaluationsUrl ?: DEFAULT_EVALUATIONS_URL,
             eventsUrl = endpoints?.eventsUrl ?: DEFAULT_EVENTS_URL,
             telemetryUrl = endpoints?.telemetryUrl ?: DEFAULT_TELEMETRY_URL,
             sdkKey = sdkKey.sdkKey,
-            onStreamingEmpty = { streamingComponents?.manager?.stopAll() },
         )
 
         val (fetchCoordinator, evaluationRepository) = createEvaluationComponents(
@@ -171,6 +170,8 @@ object SplitFactoryBuilder {
                 pollingEnabled = pollingEnabled,
             ),
             pollingEnabled = pollingEnabled,
+            authProvider = authProvider,
+            onTargetsEmpty = { streamingComponents?.manager?.stopAll() },
         )
 
         if (syncMode == SplitClientConfig.SyncMode.STREAMING) {
@@ -178,7 +179,7 @@ object SplitFactoryBuilder {
                 streamingUrl = endpoints?.streamingUrl ?: DEFAULT_STREAMING_URL,
                 retryableHttpClient = retryableHttpClient,
                 tokenProvider = {
-                    val cred = secureHttpClient.credentialForActiveTargets()
+                    val cred = authProvider.credential()
                     StreamingToken(cred.token, cred.connDelaySeconds, cred.pushEnabled)
                 },
                 onEvaluationFetchNotification = { fetchCoordinator.refetchAll(null, FetchReason.PUSH) },
@@ -211,7 +212,6 @@ object SplitFactoryBuilder {
             scope = factoryScope,
             compositeObserver = compositeObserver,
             lifecycleManager = lifecycleManager,
-            secureHttpClient = secureHttpClient,
             clientManager = clientManager,
         )
     }

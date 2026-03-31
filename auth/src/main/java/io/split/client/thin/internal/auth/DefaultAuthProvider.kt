@@ -11,6 +11,7 @@ internal class DefaultAuthProvider<T : AuthParamsProvider>(
     private val credentialFetcher: CredentialFetcher<T>,
     private val credentialStorage: CredentialStorage,
     private val compositeKeyBuilder: (Set<T>) -> T,
+    private val defaultTarget: T? = null,
     private val onJwtRequestStarted: (target: T) -> Unit = {},
     private val onJwtReturnedFromStorage: (credential: JwtCredential, target: T) -> Unit = { _, _ -> },
     private val onJwtExpiredOrInvalid: (target: T) -> Unit = {},
@@ -20,6 +21,27 @@ internal class DefaultAuthProvider<T : AuthParamsProvider>(
     private val mutex = Mutex()
     // Completion callbacks may run on different threads, so this map must be thread-safe.
     private val inFlight = ConcurrentHashMap<T, Deferred<JwtCredential>>()
+
+    private val activeTargets = mutableSetOf<T>()
+    private val activeTargetsLock = Any()
+
+    override fun addTarget(target: T): Boolean {
+        return synchronized(activeTargetsLock) { activeTargets.add(target) }
+    }
+
+    override fun removeTarget(target: T): Boolean {
+        return synchronized(activeTargetsLock) {
+            activeTargets.remove(target)
+            activeTargets.isEmpty()
+        }
+    }
+
+    override suspend fun credential(): JwtCredential {
+        val effective = synchronized(activeTargetsLock) {
+            activeTargets.toSet().ifEmpty { defaultTarget?.let { setOf(it) } ?: emptySet() }
+        }
+        return credential(effective)
+    }
 
     override suspend fun credential(targets: Set<T>): JwtCredential {
         val compositeKey = compositeKeyBuilder(targets.sortedBy { it.getUsers() }.toSet())

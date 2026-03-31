@@ -10,8 +10,6 @@ import io.split.client.thin.internal.evaluation.DefaultEvaluationPeriodicSchedul
 import io.split.client.thin.internal.evaluation.EvaluationFetchCoordinator
 import io.split.client.thin.internal.evaluation.EvaluationPeriodicScheduler
 import io.split.client.thin.internal.evaluation.EvaluationRepository
-import io.split.client.thin.internal.evaluation.toEvaluationKey
-import io.split.client.thin.internal.evaluation.toEvaluationTarget
 import io.split.client.thin.internal.lifecycle.LifecycleComponent
 import io.split.client.thin.internal.lifecycle.LifecycleManager
 import io.split.client.thin.internal.observer.CompositeObserver
@@ -19,9 +17,7 @@ import io.split.client.thin.internal.sdkevents.EventManagerObserver
 import io.split.client.thin.internal.sdkevents.SplitEventDelivery
 import io.split.client.thin.internal.sdkevents.ThinClientEventsConfig
 import io.split.client.thin.internal.secure.EvaluationFilters
-import io.split.client.thin.internal.secure.SecureHttpClient
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicBoolean
 
 internal class DefaultClientFactory(
@@ -35,7 +31,6 @@ internal class DefaultClientFactory(
     private val onEventPush: DefaultTracker.OnEventPush = DefaultTracker.OnEventPush { },
     private val flushFn: suspend () -> Unit = {},
     private val lifecycleManager: LifecycleManager? = null,
-    private val secureHttpClient: SecureHttpClient? = null,
     private val pollingEnabled: AtomicBoolean = AtomicBoolean(true),
     private val schedulerFactory: (EvaluationFetchCoordinator, Long) -> EvaluationPeriodicScheduler = { coordinator, intervalMillis ->
         DefaultEvaluationPeriodicScheduler(fetchCoordinator = coordinator, intervalMillis = intervalMillis)
@@ -58,9 +53,6 @@ internal class DefaultClientFactory(
             override fun pause() = scheduler.pause()
             override fun resume() = scheduler.resume()
         })
-        secureHttpClient?.let { client ->
-            scope.launch { client.openStreaming(target.toEvaluationKey().toEvaluationTarget()) }
-        }
         return DefaultSplitClient(
             initialTarget = target,
             tracker = eventTracker.tracker,
@@ -71,7 +63,6 @@ internal class DefaultClientFactory(
             periodicScheduler = scheduler,
             flushOperation = flushFn,
             scope = scope,
-            secureHttpClient = secureHttpClient,
         )
     }
 }

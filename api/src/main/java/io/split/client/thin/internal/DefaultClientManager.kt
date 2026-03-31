@@ -3,6 +3,10 @@ package io.split.client.thin.internal
 import io.split.client.thin.Key
 import io.split.client.thin.SplitClient
 import io.split.client.thin.Target
+import io.split.client.thin.internal.evaluation.toEvaluationKey
+import io.split.client.thin.internal.evaluation.toEvaluationTarget
+import io.split.client.thin.internal.auth.AuthProvider
+import io.split.client.thin.internal.secure.EvaluationTarget
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicBoolean
@@ -11,6 +15,8 @@ internal class DefaultClientManager(
     private val scope: CoroutineScope,
     private val clientFactory: (Target) -> SplitClient,
     private val pollingEnabled: AtomicBoolean = AtomicBoolean(true),
+    private val authProvider: AuthProvider<EvaluationTarget>? = null,
+    private val onTargetsEmpty: (suspend () -> Unit)? = null,
 ) : ClientManager {
 
     private val clients = HashMap<Key, SplitClient>()
@@ -28,6 +34,8 @@ internal class DefaultClientManager(
                 val newClient = clientFactory(target)
                 clients[target.key] = newClient
                 lastTargets[target.key] = target
+                val isNew = authProvider?.addTarget(target.toEvaluationKey().toEvaluationTarget()) ?: false
+                if (isNew) scope.launch { authProvider?.invalidateAll() }
                 Pair(newClient, false)
             }
         }
@@ -47,11 +55,19 @@ internal class DefaultClientManager(
     }
 
     override suspend fun destroy(key: Key) {
-        val client = synchronized(lock) {
-            lastTargets.remove(key)
-            clients.remove(key)
-        } ?: return
+        val (client, target) = synchronized(lock) {
+            val t = lastTargets.remove(key)
+            val c = clients.remove(key)
+            Pair(c, t)
+        }
+        client ?: return
         client.destroy()
+        if (authProvider != null && target != null) {
+            val isEmpty = authProvider.removeTarget(target.toEvaluationKey().toEvaluationTarget())
+            if (isEmpty) {
+                onTargetsEmpty?.invoke()
+            }
+        }
     }
 
     override fun startAllPolling() {
@@ -62,12 +78,18 @@ internal class DefaultClientManager(
     }
 
     override suspend fun destroyAll() {
-        val all = synchronized(lock) {
-            val copy = clients.values.toList()
-            clients.clear()
+        val (all, targets) = synchronized(lock) {
+            val clients = clients.values.toList()
+            val targets = lastTargets.values.toList()
+            this.clients.clear()
             lastTargets.clear()
-            copy
+            Pair(clients, targets)
         }
         all.forEach { runCatching { it.destroy() } }
+        if (authProvider != null) {
+            for (target in targets) {
+                authProvider.removeTarget(target.toEvaluationKey().toEvaluationTarget())
+            }
+        }
     }
 }

@@ -11,6 +11,7 @@ fun <T : AuthParamsProvider> createAuthProvider(
     authUrl: String,
     compositeObserver: CompositeObserver,
     compositeKeyBuilder: (Set<T>) -> T,
+    defaultTarget: T? = null,
 ): AuthProvider<T> {
     val storage = InMemoryCredentialStorage()
     val fetcher = DefaultCredentialFetcher<T>(
@@ -53,6 +54,7 @@ fun <T : AuthParamsProvider> createAuthProvider(
         credentialFetcher = fetcher,
         credentialStorage = storage,
         compositeKeyBuilder = compositeKeyBuilder,
+        defaultTarget = defaultTarget,
         onJwtRequestStarted = { target ->
             compositeObserver.notifyEvent(
                 ObservableEvent(

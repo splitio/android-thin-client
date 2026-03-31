@@ -46,7 +46,7 @@ class DefaultAuthProviderTest {
 
     @Before
     fun setUp() {
-        authProvider = DefaultAuthProvider(fetcher, storage, compositeKeyBuilder)
+        authProvider = DefaultAuthProvider(fetcher, storage, compositeKeyBuilder, defaultTarget = target)
     }
 
     @Test
@@ -108,7 +108,7 @@ class DefaultAuthProviderTest {
                 validCredential
             }
         }
-        authProvider = DefaultAuthProvider<TestTarget>(cancelThenSucceedFetcher, storage, compositeKeyBuilder)
+        authProvider = DefaultAuthProvider<TestTarget>(cancelThenSucceedFetcher, storage, compositeKeyBuilder, defaultTarget = target)
         `when`(storage.getCredential()).thenReturn(null)
 
         val first = launch(Job()) { authProvider.credential(setOf(target, target2)) }

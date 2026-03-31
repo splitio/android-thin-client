@@ -17,7 +17,6 @@ import io.split.client.thin.internal.evaluation.toEvaluationKey
 import io.split.client.thin.internal.lifecycle.LifecycleComponent
 import io.split.client.thin.internal.lifecycle.LifecycleManager
 import io.split.client.thin.internal.secure.EvaluationFilters
-import io.split.client.thin.internal.secure.SecureHttpClient
 import io.split.client.thin.internal.observer.DefaultCompositeObserver
 import io.split.client.thin.internal.observer.ObservableEvent
 import io.split.client.thin.internal.observer.ObservableEventType
@@ -41,7 +40,6 @@ internal class DefaultSplitFactory(
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
     private val compositeObserver: DefaultCompositeObserver = DefaultCompositeObserver(),
     private val lifecycleManager: LifecycleManager? = null,
-    private val secureHttpClient: SecureHttpClient? = null,
     private val clientManager: ClientManager = DefaultClientManager(
         scope,
         DefaultClientFactory(
@@ -53,7 +51,6 @@ internal class DefaultSplitFactory(
             fetchCoordinator = fetchCoordinator,
             schedulerIntervalMillis = schedulerIntervalMillis,
             lifecycleManager = lifecycleManager,
-            secureHttpClient = secureHttpClient,
             schedulerFactory = { coordinator, intervalMillis ->
                 DefaultEvaluationPeriodicScheduler(
                     fetchCoordinator = coordinator,

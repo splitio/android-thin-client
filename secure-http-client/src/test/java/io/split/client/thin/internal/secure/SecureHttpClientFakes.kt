@@ -29,19 +29,16 @@ internal fun makeClient(
     impressionsMode: Int? = null,
     sdkVersion: String = "test-version",
     sdkKey: String = "test-sdk-key",
-    onStreamingEmpty: (suspend () -> Unit)? = null,
 ): Triple<DefaultSecureHttpClient, FakeAuthProvider, FakeRetryableHttpClient> = Triple(
     DefaultSecureHttpClient(
         authProvider = authProvider,
         retryableHttpClient = httpClient,
-        defaultTarget = testDefaultTarget,
         evaluationsUrl = testEvaluationsUrl,
         eventsUrl = testEventsUrl,
         telemetryUrl = testTelemetryUrl,
         sdkKey = sdkKey,
         impressionsMode = impressionsMode,
         sdkVersion = sdkVersion,
-        onStreamingEmpty = onStreamingEmpty,
     ),
     authProvider,
     httpClient,
@@ -58,6 +55,11 @@ internal class FakeAuthProvider(
     var invalidateCallCount = 0
         private set
     private var credentialCallIndex = 0
+
+    override fun addTarget(target: EvaluationTarget): Boolean = false
+    override fun removeTarget(target: EvaluationTarget): Boolean = true
+
+    override suspend fun credential(): JwtCredential = credential(emptySet())
 
     override suspend fun credential(targets: Set<EvaluationTarget>): JwtCredential {
         credentialCallCount++
