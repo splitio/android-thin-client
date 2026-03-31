@@ -6,19 +6,19 @@ import io.split.client.thin.http.RequestCategory
 import io.split.client.thin.http.RetryableHttpClient
 import java.net.URI
 
-internal class DefaultCredentialFetcher<T : AuthParamsProvider>(
+internal class DefaultCredentialFetcher(
     private val retryableHttpClient: RetryableHttpClient,
     private val sdkKey: String,
     private val serviceUrl: String,
     private val tokenDeserializer: TokenDeserializer = JsonTokenDeserializer(),
-    private val onJwtFetchStarted: (target: T) -> Unit = {},
-    private val onJwtFetchSucceeded: (credential: JwtCredential, target: T) -> Unit = { _, _ -> },
-    private val onJwtFetchFailedNonRetryable: (target: T, error: Exception) -> Unit = { _, _ -> },
-) : CredentialFetcher<T> {
+    private val onJwtFetchStarted: (target: String) -> Unit = {},
+    private val onJwtFetchSucceeded: (credential: JwtCredential, target: String) -> Unit = { _, _ -> },
+    private val onJwtFetchFailedNonRetryable: (target: String, error: Exception) -> Unit = { _, _ -> },
+) : CredentialFetcher {
 
-    override suspend fun fetchCredential(target: T): JwtCredential {
+    override suspend fun fetchCredential(target: String): JwtCredential {
         val request = HttpRequestDescriptor(
-            uri = URI.create("$serviceUrl/?users=${target.getUsers()}"),
+            uri = URI.create("$serviceUrl/?users=$target"),
             method = HttpMethod.GET,
             headers = mapOf("Authorization" to "Bearer $sdkKey"),
         )

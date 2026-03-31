@@ -4,7 +4,7 @@ import io.split.client.thin.http.RetryableHttpClient
 import io.split.client.thin.internal.auth.AuthProvider
 
 fun createSecureHttpClient(
-    authProvider: AuthProvider<EvaluationTarget>,
+    authProvider: AuthProvider,
     retryableHttpClient: RetryableHttpClient,
     evaluationsUrl: String,
     eventsUrl: String,

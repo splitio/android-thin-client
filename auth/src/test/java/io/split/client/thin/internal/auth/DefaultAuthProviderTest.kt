@@ -20,11 +20,10 @@ import org.mockito.Mockito.`when`
 
 class DefaultAuthProviderTest {
 
-    @Suppress("UNCHECKED_CAST")
-    private val fetcher = mock(CredentialFetcher::class.java) as CredentialFetcher<TestTarget>
+    private val fetcher = mock(CredentialFetcher::class.java)
     private val storage = mock(CredentialStorage::class.java)
 
-    private val target = TestTarget("user-1")
+    private val target = "user-1"
     private val validCredential = JwtCredential(
         token = "valid-token",
         expiresAt = System.currentTimeMillis() / 1000 + 3600,
@@ -36,13 +35,13 @@ class DefaultAuthProviderTest {
         pushEnabled = false,
     )
 
-    private val target2 = TestTarget("user-2")
-    private val compositeTarget = TestTarget("user-1,user-2")
-    private val compositeKeyBuilder: (Set<TestTarget>) -> TestTarget = { targets ->
-        TestTarget(targets.map { it.getUsers() }.sorted().joinToString(","))
+    private val target2 = "user-2"
+    private val compositeTarget = "user-1,user-2"
+    private val compositeKeyBuilder: (Set<String>) -> String = { targets ->
+        targets.sorted().joinToString(",")
     }
 
-    private lateinit var authProvider: DefaultAuthProvider<TestTarget>
+    private lateinit var authProvider: DefaultAuthProvider
 
     @Before
     fun setUp() {
@@ -99,7 +98,7 @@ class DefaultAuthProviderTest {
     fun `credential starts a new fetch after prior in-flight fetch is cancelled`() = runTest {
         var attempts = 0
         val firstFetchStarted = CompletableDeferred<Unit>()
-        val cancelThenSucceedFetcher = CredentialFetcher<TestTarget> {
+        val cancelThenSucceedFetcher = CredentialFetcher {
             attempts++
             if (attempts == 1) {
                 firstFetchStarted.complete(Unit)
@@ -108,7 +107,7 @@ class DefaultAuthProviderTest {
                 validCredential
             }
         }
-        authProvider = DefaultAuthProvider<TestTarget>(cancelThenSucceedFetcher, storage, compositeKeyBuilder, defaultTarget = target)
+        authProvider = DefaultAuthProvider(cancelThenSucceedFetcher, storage, compositeKeyBuilder, defaultTarget = target)
         `when`(storage.getCredential()).thenReturn(null)
 
         val first = launch(Job()) { authProvider.credential(setOf(target, target2)) }
@@ -145,12 +144,11 @@ class DefaultAuthProviderTest {
     @Test
     fun `composite key is sorted regardless of set iteration order`() = runTest {
         `when`(storage.getCredential()).thenReturn(null)
-        val expectedComposite = TestTarget("user-1,user-2")
-        `when`(fetcher.fetchCredential(expectedComposite)).thenReturn(validCredential)
+        `when`(fetcher.fetchCredential("user-1,user-2")).thenReturn(validCredential)
 
         // Pass targets in reverse order
         authProvider.credential(setOf(target2, target))
 
-        verify(fetcher).fetchCredential(expectedComposite)
+        verify(fetcher).fetchCredential("user-1,user-2")
     }
 }

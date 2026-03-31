@@ -32,23 +32,23 @@ class AuthProviderFactoryTest {
     }
 
     private fun makeProvider(httpClient: RetryableHttpClient = FakeSuccessHttpClient()) =
-        createAuthProvider<TestTarget>(
+        createAuthProvider(
             retryableHttpClient = httpClient,
             sdkKey = "test-sdk-key",
             authUrl = "https://auth.example.com",
             compositeObserver = fakeObserver,
-            compositeKeyBuilder = { targets -> TestTarget(targets.joinToString(",") { it.getUsers() }) },
+            compositeKeyBuilder = { targets -> targets.sorted().joinToString(",") },
         )
 
     @Test
     fun `createAuthProvider returns a DefaultAuthProvider`() {
         assertNotNull(makeProvider())
-        assertTrue(makeProvider() is DefaultAuthProvider<*>)
+        assertTrue(makeProvider() is DefaultAuthProvider)
     }
 
     @Test
     fun `observer receives JWT_REQUEST_STARTED and JWT_FETCH_STARTED and JWT_FETCH_SUCCEEDED and JWT_STORED on first fetch`() = runTest {
-        makeProvider().credential(setOf(TestTarget("user-1")))
+        makeProvider().credential(setOf("user-1"))
 
         val types = capturedEvents.map { it.type }
         assertTrue(types.contains(ObservableEventType.JWT_REQUEST_STARTED))
@@ -60,10 +60,10 @@ class AuthProviderFactoryTest {
     @Test
     fun `observer receives JWT_RETURNED_FROM_STORAGE on second credential fetch`() = runTest {
         val provider = makeProvider()
-        provider.credential(setOf(TestTarget("user-1")))
+        provider.credential(setOf("user-1"))
         capturedEvents.clear()
 
-        provider.credential(setOf(TestTarget("user-1")))
+        provider.credential(setOf("user-1"))
 
         assertTrue(capturedEvents.any { it.type == ObservableEventType.JWT_RETURNED_FROM_STORAGE })
     }
@@ -72,7 +72,7 @@ class AuthProviderFactoryTest {
     fun `observer receives JWT_FETCH_FAILED_NON_RETRYABLE on HTTP failure`() = runTest {
         val provider = makeProvider(FakeFailingHttpClient())
         try {
-            provider.credential(setOf(TestTarget("user-1")))
+            provider.credential(setOf("user-1"))
         } catch (_: Exception) {}
 
         assertTrue(capturedEvents.any { it.type == ObservableEventType.JWT_FETCH_FAILED_NON_RETRYABLE })
@@ -80,7 +80,7 @@ class AuthProviderFactoryTest {
 
     @Test
     fun `events include matching key from target`() = runTest {
-        makeProvider().credential(setOf(TestTarget("user-1")))
+        makeProvider().credential(setOf("user-1"))
 
         val requestStarted = capturedEvents.first { it.type == ObservableEventType.JWT_REQUEST_STARTED }
         assertEquals("user-1", requestStarted.properties["matchingKey"])

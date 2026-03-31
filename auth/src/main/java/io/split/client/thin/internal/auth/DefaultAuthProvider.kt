@@ -7,29 +7,29 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
 
-internal class DefaultAuthProvider<T : AuthParamsProvider>(
-    private val credentialFetcher: CredentialFetcher<T>,
+internal class DefaultAuthProvider(
+    private val credentialFetcher: CredentialFetcher,
     private val credentialStorage: CredentialStorage,
-    private val compositeKeyBuilder: (Set<T>) -> T,
-    private val defaultTarget: T? = null,
-    private val onJwtRequestStarted: (target: T) -> Unit = {},
-    private val onJwtReturnedFromStorage: (credential: JwtCredential, target: T) -> Unit = { _, _ -> },
-    private val onJwtExpiredOrInvalid: (target: T) -> Unit = {},
-    private val onJwtStored: (credential: JwtCredential, target: T) -> Unit = { _, _ -> },
-) : AuthProvider<T> {
+    private val compositeKeyBuilder: (Set<String>) -> String,
+    private val defaultTarget: String? = null,
+    private val onJwtRequestStarted: (target: String) -> Unit = {},
+    private val onJwtReturnedFromStorage: (credential: JwtCredential, target: String) -> Unit = { _, _ -> },
+    private val onJwtExpiredOrInvalid: (target: String) -> Unit = {},
+    private val onJwtStored: (credential: JwtCredential, target: String) -> Unit = { _, _ -> },
+) : AuthProvider {
 
     private val mutex = Mutex()
     // Completion callbacks may run on different threads, so this map must be thread-safe.
-    private val inFlight = ConcurrentHashMap<T, Deferred<JwtCredential>>()
+    private val inFlight = ConcurrentHashMap<String, Deferred<JwtCredential>>()
 
-    private val activeTargets = mutableSetOf<T>()
+    private val activeTargets = mutableSetOf<String>()
     private val activeTargetsLock = Any()
 
-    override fun addTarget(target: T): Boolean {
+    override fun addTarget(target: String): Boolean {
         return synchronized(activeTargetsLock) { activeTargets.add(target) }
     }
 
-    override fun removeTarget(target: T): Boolean {
+    override fun removeTarget(target: String): Boolean {
         return synchronized(activeTargetsLock) {
             activeTargets.remove(target)
             activeTargets.isEmpty()
@@ -43,8 +43,8 @@ internal class DefaultAuthProvider<T : AuthParamsProvider>(
         return credential(effective)
     }
 
-    override suspend fun credential(targets: Set<T>): JwtCredential {
-        val compositeKey = compositeKeyBuilder(targets.sortedBy { it.getUsers() }.toSet())
+    override suspend fun credential(targets: Set<String>): JwtCredential {
+        val compositeKey = compositeKeyBuilder(targets.sorted().toSet())
         onJwtRequestStarted(compositeKey)
         val stored = credentialStorage.getCredential()
         if (stored != null && !stored.isExpired()) {
@@ -64,7 +64,7 @@ internal class DefaultAuthProvider<T : AuthParamsProvider>(
         credentialStorage.removeCredential()
     }
 
-    private suspend fun fetchDeduplicated(target: T): JwtCredential = coroutineScope {
+    private suspend fun fetchDeduplicated(target: String): JwtCredential = coroutineScope {
         val deferred = mutex.withLock {
             inFlight.getOrPut(target) {
                 async {

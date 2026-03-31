@@ -6,7 +6,6 @@ import io.split.client.thin.Target
 import io.split.client.thin.internal.evaluation.toEvaluationKey
 import io.split.client.thin.internal.evaluation.toEvaluationTarget
 import io.split.client.thin.internal.auth.AuthProvider
-import io.split.client.thin.internal.secure.EvaluationTarget
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicBoolean
@@ -15,7 +14,7 @@ internal class DefaultClientManager(
     private val scope: CoroutineScope,
     private val clientFactory: (Target) -> SplitClient,
     private val pollingEnabled: AtomicBoolean = AtomicBoolean(true),
-    private val authProvider: AuthProvider<EvaluationTarget>? = null,
+    private val authProvider: AuthProvider? = null,
     private val onTargetsEmpty: (suspend () -> Unit)? = null,
 ) : ClientManager {
 
@@ -34,7 +33,7 @@ internal class DefaultClientManager(
                 val newClient = clientFactory(target)
                 clients[target.key] = newClient
                 lastTargets[target.key] = target
-                val isNew = authProvider?.addTarget(target.toEvaluationKey().toEvaluationTarget()) ?: false
+                val isNew = authProvider?.addTarget(target.toEvaluationKey().toEvaluationTarget().matchingKey) ?: false
                 if (isNew) scope.launch { authProvider?.invalidateAll() }
                 Pair(newClient, false)
             }
@@ -63,7 +62,7 @@ internal class DefaultClientManager(
         client ?: return
         client.destroy()
         if (authProvider != null && target != null) {
-            val isEmpty = authProvider.removeTarget(target.toEvaluationKey().toEvaluationTarget())
+            val isEmpty = authProvider.removeTarget(target.toEvaluationKey().toEvaluationTarget().matchingKey)
             if (isEmpty) {
                 onTargetsEmpty?.invoke()
             }
@@ -88,7 +87,7 @@ internal class DefaultClientManager(
         all.forEach { runCatching { it.destroy() } }
         if (authProvider != null) {
             for (target in targets) {
-                authProvider.removeTarget(target.toEvaluationKey().toEvaluationTarget())
+                authProvider.removeTarget(target.toEvaluationKey().toEvaluationTarget().matchingKey)
             }
         }
     }

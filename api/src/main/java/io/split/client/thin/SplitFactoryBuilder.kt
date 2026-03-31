@@ -73,19 +73,13 @@ object SplitFactoryBuilder {
 
         val defaultEvaluationTarget = defaultTarget.toEvaluationKey().toEvaluationTarget()
 
-        val authProvider = createAuthProvider<EvaluationTarget>(
+        val authProvider = createAuthProvider(
             retryableHttpClient = retryableHttpClient,
             sdkKey = sdkKey.sdkKey,
             authUrl = endpoints?.authUrl ?: DEFAULT_AUTH_URL,
             compositeObserver = compositeObserver,
-            compositeKeyBuilder = { targets ->
-                EvaluationTarget(
-                    matchingKey = targets.map { it.matchingKey }.sorted().joinToString(","),
-                    bucketingKey = null,
-                    attributes = null,
-                )
-            },
-            defaultTarget = defaultEvaluationTarget,
+            compositeKeyBuilder = { targets -> targets.sorted().joinToString(",") },
+            defaultTarget = defaultEvaluationTarget.matchingKey,
         )
 
         val syncMode = config?.sync?.mode ?: SplitClientConfig.SyncMode.STREAMING

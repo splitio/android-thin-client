@@ -11,7 +11,7 @@ import java.net.URI
 import java.net.URLEncoder
 
 internal class DefaultSecureHttpClient(
-    private val authProvider: AuthProvider<EvaluationTarget>,
+    private val authProvider: AuthProvider,
     private val retryableHttpClient: RetryableHttpClient,
     private val evaluationsUrl: String,
     private val eventsUrl: String,

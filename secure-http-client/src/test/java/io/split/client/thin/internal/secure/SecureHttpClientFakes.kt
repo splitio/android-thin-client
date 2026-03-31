@@ -48,7 +48,7 @@ internal class FakeAuthProvider(
     private val credential: JwtCredential = JwtCredential("default-token", 9999999L, false),
     private val credentialSequence: List<JwtCredential>? = null,
     val throwOnCredential: Throwable? = null,
-) : AuthProvider<EvaluationTarget> {
+) : AuthProvider {
 
     var credentialCallCount = 0
         private set
@@ -56,12 +56,12 @@ internal class FakeAuthProvider(
         private set
     private var credentialCallIndex = 0
 
-    override fun addTarget(target: EvaluationTarget): Boolean = false
-    override fun removeTarget(target: EvaluationTarget): Boolean = true
+    override fun addTarget(target: String): Boolean = false
+    override fun removeTarget(target: String): Boolean = true
 
     override suspend fun credential(): JwtCredential = credential(emptySet())
 
-    override suspend fun credential(targets: Set<EvaluationTarget>): JwtCredential {
+    override suspend fun credential(targets: Set<String>): JwtCredential {
         credentialCallCount++
         throwOnCredential?.let { throw it }
         return credentialSequence?.getOrElse(credentialCallIndex++) { credential } ?: credential
