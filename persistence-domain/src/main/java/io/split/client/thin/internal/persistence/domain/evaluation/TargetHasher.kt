@@ -1,9 +1,11 @@
 package io.split.client.thin.internal.persistence.domain.evaluation
 
+import com.goncalossilva.murmurhash.MurmurHash3
 import io.split.client.thin.internal.evaluation.EvaluationKey
-import java.security.MessageDigest
 
 internal class TargetHasher {
+
+    private val hasher = MurmurHash3()
 
     fun hash(evalKey: EvaluationKey): String {
         val keyPart = "${evalKey.key.matchingKey}:${evalKey.key.bucketingKey}"
@@ -11,7 +13,8 @@ internal class TargetHasher {
             .sortedBy { it.key }
             .joinToString(",") { "${it.key}=${it.value}" }
         val input = "$keyPart|$attrsPart"
-        val digest = MessageDigest.getInstance("SHA-256").digest(input.toByteArray(Charsets.UTF_8))
-        return digest.joinToString("") { "%02x".format(it) }
+        val bytes = input.toByteArray(Charsets.UTF_8)
+        val hash = hasher.hash128x86(bytes)
+        return "%08x%08x".format(hash[0].toLong() and 0xFFFFFFFFL, hash[1].toLong() and 0xFFFFFFFFL)
     }
 }

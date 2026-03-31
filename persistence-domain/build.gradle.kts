@@ -47,6 +47,7 @@ dependencies {
     testImplementation("org.jetbrains.kotlin:kotlin-test:1.8.0")
 
     implementation("androidx.lifecycle:lifecycle-livedata:2.5.1")
+    implementation("com.goncalossilva:murmurhash:0.4.0")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit:1.8.0")
     testImplementation("org.mockito:mockito-core:4.8.0")
     testImplementation("org.mockito:mockito-inline:4.8.0")

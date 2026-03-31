@@ -61,6 +61,6 @@ class TargetHasherTest {
     @Test
     fun `hash has fixed length`() {
         val h = hasher.hash(key("user1"))
-        assertEquals(64, h.length) // SHA-256 = 32 bytes = 64 hex chars
+        assertEquals(16, h.length) // MurmurHash3 x86_128 first 64 bits = 8 bytes = 16 hex chars
     }
 }
