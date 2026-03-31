@@ -11,7 +11,6 @@ fun createSecureHttpClient(
     eventsUrl: String,
     telemetryUrl: String,
     sdkKey: String,
-    onStreamingTargetsChanged: (suspend (Set<EvaluationTarget>) -> Unit)? = null,
     onStreamingEmpty: (suspend () -> Unit)? = null,
 ): SecureHttpClient = DefaultSecureHttpClient(
     authProvider = authProvider,
@@ -21,6 +20,5 @@ fun createSecureHttpClient(
     eventsUrl = eventsUrl,
     telemetryUrl = telemetryUrl,
     sdkKey = sdkKey,
-    onStreamingTargetsChanged = onStreamingTargetsChanged,
     onStreamingEmpty = onStreamingEmpty,
 )

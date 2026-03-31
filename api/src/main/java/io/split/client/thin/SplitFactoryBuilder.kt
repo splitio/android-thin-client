@@ -90,9 +90,6 @@ object SplitFactoryBuilder {
         val syncMode = config?.sync?.mode ?: SplitClientConfig.SyncMode.STREAMING
         val pollingEnabled = AtomicBoolean(syncMode == SplitClientConfig.SyncMode.POLLING)
 
-        // Track latest streaming targets for multi-user composite JWT in the tokenProvider.
-        // Updated atomically before streaming is started so the token is always fresh.
-        var latestStreamingTargets: Set<EvaluationTarget> = setOf(defaultEvaluationTarget)
         var streamingComponents: StreamingComponents? = null
 
         val secureHttpClient = createSecureHttpClient(
@@ -103,9 +100,6 @@ object SplitFactoryBuilder {
             eventsUrl = endpoints?.eventsUrl ?: DEFAULT_EVENTS_URL,
             telemetryUrl = endpoints?.telemetryUrl ?: DEFAULT_TELEMETRY_URL,
             sdkKey = sdkKey.sdkKey,
-            onStreamingTargetsChanged = { targets ->
-                latestStreamingTargets = targets
-            },
             onStreamingEmpty = { streamingComponents?.manager?.stopAll() },
         )
 
@@ -184,7 +178,7 @@ object SplitFactoryBuilder {
                 streamingUrl = endpoints?.streamingUrl ?: DEFAULT_STREAMING_URL,
                 retryableHttpClient = retryableHttpClient,
                 tokenProvider = {
-                    val cred = authProvider.credential(latestStreamingTargets)
+                    val cred = secureHttpClient.credentialForActiveTargets()
                     StreamingToken(cred.token, cred.connDelaySeconds, cred.pushEnabled)
                 },
                 onEvaluationFetchNotification = { fetchCoordinator.refetchAll(null, FetchReason.PUSH) },

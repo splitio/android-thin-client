@@ -9,18 +9,6 @@ import org.junit.Test
 class DefaultSecureHttpClientStreamingTest {
 
     @Test
-    fun `openStreaming calls onStreamingTargetsChanged with updated active set`() = runTest {
-        var capturedTargets: Set<EvaluationTarget>? = null
-        val (client, _, _) = makeClient(
-            onStreamingTargetsChanged = { targets -> capturedTargets = targets }
-        )
-
-        client.openStreaming(testDefaultTarget)
-
-        assertEquals(setOf(testDefaultTarget), capturedTargets)
-    }
-
-    @Test
     fun `openStreaming with no callbacks configured is a no-op`() = runTest {
         val (client, _, _) = makeClient()
 
@@ -31,10 +19,7 @@ class DefaultSecureHttpClientStreamingTest {
     @Test
     fun `openStreaming requests credential for active targets`() = runTest {
         val authProvider = FakeAuthProvider()
-        val (client, _, _) = makeClient(
-            authProvider = authProvider,
-            onStreamingTargetsChanged = { _ -> }
-        )
+        val (client, _, _) = makeClient(authProvider = authProvider)
 
         client.openStreaming(testDefaultTarget)
 
@@ -44,10 +29,7 @@ class DefaultSecureHttpClientStreamingTest {
     @Test
     fun `openStreaming invalidates credentials for a new target`() = runTest {
         val authProvider = FakeAuthProvider()
-        val (client, _, _) = makeClient(
-            authProvider = authProvider,
-            onStreamingTargetsChanged = { _ -> }
-        )
+        val (client, _, _) = makeClient(authProvider = authProvider)
 
         client.openStreaming(testDefaultTarget)
 
@@ -57,10 +39,7 @@ class DefaultSecureHttpClientStreamingTest {
     @Test
     fun `openStreaming does not invalidate credentials for an already-registered target`() = runTest {
         val authProvider = FakeAuthProvider()
-        val (client, _, _) = makeClient(
-            authProvider = authProvider,
-            onStreamingTargetsChanged = { _ -> }
-        )
+        val (client, _, _) = makeClient(authProvider = authProvider)
 
         client.openStreaming(testDefaultTarget)
         val countAfterFirst = authProvider.invalidateCallCount
@@ -72,9 +51,7 @@ class DefaultSecureHttpClientStreamingTest {
     @Test
     fun `closeStreaming calls onStreamingEmpty when no active targets remain`() = runTest {
         var emptyCalled = false
-        val (client, _, _) = makeClient(
-            onStreamingEmpty = { emptyCalled = true }
-        )
+        val (client, _, _) = makeClient(onStreamingEmpty = { emptyCalled = true })
 
         client.openStreaming(testDefaultTarget)
         client.closeStreaming(testDefaultTarget)
@@ -83,21 +60,26 @@ class DefaultSecureHttpClientStreamingTest {
     }
 
     @Test
-    fun `closeStreaming calls onStreamingTargetsChanged when other targets remain active`() = runTest {
+    fun `closeStreaming does not call onStreamingEmpty when other targets remain`() = runTest {
         val target2 = EvaluationTarget("user-2", null, null)
-        var changedCallCount = 0
         var emptyCalled = false
-        val (client, _, _) = makeClient(
-            onStreamingTargetsChanged = { _ -> changedCallCount++ },
-            onStreamingEmpty = { emptyCalled = true },
-        )
+        val (client, _, _) = makeClient(onStreamingEmpty = { emptyCalled = true })
 
         client.openStreaming(testDefaultTarget)
         client.openStreaming(target2)
         client.closeStreaming(testDefaultTarget)
 
-        // Called for open(default), open(target2), close(default) — target2 remains
-        assertEquals(3, changedCallCount)
         assertFalse(emptyCalled)
+    }
+
+    @Test
+    fun `credentialForActiveTargets returns credential from authProvider`() = runTest {
+        val authProvider = FakeAuthProvider()
+        val (client, _, _) = makeClient(authProvider = authProvider)
+
+        client.openStreaming(testDefaultTarget)
+        val cred = client.credentialForActiveTargets()
+
+        assertEquals("default-token", cred.token)
     }
 }

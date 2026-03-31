@@ -304,6 +304,7 @@ class FakeSecureHttpClient : SecureHttpClient {
     override suspend fun postTelemetry(payload: String): HttpResponse = error("not used")
     override suspend fun openStreaming(target: EvaluationTarget) { openStreamingCalls.add(target) }
     override suspend fun closeStreaming(target: EvaluationTarget) { closeStreamingCalls.add(target) }
+    override suspend fun credentialForActiveTargets() = error("not used")
 }
 
 class FakeEvaluationFetchCoordinator : EvaluationFetchCoordinator {

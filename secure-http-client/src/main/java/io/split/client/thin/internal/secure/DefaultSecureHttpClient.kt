@@ -6,6 +6,7 @@ import io.split.client.thin.http.HttpRequestDescriptor
 import io.split.client.thin.http.RequestCategory
 import io.split.client.thin.http.RetryableHttpClient
 import io.split.client.thin.internal.auth.AuthProvider
+import io.split.client.thin.internal.auth.JwtCredential
 import java.net.URI
 import java.net.URLEncoder
 
@@ -19,7 +20,6 @@ internal class DefaultSecureHttpClient(
     private val sdkKey: String,
     private val impressionsMode: Int? = null,
     private val sdkVersion: String = SDK_VERSION,
-    private val onStreamingTargetsChanged: (suspend (Set<EvaluationTarget>) -> Unit)? = null,
     private val onStreamingEmpty: (suspend () -> Unit)? = null,
 ) : SecureHttpClient {
 
@@ -56,28 +56,25 @@ internal class DefaultSecureHttpClient(
     }
 
     override suspend fun openStreaming(target: EvaluationTarget) {
-        val (currentTargets, isNew) = synchronized(activeTargetsLock) {
-            val added = activeTargets.add(target)
-            Pair(activeTargets.toSet(), added)
-        }
+        val isNew = synchronized(activeTargetsLock) { activeTargets.add(target) }
         if (isNew) {
             authProvider.invalidateAll()
         }
-        authProvider.credential(currentTargets)
-        onStreamingTargetsChanged?.invoke(currentTargets)
+        authProvider.credential(effectiveTargets())
     }
 
     override suspend fun closeStreaming(target: EvaluationTarget) {
-        val currentTargets = synchronized(activeTargetsLock) {
+        val isEmpty = synchronized(activeTargetsLock) {
             activeTargets.remove(target)
-            activeTargets.toSet()
+            activeTargets.isEmpty()
         }
-        if (currentTargets.isEmpty()) {
+        if (isEmpty) {
             onStreamingEmpty?.invoke()
-        } else {
-            authProvider.credential(currentTargets)
-            onStreamingTargetsChanged?.invoke(currentTargets)
         }
+    }
+
+    override suspend fun credentialForActiveTargets(): JwtCredential {
+        return authProvider.credential(effectiveTargets())
     }
 
     private fun effectiveTargets(): Set<EvaluationTarget> {

@@ -29,7 +29,6 @@ internal fun makeClient(
     impressionsMode: Int? = null,
     sdkVersion: String = "test-version",
     sdkKey: String = "test-sdk-key",
-    onStreamingTargetsChanged: (suspend (Set<EvaluationTarget>) -> Unit)? = null,
     onStreamingEmpty: (suspend () -> Unit)? = null,
 ): Triple<DefaultSecureHttpClient, FakeAuthProvider, FakeRetryableHttpClient> = Triple(
     DefaultSecureHttpClient(
@@ -42,7 +41,6 @@ internal fun makeClient(
         sdkKey = sdkKey,
         impressionsMode = impressionsMode,
         sdkVersion = sdkVersion,
-        onStreamingTargetsChanged = onStreamingTargetsChanged,
         onStreamingEmpty = onStreamingEmpty,
     ),
     authProvider,
