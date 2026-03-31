@@ -32,12 +32,6 @@ This keeps the module focused purely on persistence without domain knowledge.
 - `body` — Pre-serialized JSON string
 - `updatedAt` — Last update timestamp
 
-**`attributes` table** — Stores attributes associated with a key:
-- `key` (PK) — Same serialized Key used in evaluations/metadata tables
-- `json` — Stringified attributes JSON
-- `updatedAt` — Last update timestamp
-
-The `key` column is shared across all three evaluation-related tables, allowing the consumer to JOIN and reconstruct full `EvaluationKey` objects (Key + attributes).
 
 ### Events
 
@@ -63,7 +57,6 @@ The `key` column is shared across all three evaluation-related tables, allowing 
 
 - `EvaluationEntity` — Evaluation record with key, flagName, and body
 - `EvaluationMetadataEntity` — Metadata for each key with changeNumber
-- `AttributesEntity` — Attributes associated with a key
 - `EventEntity` — Event queue record
 
 ## Dependencies
@@ -104,13 +97,3 @@ val evaluations = data?.evaluations?.map { jsonString ->
 }
 ```
 
-**Attributes storage:**
-```kotlin
-// Consumer stores attributes for a key
-val attributesJson = """{"plan":"premium","role":"admin"}"""
-attributesDao.insert(AttributesEntity(serializedKey, attributesJson, System.currentTimeMillis()))
-
-// When loading, consumer reads attributes alongside evaluations to rebuild EvaluationKey
-val attributes = attributesDao.getByKey(serializedKey)
-val evalKey = EvaluationKey(deserializeKey(serializedKey), deserializeAttributes(attributes?.json))
-```
