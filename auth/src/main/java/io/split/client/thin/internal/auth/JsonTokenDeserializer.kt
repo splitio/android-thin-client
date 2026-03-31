@@ -17,6 +17,7 @@ internal class JsonTokenDeserializer(
             token = dto.token,
             expiresAt = decodeJwtExp(dto.token),
             pushEnabled = dto.pushEnabled,
+            connDelaySeconds = dto.connDelay,
         )
     }
 
@@ -39,4 +40,5 @@ internal class JsonTokenDeserializer(
 private data class AuthResponse(
     @SerialName("token") val token: String,
     @SerialName("pushEnabled") val pushEnabled: Boolean,
+    @SerialName("connDelay") val connDelay: Long = 0,
 )

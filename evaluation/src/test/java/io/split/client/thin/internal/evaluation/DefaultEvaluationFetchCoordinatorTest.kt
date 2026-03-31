@@ -164,4 +164,93 @@ class DefaultEvaluationFetchCoordinatorTest {
         assertNotNull(caughtError)
         assertFalse(callbackInvoked)
     }
+
+    @Test
+    fun `refetchAll calls fetchIfNeeded for each key in fetchedKeys`() = runTest {
+        val key1 = EvaluationKey(Key("user-1"))
+        val key2 = EvaluationKey(Key("user-2"))
+        val key3 = EvaluationKey(Key("user-3"))
+        val (coordinator, provider, _) = makeCoordinator()
+
+        // Populate fetchedKeys by fetching 3 keys
+        coordinator.fetchIfNeeded(key1, null, FetchReason.INITIALIZATION)
+        coordinator.fetchIfNeeded(key2, null, FetchReason.INITIALIZATION)
+        coordinator.fetchIfNeeded(key3, null, FetchReason.INITIALIZATION)
+
+        // Now refetch all
+        coordinator.refetchAll(null, FetchReason.PERIODIC)
+
+        // Should have 6 total calls: 3 initial + 3 from refetchAll
+        assertEquals(6, provider.fetchCalls.size)
+        // Verify the last 3 calls were with PERIODIC reason
+        val refetchCalls = provider.fetchCalls.drop(3)
+        assertTrue(refetchCalls.any { it.first == key1 })
+        assertTrue(refetchCalls.any { it.first == key2 })
+        assertTrue(refetchCalls.any { it.first == key3 })
+    }
+
+    @Test
+    fun `refetchAll passes filters and reason to each fetch`() = runTest {
+        val key1 = EvaluationKey(Key("user-1"))
+        val key2 = EvaluationKey(Key("user-2"))
+        val (coordinator, provider, _) = makeCoordinator()
+
+        // Populate fetchedKeys
+        coordinator.fetchIfNeeded(key1, null, FetchReason.INITIALIZATION)
+        coordinator.fetchIfNeeded(key2, null, FetchReason.INITIALIZATION)
+
+        val filters = EvaluationFilters(flagNames = setOf("flag-a"), flagSets = null)
+        coordinator.refetchAll(filters, FetchReason.PUSH)
+
+        // Verify the refetch calls (last 2) have correct filters
+        val refetchCalls = provider.fetchCalls.drop(2)
+        assertEquals(2, refetchCalls.size)
+        refetchCalls.forEach { (_, passedFilters) ->
+            assertEquals(setOf("flag-a"), passedFilters?.flagNames)
+        }
+    }
+
+    @Test
+    fun `refetchAll continues on error`() = runTest {
+        val key1 = EvaluationKey(Key("user-1"))
+        val key2 = EvaluationKey(Key("user-2"))
+        val key3 = EvaluationKey(Key("user-3"))
+
+        // Create a provider that throws on the second refetch call
+        var fetchCount = 0
+        val provider = object : EvaluationProvider {
+            override suspend fun fetch(evalKey: EvaluationKey, filters: EvaluationFilters?): EvaluationChange {
+                fetchCount++
+                // Throw on the 5th call overall (2nd refetch)
+                if (fetchCount == 5) throw RuntimeException("fetch failed")
+                return EvaluationChange(evalKey, 1L, emptyList())
+            }
+        }
+
+        val coordinator = DefaultEvaluationFetchCoordinator(
+            provider = provider,
+            readStorage = FakeEvaluationReadStorage(),
+            writeStorage = FakeEvaluationWriteStorage(),
+        )
+
+        // Populate fetchedKeys (calls 1, 2, 3)
+        coordinator.fetchIfNeeded(key1, null, FetchReason.INITIALIZATION)
+        coordinator.fetchIfNeeded(key2, null, FetchReason.INITIALIZATION)
+        coordinator.fetchIfNeeded(key3, null, FetchReason.INITIALIZATION)
+
+        // Refetch all - should attempt all 3 despite error on 2nd (calls 4, 5, 6)
+        coordinator.refetchAll(null, FetchReason.PERIODIC)
+
+        // All 6 calls should have been attempted
+        assertEquals(6, fetchCount)
+    }
+
+    @Test
+    fun `refetchAll does nothing when fetchedKeys is empty`() = runTest {
+        val (coordinator, provider, _) = makeCoordinator()
+
+        coordinator.refetchAll(null, FetchReason.PERIODIC)
+
+        assertEquals(0, provider.fetchCalls.size)
+    }
 }

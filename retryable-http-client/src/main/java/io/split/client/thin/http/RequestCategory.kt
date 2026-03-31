@@ -6,4 +6,5 @@ enum class RequestCategory {
     EVALUATIONS,
     EVENTS,
     TELEMETRY,
+    SSE,
 }

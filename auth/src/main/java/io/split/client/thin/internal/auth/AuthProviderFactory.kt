@@ -5,14 +5,16 @@ import io.split.client.thin.internal.observer.CompositeObserver
 import io.split.client.thin.internal.observer.ObservableEvent
 import io.split.client.thin.internal.observer.ObservableEventType
 
-fun <T : AuthParamsProvider> createAuthProvider(
+fun createAuthProvider(
     retryableHttpClient: RetryableHttpClient,
     sdkKey: String,
     authUrl: String,
     compositeObserver: CompositeObserver,
-): AuthProvider<T> {
-    val storage = InMemoryCredentialStorage<T>()
-    val fetcher = DefaultCredentialFetcher<T>(
+    compositeKeyBuilder: (Set<String>) -> String,
+    defaultTarget: String? = null,
+): AuthProvider {
+    val storage = InMemoryCredentialStorage()
+    val fetcher = DefaultCredentialFetcher(
         retryableHttpClient = retryableHttpClient,
         sdkKey = sdkKey,
         serviceUrl = authUrl,
@@ -20,7 +22,7 @@ fun <T : AuthParamsProvider> createAuthProvider(
             compositeObserver.notifyEvent(
                 ObservableEvent(
                     type = ObservableEventType.JWT_FETCH_STARTED,
-                    properties = mapOf("matchingKey" to extractMatchingKey(target))
+                    properties = mapOf("matchingKey" to target)
                 )
             )
         },
@@ -29,7 +31,7 @@ fun <T : AuthParamsProvider> createAuthProvider(
                 ObservableEvent(
                     type = ObservableEventType.JWT_FETCH_SUCCEEDED,
                     properties = mapOf(
-                        "matchingKey" to extractMatchingKey(target),
+                        "matchingKey" to target,
                         "expiresAt" to credential.expiresAt.toString(),
                         "pushEnabled" to credential.pushEnabled.toString()
                     )
@@ -41,7 +43,7 @@ fun <T : AuthParamsProvider> createAuthProvider(
                 ObservableEvent(
                     type = ObservableEventType.JWT_FETCH_FAILED_NON_RETRYABLE,
                     properties = mapOf(
-                        "matchingKey" to extractMatchingKey(target),
+                        "matchingKey" to target,
                         "error" to error.message.orEmpty()
                     )
                 )
@@ -51,11 +53,13 @@ fun <T : AuthParamsProvider> createAuthProvider(
     return DefaultAuthProvider(
         credentialFetcher = fetcher,
         credentialStorage = storage,
+        compositeKeyBuilder = compositeKeyBuilder,
+        defaultTarget = defaultTarget,
         onJwtRequestStarted = { target ->
             compositeObserver.notifyEvent(
                 ObservableEvent(
                     type = ObservableEventType.JWT_REQUEST_STARTED,
-                    properties = mapOf("matchingKey" to extractMatchingKey(target))
+                    properties = mapOf("matchingKey" to target)
                 )
             )
         },
@@ -64,7 +68,7 @@ fun <T : AuthParamsProvider> createAuthProvider(
                 ObservableEvent(
                     type = ObservableEventType.JWT_RETURNED_FROM_STORAGE,
                     properties = mapOf(
-                        "matchingKey" to extractMatchingKey(target),
+                        "matchingKey" to target,
                         "expiresAt" to credential.expiresAt.toString()
                     )
                 )
@@ -74,7 +78,7 @@ fun <T : AuthParamsProvider> createAuthProvider(
             compositeObserver.notifyEvent(
                 ObservableEvent(
                     type = ObservableEventType.JWT_EXPIRED_OR_INVALID,
-                    properties = mapOf("matchingKey" to extractMatchingKey(target))
+                    properties = mapOf("matchingKey" to target)
                 )
             )
         },
@@ -83,7 +87,7 @@ fun <T : AuthParamsProvider> createAuthProvider(
                 ObservableEvent(
                     type = ObservableEventType.JWT_STORED,
                     properties = mapOf(
-                        "matchingKey" to extractMatchingKey(target),
+                        "matchingKey" to target,
                         "expiresAt" to credential.expiresAt.toString()
                     )
                 )
@@ -91,6 +95,3 @@ fun <T : AuthParamsProvider> createAuthProvider(
         },
     )
 }
-
-private fun <T : AuthParamsProvider> extractMatchingKey(target: T): String =
-    target.getUsers()

@@ -10,16 +10,16 @@ import io.split.client.thin.SplitVoidCallback
 import io.split.client.thin.Target
 import io.split.client.thin.events.EventSubmissionCoordinator
 import io.split.client.thin.events.EventsPeriodicScheduler
-import io.split.client.thin.internal.evaluation.DefaultEvaluationPeriodicScheduler
 import io.split.client.thin.internal.evaluation.EvaluationFetchCoordinator
 import io.split.client.thin.internal.evaluation.EvaluationRepository
+import io.split.client.thin.internal.evaluation.PollingScheduler
 import io.split.client.thin.internal.evaluation.toEvaluationKey
 import io.split.client.thin.internal.lifecycle.LifecycleComponent
 import io.split.client.thin.internal.lifecycle.LifecycleManager
+import io.split.client.thin.internal.secure.EvaluationFilters
 import io.split.client.thin.internal.observer.DefaultCompositeObserver
 import io.split.client.thin.internal.observer.ObservableEvent
 import io.split.client.thin.internal.observer.ObservableEventType
-import io.split.client.thin.internal.secure.EvaluationFilters
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -34,7 +34,7 @@ internal class DefaultSplitFactory(
     private val evaluationRepository: EvaluationRepository,
     private val filters: EvaluationFilters?,
     private val fetchCoordinator: EvaluationFetchCoordinator,
-    private val schedulerIntervalMillis: Long,
+    private val pollingScheduler: PollingScheduler? = null,
     private val eventsScheduler: EventsPeriodicScheduler? = null,
     private val eventsCoordinator: EventSubmissionCoordinator? = null,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
@@ -48,23 +48,6 @@ internal class DefaultSplitFactory(
             evaluationRepository = evaluationRepository,
             filters = filters,
             fallbackCalculator = buildFallbackCalculator(config),
-            fetchCoordinator = fetchCoordinator,
-            schedulerIntervalMillis = schedulerIntervalMillis,
-            lifecycleManager = lifecycleManager,
-            schedulerFactory = { coordinator, intervalMillis ->
-                DefaultEvaluationPeriodicScheduler(
-                    fetchCoordinator = coordinator,
-                    intervalMillis = intervalMillis,
-                    onPollTrigger = { interval ->
-                        compositeObserver.notifyEvent(
-                            ObservableEvent(
-                                type = ObservableEventType.POLL_TRIGGER,
-                                properties = mapOf("rate" to "${interval / 1000}s")
-                            )
-                        )
-                    }
-                )
-            },
         ),
     ),
     private val splitManager: SplitManager = DefaultSplitManager(evaluationRepository, defaultTarget.toEvaluationKey()),
@@ -107,6 +90,7 @@ internal class DefaultSplitFactory(
     }
 
     override suspend fun destroy() {
+        pollingScheduler?.stop()
         eventsScheduler?.stop()
         eventsCoordinator?.flush()
         lifecycleManager?.destroy()

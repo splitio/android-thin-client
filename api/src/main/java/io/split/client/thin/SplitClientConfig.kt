@@ -205,6 +205,7 @@ class SplitClientConfig private constructor(
         val evaluationsUrl: String,
         val eventsUrl: String,
         val telemetryUrl: String,
+        val streamingUrl: String? = null,
     )
 
     /**
@@ -297,12 +298,14 @@ class ServiceEndpointsDsl {
     var evaluationsUrl: String = ""
     var eventsUrl: String = ""
     var telemetryUrl: String = ""
+    var streamingUrl: String? = null
 
     internal fun build() = SplitClientConfig.ServiceEndpoints(
         authUrl = authUrl,
         evaluationsUrl = evaluationsUrl,
         eventsUrl = eventsUrl,
         telemetryUrl = telemetryUrl,
+        streamingUrl = streamingUrl,
     )
 }
 

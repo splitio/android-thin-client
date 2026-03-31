@@ -20,15 +20,24 @@ import io.split.client.thin.internal.DefaultClientFactory
 import io.split.client.thin.internal.DefaultClientManager
 import io.split.client.thin.internal.DefaultSplitFactory
 import io.split.client.thin.internal.auth.createAuthProvider
+import io.split.client.thin.internal.evaluation.DefaultPollingScheduler
+import io.split.client.thin.internal.evaluation.FetchReason
+import io.split.client.thin.internal.evaluation.PollingScheduler
 import io.split.client.thin.internal.evaluation.createEvaluationComponents
 import io.split.client.thin.internal.evaluation.toEvaluationKey
 import io.split.client.thin.internal.evaluation.toEvaluationTarget
 import io.split.client.thin.internal.lifecycle.DefaultLifecycleManager
+import io.split.client.thin.internal.lifecycle.LifecycleComponent
 import io.split.client.thin.internal.observer.AndroidLoggerAdapter
 import io.split.client.thin.internal.observer.DefaultCompositeObserver
 import io.split.client.thin.internal.observer.LoggerObserver
+import io.split.client.thin.internal.observer.ObservableEvent
+import io.split.client.thin.internal.observer.ObservableEventType
 import io.split.client.thin.internal.secure.EvaluationTarget
 import io.split.client.thin.internal.secure.createSecureHttpClient
+import io.split.client.thin.internal.streaming.StreamingComponents
+import io.split.client.thin.internal.streaming.StreamingToken
+import io.split.client.thin.internal.streaming.createStreamingComponents
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -47,6 +56,7 @@ object SplitFactoryBuilder {
     private const val DEFAULT_EVALUATIONS_URL = "https://sdk.split.io/api/v2/evaluations"
     private const val DEFAULT_EVENTS_URL = "https://events.split.io/api/v1/events/bulk"
     private const val DEFAULT_TELEMETRY_URL = "https://telemetry.split.io/api/v1/metrics/config"
+    private const val DEFAULT_STREAMING_URL = "https://streaming.split.io/sse"
 
     /**
      * Creates a factory configured with the SDK key, default target and config.
@@ -64,18 +74,24 @@ object SplitFactoryBuilder {
         val retryableHttpClient = createRetryableHttpClient(httpClient, compositeObserver)
         val endpoints = config?.sync?.serviceEndpoints
 
-        val authProvider = createAuthProvider<EvaluationTarget>(
+        val defaultEvaluationTarget = defaultTarget.toEvaluationKey().toEvaluationTarget()
+
+        val authProvider = createAuthProvider(
             retryableHttpClient = retryableHttpClient,
             sdkKey = sdkKey.sdkKey,
             authUrl = endpoints?.authUrl ?: DEFAULT_AUTH_URL,
             compositeObserver = compositeObserver,
+            compositeKeyBuilder = { targets -> targets.sorted().joinToString(",") },
+            defaultTarget = defaultEvaluationTarget.matchingKey,
         )
 
-        val defaultEvaluationTarget = defaultTarget.toEvaluationKey().toEvaluationTarget()
+        val syncMode = config?.sync?.mode ?: SplitClientConfig.SyncMode.STREAMING
+
+        var streamingComponents: StreamingComponents? = null
+
         val secureHttpClient = createSecureHttpClient(
             authProvider = authProvider,
             retryableHttpClient = retryableHttpClient,
-            defaultTarget = defaultEvaluationTarget,
             evaluationsUrl = endpoints?.evaluationsUrl ?: DEFAULT_EVALUATIONS_URL,
             eventsUrl = endpoints?.eventsUrl ?: DEFAULT_EVENTS_URL,
             telemetryUrl = endpoints?.telemetryUrl ?: DEFAULT_TELEMETRY_URL,
@@ -134,6 +150,77 @@ object SplitFactoryBuilder {
             },
         )
 
+        val clientManager = DefaultClientManager(
+            scope = factoryScope,
+            clientFactory = DefaultClientFactory(
+                compositeObserver = compositeObserver,
+                scope = factoryScope,
+                evaluationRepository = evaluationRepository,
+                filters = null,
+                fallbackCalculator = DefaultSplitFactory.buildFallbackCalculator(config),
+                onEventPush = eventsPushHandler,
+                flushFn = { eventsCoordinator.flush() },
+            ),
+            authProvider = authProvider,
+            onTargetsEmpty = { streamingComponents?.manager?.stopAll() },
+        )
+
+        // Polling scheduler - created on-demand
+        var pollingScheduler: PollingScheduler? = null
+        val schedulerLock = Any()
+
+        // Helper to create and register scheduler
+        fun getOrCreateScheduler(): PollingScheduler = synchronized(schedulerLock) {
+            pollingScheduler ?: DefaultPollingScheduler(
+                fetchCoordinator = fetchCoordinator,
+                intervalMillis = schedulerIntervalMillis,
+                scope = factoryScope,
+                onPollTrigger = { interval ->
+                    compositeObserver.notifyEvent(
+                        ObservableEvent(
+                            type = ObservableEventType.POLL_TRIGGER,
+                            properties = mapOf("rate" to "${interval / 1000}s")
+                        )
+                    )
+                }
+            ).also { scheduler ->
+                pollingScheduler = scheduler
+                // Register with lifecycle manager
+                lifecycleManager.register(object : LifecycleComponent {
+                    override fun pause() = scheduler.pause()
+                    override fun resume() = scheduler.resume()
+                })
+            }
+        }
+
+        if (syncMode == SplitClientConfig.SyncMode.STREAMING) {
+            createStreamingComponents(
+                streamingUrl = endpoints?.streamingUrl ?: DEFAULT_STREAMING_URL,
+                retryableHttpClient = retryableHttpClient,
+                tokenProvider = {
+                    val cred = authProvider.credential()
+                    StreamingToken(cred.token, cred.connDelaySeconds, cred.pushEnabled)
+                },
+                onEvaluationFetchNotification = { fetchCoordinator.refetchAll(null, FetchReason.PUSH) },
+                onPushDisabled = {
+                    fetchCoordinator.refetchAll(null, FetchReason.PERIODIC)
+                    getOrCreateScheduler().start()
+                },
+            ).apply {
+                // Register with lifecycle manager
+                lifecycleManager.register(object : LifecycleComponent {
+                    override fun pause() = manager.pause()
+                    override fun resume() = manager.resume()
+                })
+            }.apply {
+                // start
+                startTrigger()
+            }
+        } else {
+            // Polling mode - create and start immediately
+            getOrCreateScheduler().start()
+        }
+
         return DefaultSplitFactory(
             defaultTarget = defaultTarget,
             config = config,
@@ -141,27 +228,14 @@ object SplitFactoryBuilder {
             evaluationRepository = evaluationRepository,
             filters = null,
             fetchCoordinator = fetchCoordinator,
-            schedulerIntervalMillis = schedulerIntervalMillis,
+            pollingScheduler = pollingScheduler,
             eventsScheduler = eventsScheduler,
             eventsCoordinator = eventsCoordinator,
             scope = factoryScope,
             compositeObserver = compositeObserver,
             lifecycleManager = lifecycleManager,
-            clientManager = DefaultClientManager(
-                factoryScope,
-                DefaultClientFactory(
-                    compositeObserver = compositeObserver,
-                    scope = factoryScope,
-                    evaluationRepository = evaluationRepository,
-                    filters = null,
-                    fallbackCalculator = DefaultSplitFactory.buildFallbackCalculator(config),
-                    fetchCoordinator = fetchCoordinator,
-                    schedulerIntervalMillis = schedulerIntervalMillis,
-                    onEventPush = eventsPushHandler,
-                    flushFn = { eventsCoordinator.flush() },
-                    lifecycleManager = lifecycleManager,
-                )
-            ),
+            clientManager = clientManager,
         )
     }
+
 }

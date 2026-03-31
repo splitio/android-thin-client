@@ -32,6 +32,8 @@ val fusedIncludedProjects = listOf(
     project(":persistence"),
     project(":observer"),
     project(":events"),
+    project(":streaming-thin"),
+    project(":streaming"),
     project(":executor"),
     project(":submitter"),
 )

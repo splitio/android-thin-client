@@ -32,6 +32,7 @@ include(":secure-http-client")
 include(":events-tracking")
 include(":evaluation")
 include(":persistence")
+include(":streaming-thin")
 include(":e2e")
 // include(":sdk")
 
@@ -43,6 +44,8 @@ listOf<String>(
     "backoff",
     "tracker",
     "events",
+    "streaming",
+    "streaming-support",
     "executor",
     "submitter",
 ).forEach {

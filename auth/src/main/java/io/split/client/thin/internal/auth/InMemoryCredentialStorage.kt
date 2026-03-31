@@ -1,26 +1,25 @@
 package io.split.client.thin.internal.auth
 
-import java.util.concurrent.ConcurrentHashMap
+internal class InMemoryCredentialStorage(
+    private val secureStorage: SecureStorage = NoOpSecureStorage(),
+) : CredentialStorage {
 
-internal class InMemoryCredentialStorage<T : Any>(
-    private val secureStorage: SecureStorage<T> = NoOpSecureStorage(),
-) : CredentialStorage<T> {
+    @Volatile
+    private var cached: JwtCredential? = null
 
-    private val cache = ConcurrentHashMap<T, JwtCredential>()
-
-    override suspend fun getCredential(target: T): JwtCredential? {
-        return cache[target] ?: secureStorage.getCredential(target)?.also {
-            cache[target] = it
+    override suspend fun getCredential(): JwtCredential? {
+        return cached ?: secureStorage.getCredential()?.also {
+            cached = it
         }
     }
 
-    override suspend fun saveCredential(credential: JwtCredential, target: T) {
-        cache[target] = credential
-        secureStorage.saveCredential(credential, target)
+    override suspend fun saveCredential(credential: JwtCredential) {
+        cached = credential
+        secureStorage.saveCredential(credential)
     }
 
-    override suspend fun removeCredential(target: T) {
-        cache.remove(target)
-        secureStorage.removeCredential(target)
+    override suspend fun removeCredential() {
+        cached = null
+        secureStorage.removeCredential()
     }
 }

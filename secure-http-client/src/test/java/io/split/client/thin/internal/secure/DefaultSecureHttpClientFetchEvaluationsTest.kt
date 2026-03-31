@@ -228,7 +228,7 @@ class DefaultSecureHttpClientFetchEvaluationsTest {
 
         client.fetchEvaluations(testDefaultTarget, testDefaultFilters)
 
-        assertEquals(1, auth.invalidateCallCount)
+        assertEquals(1, auth.invalidateCallCount) // once for 401
         assertEquals(2, http.executeCallCount)
         assertEquals("Bearer second-token", http.requests[1].headers["Authorization"])
     }

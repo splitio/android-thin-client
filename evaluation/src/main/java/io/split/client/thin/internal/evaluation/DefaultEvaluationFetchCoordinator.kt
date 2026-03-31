@@ -41,4 +41,15 @@ class DefaultEvaluationFetchCoordinator(
             inFlight.remove(evalKey)
         }
     }
+
+    override suspend fun refetchAll(filters: EvaluationFilters?, reason: FetchReason) {
+        val snapshot = fetchedKeys.toSet()
+        for (evalKey in snapshot) {
+            try {
+                fetchIfNeeded(evalKey, filters, reason)
+            } catch (e: Throwable) {
+                // Silently continue - errors don't stop the batch
+            }
+        }
+    }
 }

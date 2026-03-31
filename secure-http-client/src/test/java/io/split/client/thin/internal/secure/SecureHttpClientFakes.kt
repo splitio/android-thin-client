@@ -33,7 +33,6 @@ internal fun makeClient(
     DefaultSecureHttpClient(
         authProvider = authProvider,
         retryableHttpClient = httpClient,
-        defaultTarget = testDefaultTarget,
         evaluationsUrl = testEvaluationsUrl,
         eventsUrl = testEventsUrl,
         telemetryUrl = testTelemetryUrl,
@@ -49,21 +48,26 @@ internal class FakeAuthProvider(
     private val credential: JwtCredential = JwtCredential("default-token", 9999999L, false),
     private val credentialSequence: List<JwtCredential>? = null,
     val throwOnCredential: Throwable? = null,
-) : AuthProvider<EvaluationTarget> {
+) : AuthProvider {
 
-    var lastCredentialTarget: EvaluationTarget? = null
+    var credentialCallCount = 0
         private set
     var invalidateCallCount = 0
         private set
     private var credentialCallIndex = 0
 
-    override suspend fun credential(target: EvaluationTarget): JwtCredential {
-        lastCredentialTarget = target
+    override fun addTarget(target: String): Boolean = false
+    override fun removeTarget(target: String): Boolean = true
+
+    override suspend fun credential(): JwtCredential = credential(emptySet())
+
+    override suspend fun credential(targets: Set<String>): JwtCredential {
+        credentialCallCount++
         throwOnCredential?.let { throw it }
         return credentialSequence?.getOrElse(credentialCallIndex++) { credential } ?: credential
     }
 
-    override suspend fun invalidate(target: EvaluationTarget) {
+    override suspend fun invalidateAll() {
         invalidateCallCount++
     }
 }

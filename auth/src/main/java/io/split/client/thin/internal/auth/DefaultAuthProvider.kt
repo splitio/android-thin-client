@@ -7,45 +7,69 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
 
-internal class DefaultAuthProvider<T : AuthParamsProvider>(
-    private val credentialFetcher: CredentialFetcher<T>,
-    private val credentialStorage: CredentialStorage<T>,
-    private val onJwtRequestStarted: (target: T) -> Unit = {},
-    private val onJwtReturnedFromStorage: (credential: JwtCredential, target: T) -> Unit = { _, _ -> },
-    private val onJwtExpiredOrInvalid: (target: T) -> Unit = {},
-    private val onJwtStored: (credential: JwtCredential, target: T) -> Unit = { _, _ -> },
-) : AuthProvider<T> {
+internal class DefaultAuthProvider(
+    private val credentialFetcher: CredentialFetcher,
+    private val credentialStorage: CredentialStorage,
+    private val compositeKeyBuilder: (Set<String>) -> String,
+    private val defaultTarget: String? = null,
+    private val onJwtRequestStarted: (target: String) -> Unit = {},
+    private val onJwtReturnedFromStorage: (credential: JwtCredential, target: String) -> Unit = { _, _ -> },
+    private val onJwtExpiredOrInvalid: (target: String) -> Unit = {},
+    private val onJwtStored: (credential: JwtCredential, target: String) -> Unit = { _, _ -> },
+) : AuthProvider {
 
     private val mutex = Mutex()
     // Completion callbacks may run on different threads, so this map must be thread-safe.
-    private val inFlight = ConcurrentHashMap<T, Deferred<JwtCredential>>()
+    private val inFlight = ConcurrentHashMap<String, Deferred<JwtCredential>>()
 
-    override suspend fun credential(target: T): JwtCredential {
-        onJwtRequestStarted(target)
-        val stored = credentialStorage.getCredential(target)
+    private val activeTargets = mutableSetOf<String>()
+    private val activeTargetsLock = Any()
+
+    override fun addTarget(target: String): Boolean {
+        return synchronized(activeTargetsLock) { activeTargets.add(target) }
+    }
+
+    override fun removeTarget(target: String): Boolean {
+        return synchronized(activeTargetsLock) {
+            activeTargets.remove(target)
+            activeTargets.isEmpty()
+        }
+    }
+
+    override suspend fun credential(): JwtCredential {
+        val effective = synchronized(activeTargetsLock) {
+            activeTargets.toSet().ifEmpty { defaultTarget?.let { setOf(it) } ?: emptySet() }
+        }
+        return credential(effective)
+    }
+
+    override suspend fun credential(targets: Set<String>): JwtCredential {
+        val compositeKey = compositeKeyBuilder(targets.sorted().toSet())
+        onJwtRequestStarted(compositeKey)
+        val stored = credentialStorage.getCredential()
         if (stored != null && !stored.isExpired()) {
-            onJwtReturnedFromStorage(stored, target)
+            onJwtReturnedFromStorage(stored, compositeKey)
             return stored
         } else if (stored != null) {
-            onJwtExpiredOrInvalid(target)
+            onJwtExpiredOrInvalid(compositeKey)
         }
 
-        return fetchDeduplicated(target)
+        return fetchDeduplicated(compositeKey)
     }
 
-    override suspend fun invalidate(target: T) {
+    override suspend fun invalidateAll() {
         mutex.withLock {
-            inFlight.remove(target)
+            inFlight.clear()
         }
-        credentialStorage.removeCredential(target)
+        credentialStorage.removeCredential()
     }
 
-    private suspend fun fetchDeduplicated(target: T): JwtCredential = coroutineScope {
+    private suspend fun fetchDeduplicated(target: String): JwtCredential = coroutineScope {
         val deferred = mutex.withLock {
             inFlight.getOrPut(target) {
                 async {
                     val credential = credentialFetcher.fetchCredential(target)
-                    credentialStorage.saveCredential(credential, target)
+                    credentialStorage.saveCredential(credential)
                     onJwtStored(credential, target)
                     credential
                 }.also { newDeferred ->

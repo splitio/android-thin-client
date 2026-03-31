@@ -27,8 +27,6 @@ class FakeSecureHttpClient(
 
     override suspend fun postEvents(payload: String): HttpResponse = FakeHttpResponse(200, null)
     override suspend fun postTelemetry(payload: String): HttpResponse = FakeHttpResponse(200, null)
-    override suspend fun openStreaming(target: EvaluationTarget) = Unit
-    override suspend fun closeStreaming() = Unit
 }
 
 class FakeHttpResponse(
@@ -119,9 +117,14 @@ class FakeEvaluationFetchCoordinator(
 ) : EvaluationFetchCoordinator {
 
     val fetchCalls = mutableListOf<Triple<EvaluationKey, EvaluationFilters?, FetchReason>>()
+    val refetchAllCalls = mutableListOf<Pair<EvaluationFilters?, FetchReason>>()
 
     override suspend fun fetchIfNeeded(evalKey: EvaluationKey, filters: EvaluationFilters?, reason: FetchReason): Boolean {
         fetchCalls.add(Triple(evalKey, filters, reason))
         return fetchIfNeededResult
+    }
+
+    override suspend fun refetchAll(filters: EvaluationFilters?, reason: FetchReason) {
+        refetchAllCalls.add(filters to reason)
     }
 }

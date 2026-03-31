@@ -1,10 +1,10 @@
 package io.split.client.thin.internal.auth
 
-internal class NoOpSecureStorage<T : Any> : SecureStorage<T> {
+internal class NoOpSecureStorage : SecureStorage {
 
-    override suspend fun getCredential(target: T): JwtCredential? = null
+    override suspend fun getCredential(): JwtCredential? = null
 
-    override suspend fun saveCredential(credential: JwtCredential, target: T) = Unit
+    override suspend fun saveCredential(credential: JwtCredential) = Unit
 
-    override suspend fun removeCredential(target: T) = Unit
+    override suspend fun removeCredential() = Unit
 }

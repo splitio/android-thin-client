@@ -1,6 +1,5 @@
 package io.split.client.thin.internal.secure
 
-import io.split.client.thin.internal.auth.AuthProvider
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -12,7 +11,6 @@ class SecureHttpClientFactoryTest {
         val result = createSecureHttpClient(
             authProvider = FakeAuthProvider(),
             retryableHttpClient = FakeRetryableHttpClient(),
-            defaultTarget = testDefaultTarget,
             evaluationsUrl = testEvaluationsUrl,
             eventsUrl = testEventsUrl,
             telemetryUrl = testTelemetryUrl,

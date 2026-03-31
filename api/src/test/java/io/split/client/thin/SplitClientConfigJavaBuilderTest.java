@@ -107,7 +107,8 @@ public class SplitClientConfigJavaBuilderTest {
                         "https://auth.example.com",
                         "https://evaluations.example.com",
                         "https://events.example.com",
-                        "https://telemetry.example.com"
+                        "https://telemetry.example.com",
+                        "https://streaming.example.com"
                 );
 
         SplitClientConfig config = new SplitClientConfig.Builder()
