@@ -26,10 +26,7 @@ class RoomEvaluationPersistenceTest {
         database = Room.inMemoryDatabaseBuilder(context, ThinClientDatabase::class.java)
             .allowMainThreadQueries()
             .build()
-        persistence = RoomEvaluationPersistence(
-            database.evaluationDao(),
-            database.generalInfoDao()
-        )
+        persistence = RoomEvaluationPersistence(database)
     }
 
     @After

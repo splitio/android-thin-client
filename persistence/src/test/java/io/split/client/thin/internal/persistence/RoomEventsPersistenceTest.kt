@@ -35,28 +35,20 @@ class RoomEventsPersistenceTest {
 
     @Test
     fun `push adds event to storage`() {
-        val eventJson = """{"trafficType":"user","eventType":"click","key":"user1","value":1.0,"timestamp":1234567890,"properties":{"button":"submit"},"sizeInBytes":100}"""
-
-        persistence.push(eventJson)
-
+        persistence.push(createEventJson("click", "user1", 1.0))
         assertEquals(1, persistence.count())
     }
 
     @Test
     fun `push multiple events`() {
-        val event1Json = createEventJson("click", "user1", 1.0)
-        val event2Json = createEventJson("view", "user2", 2.0)
-        val event3Json = createEventJson("purchase", "user3", 3.0)
-
-        persistence.push(event1Json)
-        persistence.push(event2Json)
-        persistence.push(event3Json)
-
+        persistence.push(createEventJson("click", "user1", 1.0))
+        persistence.push(createEventJson("view", "user2", 2.0))
+        persistence.push(createEventJson("purchase", "user3", 3.0))
         assertEquals(3, persistence.count())
     }
 
     @Test
-    fun `pop returns events in FIFO order`() {
+    fun `pop returns events in FIFO order without removing them`() {
         val event1Json = createEventJson("click", "user1", 1.0)
         val event2Json = createEventJson("view", "user2", 2.0)
         val event3Json = createEventJson("purchase", "user3", 3.0)
@@ -69,20 +61,62 @@ class RoomEventsPersistenceTest {
 
         val popped = persistence.pop(2)
         assertEquals(2, popped.size)
-        assertTrue(popped[0].contains("\"eventType\":\"click\""))
-        assertTrue(popped[1].contains("\"eventType\":\"view\""))
+        assertTrue(popped[0].json.contains("\"click\""))
+        assertTrue(popped[1].json.contains("\"view\""))
+        assertEquals(3, persistence.count())
+    }
+
+    @Test
+    fun `pop does not remove events from storage`() {
+        persistence.push(createEventJson("click", "user1", 1.0))
+
+        persistence.pop(1)
+
         assertEquals(1, persistence.count())
     }
 
     @Test
-    fun `pop and push round trip preserves event data`() {
-        val eventJson = """{"trafficType":"user","eventType":"purchase","key":"user123","value":99.99,"timestamp":1234567890,"properties":{"item":"widget","quantity":5},"sizeInBytes":150}"""
-
+    fun `pop returns StoredEvent with valid id and json`() {
+        val eventJson = createEventJson("click", "user1", 1.0)
         persistence.push(eventJson)
+
         val popped = persistence.pop(1)
 
         assertEquals(1, popped.size)
-        assertEquals(eventJson, popped[0])
+        assertTrue(popped[0].id > 0)
+        assertEquals(eventJson, popped[0].json)
+    }
+
+    @Test
+    fun `delete removes specific events by id`() {
+        val event1Json = createEventJson("click", "user1", 1.0)
+        val event2Json = createEventJson("view", "user2", 2.0)
+
+        persistence.push(event1Json)
+        persistence.push(event2Json)
+
+        val popped = persistence.pop(1)
+        persistence.delete(popped.map { it.id })
+
+        assertEquals(1, persistence.count())
+        val remaining = persistence.pop(10)
+        assertEquals(1, remaining.size)
+        assertTrue(remaining[0].json.contains("\"view\""))
+    }
+
+    @Test
+    fun `pop then delete removes only confirmed events`() {
+        val event1Json = createEventJson("click", "user1", 1.0)
+        val event2Json = createEventJson("view", "user2", 2.0)
+
+        persistence.push(event1Json)
+        persistence.push(event2Json)
+
+        val popped = persistence.pop(1)
+        assertEquals(2, persistence.count())
+
+        persistence.delete(popped.map { it.id })
+        assertEquals(1, persistence.count())
     }
 
     @Test
@@ -92,20 +126,18 @@ class RoomEventsPersistenceTest {
 
         val popped = persistence.pop(10)
         assertEquals(2, popped.size)
-        assertEquals(0, persistence.count())
+        assertEquals(2, persistence.count())
     }
 
     @Test
     fun `pop from empty storage returns empty list`() {
-        val popped = persistence.pop(10)
-        assertTrue(popped.isEmpty())
+        assertTrue(persistence.pop(10).isEmpty())
     }
 
     @Test
     fun `clear removes all events`() {
         persistence.push(createEventJson("click", "user1", 1.0))
         persistence.push(createEventJson("view", "user2", 2.0))
-        persistence.push(createEventJson("purchase", "user3", 3.0))
 
         persistence.clear()
 
@@ -122,7 +154,10 @@ class RoomEventsPersistenceTest {
         persistence.push(createEventJson("view", "user2", 2.0))
         assertEquals(2, persistence.count())
 
-        persistence.pop(1)
+        val popped = persistence.pop(1)
+        assertEquals(2, persistence.count())
+
+        persistence.delete(popped.map { it.id })
         assertEquals(1, persistence.count())
 
         persistence.clear()

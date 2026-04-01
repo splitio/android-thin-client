@@ -43,10 +43,7 @@ fun createPersistenceDomainComponents(
     val eventSerializer = TrackerEventSerializer()
 
     val evaluationPersistenceManager = DefaultEvaluationPersistenceManager(
-        persistentStorage = RoomEvaluationPersistence(
-            evaluationDao = database.evaluationDao(),
-            metadataDao = database.evaluationMetadataDao()
-        ),
+        persistentStorage = RoomEvaluationPersistence(database = database),
         callbacks = evaluationCallbacks,
         targetHasher = targetHasher,
         evalSerializer = evalSerializer,

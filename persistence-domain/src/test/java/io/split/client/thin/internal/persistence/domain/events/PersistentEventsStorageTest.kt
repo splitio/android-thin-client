@@ -2,6 +2,7 @@ package io.split.client.thin.internal.persistence.domain.events
 
 import io.split.android.client.tracker.TrackerEvent
 import io.split.client.thin.internal.persistence.PersistentEventsStorage as RoomEventsPersistence
+import io.split.client.thin.internal.persistence.StoredEvent
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -14,8 +15,8 @@ import org.mockito.Mockito.mock
 import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
-import org.mockito.ArgumentMatchers.any
 import org.mockito.ArgumentMatchers.anyInt
+import org.mockito.ArgumentMatchers.anyList
 import org.mockito.ArgumentMatchers.anyString
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -78,14 +79,14 @@ class PersistentEventsStorageTest {
         val json2 = "{\"key\":\"b\"}"
         val event1 = makeEvent("a")
         val event2 = makeEvent("b")
-        `when`(roomStorage.pop(2)).thenReturn(listOf(json1, json2))
+        `when`(roomStorage.pop(2)).thenReturn(listOf(StoredEvent(1L, json1), StoredEvent(2L, json2)))
         `when`(serializer.deserialize(json1)).thenReturn(event1)
         `when`(serializer.deserialize(json2)).thenReturn(event2)
 
         val result = storage.pop(2)
 
         assertEquals(listOf(event1, event2), result)
-        verify(callbacks).onEventPopped(2) // verify actual count (2 items returned)
+        verify(callbacks).onEventPopped(2)
     }
 
     @Test
@@ -100,25 +101,38 @@ class PersistentEventsStorageTest {
     }
 
     @Test
-    fun `delete is a no-op`() {
-        val event = makeEvent()
-        storage.delete(listOf(event))
+    fun `delete uses IDs from preceding pop`() {
+        val json1 = "{\"key\":\"a\"}"
+        val json2 = "{\"key\":\"b\"}"
+        val event1 = makeEvent("a")
+        val event2 = makeEvent("b")
+        `when`(roomStorage.pop(2)).thenReturn(listOf(StoredEvent(10L, json1), StoredEvent(20L, json2)))
+        `when`(serializer.deserialize(json1)).thenReturn(event1)
+        `when`(serializer.deserialize(json2)).thenReturn(event2)
 
-        verify(roomStorage, never()).pop(anyInt())
-        verify(roomStorage, never()).push(anyString())
+        val popped = storage.pop(2)
+        storage.delete(popped)
+
+        verify(roomStorage).delete(listOf(10L, 20L))
     }
 
     @Test
-    fun `setActive re-pushes each item`() = scope.runTest {
-        val event1 = makeEvent("a")
-        val event2 = makeEvent("b")
-        `when`(serializer.serialize(event1)).thenReturn("{\"key\":\"a\"}")
-        `when`(serializer.serialize(event2)).thenReturn("{\"key\":\"b\"}")
+    fun `delete of unknown items does not call room storage`() {
+        val event = makeEvent()
 
-        storage.setActive(listOf(event1, event2))
+        storage.delete(listOf(event)) // not popped first — no ID in map
+
+        verify(roomStorage, never()).delete(anyList())
+    }
+
+    @Test
+    fun `setActive is a no-op`() = scope.runTest {
+        val event = makeEvent()
+
+        storage.setActive(listOf(event))
         advanceUntilIdle()
 
-        verify(roomStorage).push("{\"key\":\"a\"}")
-        verify(roomStorage).push("{\"key\":\"b\"}")
+        verify(roomStorage, never()).push(anyString())
+        verify(roomStorage, never()).delete(anyList())
     }
 }

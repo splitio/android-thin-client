@@ -5,23 +5,15 @@ class RoomEventsPersistence(
 ) : PersistentEventsStorage {
 
     override fun push(eventJson: String) {
-        val entity = EventEntity(
-            0,
-            eventJson,
-            System.currentTimeMillis()
-        )
-        dao.insert(entity)
+        dao.insert(EventEntity(0, eventJson, System.currentTimeMillis()))
     }
 
-    override fun pop(count: Int): List<String> {
-        val entities = dao.getOldest(count)
-        val eventJsons = entities.map { it.body }
+    override fun pop(count: Int): List<StoredEvent> {
+        return dao.getOldest(count).map { StoredEvent(it.id, it.body) }
+    }
 
-        if (entities.isNotEmpty()) {
-            dao.delete(entities)
-        }
-
-        return eventJsons
+    override fun delete(ids: List<Long>) {
+        dao.deleteByIds(ids)
     }
 
     override fun clear() {
