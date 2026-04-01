@@ -22,10 +22,9 @@ This keeps the module focused purely on persistence without domain knowledge.
 
 ### Evaluations
 
-**`evaluation_metadata` table** — Stores changeNumber once per key:
+**`general_info` table** — General-purpose key-value store; used to store serialized metadata once per key:
 - `key` (PK) — Serialized Key (matchingKey + bucketingKey)
-- `changeNumber` — Server's `till` value for this key
-- `updatedAt` — Last update timestamp
+- `value` — JSON-encoded payload (e.g. `{"changeNumber":12345,"updatedAt":...}`)
 
 **`evaluations` table** — Stores individual flag evaluations:
 - `key`, `flagName` (composite PK) — Unique per flag per key
@@ -50,13 +49,13 @@ This keeps the module focused purely on persistence without domain knowledge.
 
 ### Implementations
 
-- `RoomEvaluationPersistence` — Room-backed evaluation storage with metadata table
+- `RoomEvaluationPersistence` — Room-backed evaluation storage; uses `GeneralInfoDao` for per-key metadata
 - `RoomEventsPersistence` — Room-backed event queue storage
 
 ### Entities
 
 - `EvaluationEntity` — Evaluation record with key, flagName, and body
-- `EvaluationMetadataEntity` — Metadata for each key with changeNumber
+- `GeneralInfoEntity` — General-purpose key-value record (used for per-key metadata such as changeNumber)
 - `EventEntity` — Event queue record
 
 ## Dependencies

@@ -1,21 +1,24 @@
 package io.split.client.thin.internal.persistence
 
-class RoomEvaluationPersistence(
+import org.json.JSONObject
+
+internal class RoomEvaluationPersistence(
     private val evaluationDao: EvaluationDao,
-    private val metadataDao: EvaluationMetadataDao
+    private val generalInfoDao: GeneralInfoDao
 ) : PersistentEvaluationStorage {
 
     override fun loadForKey(key: String): PersistentEvaluationData? {
-        val metadata = metadataDao.getByKey(key) ?: return null
+        val info = generalInfoDao.getByKey(key) ?: return null
         val entities = evaluationDao.getByKey(key)
 
         if (entities.isEmpty()) {
-            metadataDao.deleteByKey(key)
+            generalInfoDao.deleteByKey(key)
             return null
         }
 
+        val changeNumber = JSONObject(info.value).getLong(FIELD_CHANGE_NUMBER)
         val evaluationJsons = entities.map { it.body }
-        return PersistentEvaluationData(metadata.changeNumber, evaluationJsons)
+        return PersistentEvaluationData(changeNumber, evaluationJsons)
     }
 
     override fun persistForKey(
@@ -24,18 +27,16 @@ class RoomEvaluationPersistence(
         evaluations: List<SerializedEvaluation>
     ) {
         if (evaluations.isEmpty()) {
-            metadataDao.deleteByKey(key)
+            generalInfoDao.deleteByKey(key)
             evaluationDao.deleteByKey(key)
             return
         }
 
-        metadataDao.insert(
-            EvaluationMetadataEntity(
-                key,
-                changeNumber,
-                System.currentTimeMillis()
-            )
-        )
+        val value = JSONObject()
+            .put(FIELD_CHANGE_NUMBER, changeNumber)
+            .put(FIELD_UPDATED_AT, System.currentTimeMillis())
+            .toString()
+        generalInfoDao.insert(GeneralInfoEntity(key, value))
 
         val entities = evaluations.map { serialized ->
             EvaluationEntity(
@@ -50,7 +51,12 @@ class RoomEvaluationPersistence(
     }
 
     override fun clearForKey(key: String) {
-        metadataDao.deleteByKey(key)
+        generalInfoDao.deleteByKey(key)
         evaluationDao.deleteByKey(key)
+    }
+
+    private companion object {
+        const val FIELD_CHANGE_NUMBER = "changeNumber"
+        const val FIELD_UPDATED_AT = "updatedAt"
     }
 }

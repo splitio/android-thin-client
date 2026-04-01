@@ -28,7 +28,7 @@ class RoomEvaluationPersistenceTest {
             .build()
         persistence = RoomEvaluationPersistence(
             database.evaluationDao(),
-            database.evaluationMetadataDao()
+            database.generalInfoDao()
         )
     }
 
@@ -135,8 +135,9 @@ class RoomEvaluationPersistenceTest {
             SerializedEvaluation("flag2", flag2Json)
         ))
 
-        val metadataCount = database.evaluationMetadataDao().getByKey("user1")
-        assertEquals(12345L, metadataCount?.changeNumber)
+        val info = database.generalInfoDao().getByKey("user1")
+        val changeNumber = org.json.JSONObject(info!!.value).getLong("changeNumber")
+        assertEquals(12345L, changeNumber)
 
         val evaluationEntities = database.evaluationDao().getByKey("user1")
         assertEquals(2, evaluationEntities.size)
