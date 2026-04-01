@@ -5,6 +5,4 @@ import io.split.client.thin.internal.evaluation.EvaluationKey
 
 interface EvaluationPersistenceManager {
     suspend fun loadLocal(evalKey: EvaluationKey): EvaluationChange?
-    fun start()
-    fun stop()
 }

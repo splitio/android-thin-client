@@ -6,7 +6,7 @@ import io.split.android.client.tracker.TrackerEvent
 import io.split.client.thin.internal.persistence.PersistentEventsStorage as RoomEventsPersistence
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
-import java.util.IdentityHashMap
+import java.util.concurrent.ConcurrentHashMap
 
 internal class PersistentEventsStorage(
     private val roomEventsPersistence: RoomEventsPersistence,
@@ -15,7 +15,7 @@ internal class PersistentEventsStorage(
     private val scope: CoroutineScope
 ) : RecorderStorage<TrackerEvent>, StoragePusher<TrackerEvent> {
 
-    private val poppedIds = IdentityHashMap<TrackerEvent, Long>()
+    private val poppedIds = ConcurrentHashMap<Int, Long>()
 
     override fun push(element: TrackerEvent) {
         scope.launch {
@@ -33,7 +33,7 @@ internal class PersistentEventsStorage(
         return try {
             val stored = roomEventsPersistence.pop(count)
             val events = stored.map { serializer.deserialize(it.json) }
-            events.forEachIndexed { i, event -> poppedIds[event] = stored[i].id }
+            events.forEachIndexed { i, event -> poppedIds[System.identityHashCode(event)] = stored[i].id }
             callbacks.onEventPopped(events.size)
             events
         } catch (e: Exception) {
@@ -44,7 +44,7 @@ internal class PersistentEventsStorage(
 
     override fun delete(items: List<TrackerEvent>) {
         try {
-            val ids = items.mapNotNull { poppedIds.remove(it) }
+            val ids = items.mapNotNull { poppedIds.remove(System.identityHashCode(it)) }
             if (ids.isNotEmpty()) roomEventsPersistence.delete(ids)
         } catch (e: Exception) {
             callbacks.onPersistenceFailed(e.message ?: "Unknown error")

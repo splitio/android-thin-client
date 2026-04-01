@@ -126,6 +126,23 @@ class PersistentEventsStorageTest {
     }
 
     @Test
+    fun `delete tracks each popped event independently even with equal content`() {
+        val json = "{\"key\":\"a\"}"
+        val event1 = makeEvent("a")
+        val event2 = makeEvent("a") // same content, different instance
+        `when`(roomStorage.pop(1))
+            .thenReturn(listOf(StoredEvent(10L, json)))
+            .thenReturn(listOf(StoredEvent(20L, json)))
+        `when`(serializer.deserialize(json)).thenReturn(event1).thenReturn(event2)
+
+        val popped1 = storage.pop(1)
+        val popped2 = storage.pop(1)
+        storage.delete(popped1 + popped2)
+
+        verify(roomStorage).delete(listOf(10L, 20L))
+    }
+
+    @Test
     fun `setActive is a no-op`() = scope.runTest {
         val event = makeEvent()
 

@@ -6,6 +6,9 @@ import androidx.room.Database;
 import androidx.room.Room;
 import androidx.room.RoomDatabase;
 
+import java.util.HashMap;
+import java.util.Map;
+
 @Database(entities = {EvaluationEntity.class, EventEntity.class, GeneralInfoEntity.class}, version = 1, exportSchema = false)
 public abstract class ThinClientDatabase extends RoomDatabase {
 
@@ -13,17 +16,19 @@ public abstract class ThinClientDatabase extends RoomDatabase {
     public abstract EventDao eventDao();
     public abstract GeneralInfoDao generalInfoDao();
 
-    private static volatile ThinClientDatabase INSTANCE;
+    private static final Map<String, ThinClientDatabase> INSTANCES = new HashMap<>();
 
     public static ThinClientDatabase build(Context context, String prefix) {
-        if (INSTANCE == null) {
-            synchronized (ThinClientDatabase.class) {
-                if (INSTANCE == null) {
-                    String dbName = (prefix != null && !prefix.isEmpty())
-                            ? prefix + "_split_thin.db"
-                            : "split_thin.db";
+        String dbName = (prefix != null && !prefix.isEmpty())
+                ? prefix + "_split_thin.db"
+                : "split_thin.db";
 
-                    INSTANCE = Room.databaseBuilder(
+        ThinClientDatabase instance = INSTANCES.get(dbName);
+        if (instance == null) {
+            synchronized (ThinClientDatabase.class) {
+                instance = INSTANCES.get(dbName);
+                if (instance == null) {
+                    instance = Room.databaseBuilder(
                             context.getApplicationContext(),
                             ThinClientDatabase.class,
                             dbName
@@ -31,9 +36,10 @@ public abstract class ThinClientDatabase extends RoomDatabase {
                     .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
                     .fallbackToDestructiveMigration()
                     .build();
+                    INSTANCES.put(dbName, instance);
                 }
             }
         }
-        return INSTANCE;
+        return instance;
     }
 }

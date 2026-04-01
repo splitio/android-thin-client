@@ -61,6 +61,4 @@ internal class DefaultEvaluationPersistenceManager(
         }
     }
 
-    override fun start() { /* no-op for now */ }
-    override fun stop() { /* no-op for now */ }
 }
