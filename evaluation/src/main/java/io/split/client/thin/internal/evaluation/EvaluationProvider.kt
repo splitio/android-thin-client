@@ -1,6 +1,5 @@
 package io.split.client.thin.internal.evaluation
 
-import io.split.android.client.utils.logger.Logger
 import io.split.client.thin.internal.secure.EvaluationFilters
 import io.split.client.thin.internal.secure.EvaluationTarget
 import io.split.client.thin.internal.secure.SecureHttpClient

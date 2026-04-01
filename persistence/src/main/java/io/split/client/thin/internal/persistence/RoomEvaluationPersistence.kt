@@ -9,14 +9,14 @@ class RoomEvaluationPersistence(
     private val evaluationDao get() = database.evaluationDao()
     private val generalInfoDao get() = database.generalInfoDao()
 
-    override fun loadForKey(key: String): PersistentEvaluationData? {
+    override fun loadForKey(keyHash: String, attrsHash: String): PersistentEvaluationData? {
         var result: PersistentEvaluationData? = null
         database.runInTransaction {
-            val info = generalInfoDao.getByKey(key) ?: return@runInTransaction
-            val entities = evaluationDao.getByKey(key)
+            val info = generalInfoDao.getByKeyAndAttrs(keyHash, attrsHash) ?: return@runInTransaction
+            val entities = evaluationDao.getByKeyAndAttrs(keyHash, attrsHash)
 
             if (entities.isEmpty()) {
-                generalInfoDao.deleteByKey(key)
+                generalInfoDao.deleteByKeyAndAttrs(keyHash, attrsHash)
                 return@runInTransaction
             }
 
@@ -27,14 +27,15 @@ class RoomEvaluationPersistence(
     }
 
     override fun persistForKey(
-        key: String,
+        keyHash: String,
+        attrsHash: String,
         changeNumber: Long,
         evaluations: List<SerializedEvaluation>
     ) {
         database.runInTransaction {
             if (evaluations.isEmpty()) {
-                generalInfoDao.deleteByKey(key)
-                evaluationDao.deleteByKey(key)
+                generalInfoDao.deleteByKeyAndAttrs(keyHash, attrsHash)
+                evaluationDao.deleteByKeyAndAttrs(keyHash, attrsHash)
                 return@runInTransaction
             }
 
@@ -42,24 +43,25 @@ class RoomEvaluationPersistence(
                 .put(FIELD_CHANGE_NUMBER, changeNumber)
                 .put(FIELD_UPDATED_AT, System.currentTimeMillis())
                 .toString()
-            generalInfoDao.insert(GeneralInfoEntity(key, value))
+            generalInfoDao.insert(GeneralInfoEntity(keyHash, attrsHash, value))
 
             val entities = evaluations.map { serialized ->
                 EvaluationEntity(
-                    key,
+                    keyHash,
                     serialized.flagName,
+                    attrsHash,
                     serialized.json,
                     System.currentTimeMillis()
                 )
             }
-            evaluationDao.replaceForKey(key, entities)
+            evaluationDao.replaceForKeyAndAttrs(keyHash, attrsHash, entities)
         }
     }
 
-    override fun clearForKey(key: String) {
+    override fun clearForKey(keyHash: String) {
         database.runInTransaction {
-            generalInfoDao.deleteByKey(key)
-            evaluationDao.deleteByKey(key)
+            generalInfoDao.deleteByKeyHash(keyHash)
+            evaluationDao.deleteByKeyHash(keyHash)
         }
     }
 

@@ -19,8 +19,8 @@ internal class DefaultEvaluationPersistenceManager(
     override suspend fun loadLocal(evalKey: EvaluationKey): EvaluationChange? {
         callbacks.onLoadStarted()
         return try {
-            val hashKey = targetHasher.hash(evalKey)
-            val persistedData = persistentStorage.loadForKey(hashKey) ?: return null
+            val hashed = targetHasher.hash(evalKey)
+            val persistedData = persistentStorage.loadForKey(hashed.keyHash, hashed.attrsHash) ?: return null
 
             val evaluations = persistedData.evaluations.map { evalSerializer.deserialize(it) }
             val change = EvaluationChange(
@@ -47,12 +47,12 @@ internal class DefaultEvaluationPersistenceManager(
         scope.launch {
             callbacks.onWriteScheduled()
             try {
-                val hashKey = targetHasher.hash(evalKey)
+                val hashed = targetHasher.hash(evalKey)
                 val serializedEvals = evaluations.map { eval ->
                     SerializedEvaluation(flagName = eval.result.flag, json = evalSerializer.serialize(eval))
                 }
 
-                persistentStorage.persistForKey(hashKey, changeNumber, serializedEvals)
+                persistentStorage.persistForKey(hashed.keyHash, hashed.attrsHash, changeNumber, serializedEvals)
 
                 callbacks.onWriteSucceeded()
             } catch (e: Exception) {

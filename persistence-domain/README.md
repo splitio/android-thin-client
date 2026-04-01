@@ -15,7 +15,7 @@ Bridges the thin-client domain model (`EvaluationKey`, `StoredEvaluation`, `Trac
 
 ### Target Hashing
 
-Evaluations are stored **per Target** (Key + Attributes), not just per Key. Two users with the same `matchingKey` but different attributes will have different cached evaluations (since attributes influence evaluation results). `TargetHasher` produces a SHA-256 hash of the combined Key + sorted Attributes, used as the opaque DB key. This means:
+Evaluations are stored **per Target** (Key + Attributes), not just per Key. Two users with the same `matchingKey` but different attributes will have different cached evaluations (since attributes influence evaluation results). `TargetHasher` produces a MurmurHash3 hash of the combined Key + sorted Attributes, used as the opaque DB key. This means:
 
 - Attributes are **never stored in the DB** — they are always provided by the caller
 - On load, the caller's `EvaluationKey` is used directly — no reconstruction needed
@@ -27,7 +27,7 @@ Evaluations are stored **per Target** (Key + Attributes), not just per Key. Two 
 
 - **`EvaluationPersistenceManager`** — Interface: `loadLocal(evalKey)` and `persistAsync(evalKey, changeNumber, evaluations)`
 - **`DefaultEvaluationPersistenceManager`** — Implementation using `TargetHasher` and `StoredEvaluationSerializer`
-- **`TargetHasher`** — Produces a deterministic SHA-256 hash from `EvaluationKey` (Key + sorted Attributes)
+- **`TargetHasher`** — Produces a deterministic MurmurHash3 (128×86) hash from `EvaluationKey`. The input string is `matchingKey:bucketingKey|key1=value1,key2=value2,...` where attributes are sorted by key name. Only the first two of the four 32-bit hash components are used, producing a 64-bit hex string used as the opaque DB key.
 - **`StoredEvaluationSerializer`** — JSON serialization for `StoredEvaluation` objects
 - **`EvaluationPersistenceCallbacks`** — Load/write lifecycle callbacks
 
