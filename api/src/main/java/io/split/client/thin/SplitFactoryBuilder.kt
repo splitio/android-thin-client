@@ -14,6 +14,7 @@ import io.split.client.thin.events.EventsRecorderTask
 import io.split.client.thin.events.EventsStorage
 import io.split.client.thin.events.HttpEventsSubmitter
 import io.split.client.thin.events.InBytesSizableStorageAdapter
+import io.split.client.thin.http.RetryableHttpClient
 import io.split.client.thin.http.createRetryableHttpClient
 import io.split.client.thin.internal.AsyncBridge
 import io.split.client.thin.internal.DefaultClientFactory
@@ -193,32 +194,23 @@ object SplitFactoryBuilder {
             }
         }
 
-        if (syncMode == SplitClientConfig.SyncMode.STREAMING) {
-            createStreamingComponents(
-                streamingUrl = endpoints?.streamingUrl ?: DEFAULT_STREAMING_URL,
-                retryableHttpClient = retryableHttpClient,
-                tokenProvider = {
-                    val cred = authProvider.credential()
-                    StreamingToken(cred.token, cred.connDelaySeconds, cred.pushEnabled)
-                },
-                onEvaluationFetchNotification = { fetchCoordinator.refetchAll(null, FetchReason.PUSH) },
-                onPushDisabled = {
-                    fetchCoordinator.refetchAll(null, FetchReason.PERIODIC)
-                    getOrCreateScheduler().start()
-                },
-            ).apply {
-                // Register with lifecycle manager
-                lifecycleManager.register(object : LifecycleComponent {
-                    override fun pause() = manager.pause()
-                    override fun resume() = manager.resume()
-                })
-            }.apply {
-                // start
-                startTrigger()
-            }
-        } else {
-            // Polling mode - create and start immediately
-            getOrCreateScheduler().start()
+        createAndRegisterStreaming(
+            syncMode = syncMode,
+            streamingUrl = endpoints?.streamingUrl ?: DEFAULT_STREAMING_URL,
+            retryableHttpClient = retryableHttpClient,
+            tokenProvider = {
+                val cred = authProvider.credential()
+                StreamingToken(cred.token, cred.connDelaySeconds, cred.pushEnabled)
+            },
+            onEvaluationFetchNotification = { fetchCoordinator.refetchAll(null, FetchReason.PUSH) },
+            onPushDisabled = {
+                fetchCoordinator.refetchAll(null, FetchReason.PERIODIC)
+                getOrCreateScheduler().start()
+            },
+            lifecycleManager = lifecycleManager,
+            onPollingMode = { getOrCreateScheduler().start() },
+        )?.also { components ->
+            streamingComponents = components
         }
 
         return DefaultSplitFactory(
@@ -236,6 +228,37 @@ object SplitFactoryBuilder {
             lifecycleManager = lifecycleManager,
             clientManager = clientManager,
         )
+    }
+
+    private fun createAndRegisterStreaming(
+        syncMode: SplitClientConfig.SyncMode,
+        streamingUrl: String,
+        retryableHttpClient: RetryableHttpClient,
+        tokenProvider: suspend () -> StreamingToken,
+        onEvaluationFetchNotification: suspend () -> Unit,
+        onPushDisabled: suspend () -> Unit,
+        lifecycleManager: DefaultLifecycleManager,
+        onPollingMode: () -> Unit,
+    ): StreamingComponents? {
+        return if (syncMode == SplitClientConfig.SyncMode.STREAMING) {
+            createStreamingComponents(
+                streamingUrl = streamingUrl,
+                retryableHttpClient = retryableHttpClient,
+                tokenProvider = tokenProvider,
+                onEvaluationFetchNotification = onEvaluationFetchNotification,
+                onPushDisabled = onPushDisabled,
+            ).also { components ->
+                lifecycleManager.register(object : LifecycleComponent {
+                    override fun pause() = components.manager.pause()
+                    override fun resume() = components.manager.resume()
+                })
+                components.startTrigger()
+            }
+        } else {
+            // Polling mode - create and start immediately
+            onPollingMode()
+            null
+        }
     }
 
 }

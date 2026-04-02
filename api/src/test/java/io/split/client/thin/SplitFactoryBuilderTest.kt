@@ -43,4 +43,22 @@ class SplitFactoryBuilderTest {
         assertNotNull(factory)
         assertTrue(factory is DefaultSplitFactory)
     }
+
+    @Test
+    fun `build returns a SplitFactory in polling mode`() {
+        val config = splitClientConfig {
+            sync {
+                mode = SplitClientConfig.SyncMode.POLLING
+            }
+        }
+
+        val factory = SplitFactoryBuilder.build(
+            sdkKey = sdkKey,
+            defaultTarget = defaultTarget,
+            config = config,
+        )
+
+        assertNotNull(factory)
+        assertTrue(factory is DefaultSplitFactory)
+    }
 }
