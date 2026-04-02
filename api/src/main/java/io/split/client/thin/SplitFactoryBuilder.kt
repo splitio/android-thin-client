@@ -194,7 +194,7 @@ object SplitFactoryBuilder {
         }
 
         if (syncMode == SplitClientConfig.SyncMode.STREAMING) {
-            createStreamingComponents(
+            streamingComponents = createStreamingComponents(
                 streamingUrl = endpoints?.streamingUrl ?: DEFAULT_STREAMING_URL,
                 retryableHttpClient = retryableHttpClient,
                 tokenProvider = {
@@ -206,16 +206,18 @@ object SplitFactoryBuilder {
                     fetchCoordinator.refetchAll(null, FetchReason.PERIODIC)
                     getOrCreateScheduler().start()
                 },
-            ).apply {
+            )
+
+            streamingComponents.manager.also {
                 // Register with lifecycle manager
                 lifecycleManager.register(object : LifecycleComponent {
-                    override fun pause() = manager.pause()
-                    override fun resume() = manager.resume()
+                    override fun pause() = it.pause()
+                    override fun resume() = it.resume()
                 })
-            }.apply {
-                // start
-                startTrigger()
             }
+
+            // start
+            streamingComponents.startTrigger()
         } else {
             // Polling mode - create and start immediately
             getOrCreateScheduler().start()
