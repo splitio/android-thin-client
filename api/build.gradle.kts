@@ -58,6 +58,7 @@ dependencies {
     implementation(project(":retryable-http-client"))
     implementation(project(":auth"))
     implementation(project(":observer"))
+    implementation(project(":persistence-domain"))
     implementation(project(":events"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("androidx.lifecycle:lifecycle-process:2.5.1")
