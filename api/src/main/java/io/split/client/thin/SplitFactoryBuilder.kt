@@ -106,10 +106,6 @@ object SplitFactoryBuilder {
             sdkKey = sdkKey.sdkKey,
         )
 
-        val (fetchCoordinator, evaluationRepository) = createEvaluationComponents(
-            secureHttpClient = secureHttpClient,
-            compositeObserver = compositeObserver,
-        )
         val schedulerIntervalMillis = (config?.sync?.evaluationRefreshRate ?: 3600) * 1_000L
 
         // Single factory-level scope for all async operations
@@ -122,6 +118,12 @@ object SplitFactoryBuilder {
             evaluationCallbacks = ObserverEvaluationPersistenceCallbacks(compositeObserver),
             eventsCallbacks = ObserverEventsPersistenceCallbacks(compositeObserver),
             scope = factoryScope
+        )
+
+        val (fetchCoordinator, evaluationRepository) = createEvaluationComponents(
+            secureHttpClient = secureHttpClient,
+            compositeObserver = compositeObserver,
+            cacheLoader = persistenceComponents.evaluationPersistenceManager,
         )
 
         // Event tracking components

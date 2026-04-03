@@ -13,8 +13,9 @@ data class EvaluationComponents(
 fun createEvaluationComponents(
     secureHttpClient: SecureHttpClient,
     compositeObserver: CompositeObserver,
+    cacheLoader: EvaluationCacheLoader? = null,
 ): EvaluationComponents {
-    val storage = InMemoryEvaluationStorage()
+    val storage = InMemoryEvaluationStorage(cacheLoader)
     val provider = DefaultEvaluationProvider(
         secureHttpClient = secureHttpClient,
         deserializer = JsonEvaluationResponseDeserializer(),

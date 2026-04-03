@@ -2,8 +2,10 @@ package io.split.client.thin.internal.evaluation
 
 import io.split.client.thin.EvaluationResult
 import io.split.client.thin.Key
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -188,4 +190,108 @@ class InMemoryEvaluationStorageTest {
         assertEquals("on", storage.get("flag-a", key1)?.result?.treatment)
         assertEquals("off", storage.get("flag-a", keyWithAttrs)?.result?.treatment)
     }
+
+    // --- EvaluationCacheLoader integration ---
+
+    @Test
+    fun `ensureCacheLoaded calls loadLocal when key is new`() = runTest {
+        val loadCalls = mutableListOf<EvaluationKey>()
+        val cacheLoader = FakeCacheLoader(onLoad = { key -> loadCalls.add(key); null })
+        val storageWithLoader = InMemoryEvaluationStorage(cacheLoader)
+
+        storageWithLoader.ensureCacheLoaded(key1)
+
+        assertEquals(1, loadCalls.size)
+        assertEquals(key1, loadCalls[0])
+    }
+
+    @Test
+    fun `ensureCacheLoaded does not call loadLocal when key already loaded`() = runTest {
+        val loadCalls = mutableListOf<EvaluationKey>()
+        val cacheLoader = FakeCacheLoader(onLoad = { key -> loadCalls.add(key); null })
+        val storageWithLoader = InMemoryEvaluationStorage(cacheLoader)
+
+        storageWithLoader.ensureCacheLoaded(key1)
+        storageWithLoader.ensureCacheLoaded(key1)
+
+        assertEquals(1, loadCalls.size)
+    }
+
+    @Test
+    fun `ensureCacheLoaded upserts cached result when loadLocal returns data`() = runTest {
+        val cached = change(key1, 10L, storedEval("flag-cached", "on"))
+        val cacheLoader = FakeCacheLoader(onLoad = { cached })
+        val storageWithLoader = InMemoryEvaluationStorage(cacheLoader)
+
+        storageWithLoader.ensureCacheLoaded(key1)
+
+        assertEquals("on", storageWithLoader.get("flag-cached", key1)?.result?.treatment)
+        assertEquals(10L, storageWithLoader.lastChangeNumber(key1))
+    }
+
+    @Test
+    fun `upsert calls persistAsync when data changed`() {
+        val persistCalls = mutableListOf<Triple<EvaluationKey, Long, List<StoredEvaluation>>>()
+        val cacheLoader = FakeCacheLoader(onPersist = { key, cn, evals -> persistCalls.add(Triple(key, cn, evals)) })
+        val storageWithLoader = InMemoryEvaluationStorage(cacheLoader)
+
+        val eval = storedEval("flag-a", "on")
+        storageWithLoader.upsert(change(key1, 1L, eval))
+
+        assertEquals(1, persistCalls.size)
+        assertEquals(key1, persistCalls[0].first)
+        assertEquals(1L, persistCalls[0].second)
+    }
+
+    @Test
+    fun `upsert does not call persistAsync when data unchanged`() {
+        val persistCalls = mutableListOf<EvaluationKey>()
+        val cacheLoader = FakeCacheLoader(onPersist = { key, _, _ -> persistCalls.add(key) })
+        val storageWithLoader = InMemoryEvaluationStorage(cacheLoader)
+
+        val eval = storedEval("flag-a", "on")
+        storageWithLoader.upsert(change(key1, 1L, eval))
+        // Same changeNumber and same flags — should not update
+        storageWithLoader.upsert(change(key1, 1L, storedEval("flag-a", "off")))
+
+        // Only one persist call (from the first upsert)
+        assertEquals(1, persistCalls.size)
+    }
+
+    @Test
+    fun `ensureCacheLoaded retries after loadLocal failure`() = runTest {
+        var callCount = 0
+        val cacheLoader = object : EvaluationCacheLoader {
+            override suspend fun loadLocal(evalKey: EvaluationKey): EvaluationChange? {
+                callCount++
+                if (callCount == 1) throw RuntimeException("Load failed")
+                return change(key1, 10L, storedEval("flag-loaded", "on"))
+            }
+
+            override fun persistAsync(evalKey: EvaluationKey, changeNumber: Long, evaluations: List<StoredEvaluation>) {}
+        }
+        val storageWithLoader = InMemoryEvaluationStorage(cacheLoader)
+
+        // First call throws
+        try {
+            storageWithLoader.ensureCacheLoaded(key1)
+        } catch (e: RuntimeException) {
+            // Expected
+        }
+
+        // Second call should retry (not skip due to already being in loadedKeys)
+        storageWithLoader.ensureCacheLoaded(key1)
+
+        assertEquals(2, callCount)
+        assertEquals("on", storageWithLoader.get("flag-loaded", key1)?.result?.treatment)
+    }
+}
+
+private class FakeCacheLoader(
+    private val onLoad: suspend (EvaluationKey) -> EvaluationChange? = { null },
+    private val onPersist: (EvaluationKey, Long, List<StoredEvaluation>) -> Unit = { _, _, _ -> },
+) : EvaluationCacheLoader {
+    override suspend fun loadLocal(evalKey: EvaluationKey): EvaluationChange? = onLoad(evalKey)
+    override fun persistAsync(evalKey: EvaluationKey, changeNumber: Long, evaluations: List<StoredEvaluation>) =
+        onPersist(evalKey, changeNumber, evaluations)
 }

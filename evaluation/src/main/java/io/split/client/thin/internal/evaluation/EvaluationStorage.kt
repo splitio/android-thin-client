@@ -9,6 +9,7 @@ interface EvaluationReadStorage {
 }
 
 interface EvaluationWriteStorage {
+    suspend fun ensureCacheLoaded(evalKey: EvaluationKey)
     fun upsert(change: EvaluationChange): Boolean
     fun clear(evalKey: EvaluationKey)
 }

@@ -253,4 +253,36 @@ class DefaultEvaluationFetchCoordinatorTest {
 
         assertEquals(0, provider.fetchCalls.size)
     }
+
+    // --- Cache loading via EvaluationWriteStorage.ensureCacheLoaded ---
+
+    @Test
+    fun `fetchIfNeeded calls ensureCacheLoaded on writeStorage`() = runTest {
+        val writeStorage = FakeEvaluationWriteStorage()
+        val coordinator = DefaultEvaluationFetchCoordinator(
+            provider = FakeEvaluationProvider(),
+            readStorage = FakeEvaluationReadStorage(),
+            writeStorage = writeStorage,
+        )
+
+        coordinator.fetchIfNeeded(evalKey, null, FetchReason.INITIALIZATION)
+
+        assertEquals(1, writeStorage.ensureCacheLoadedCalls.size)
+        assertEquals(evalKey, writeStorage.ensureCacheLoadedCalls[0])
+    }
+
+    @Test
+    fun `fetchIfNeeded calls ensureCacheLoaded before each fetch`() = runTest {
+        val writeStorage = FakeEvaluationWriteStorage()
+        val coordinator = DefaultEvaluationFetchCoordinator(
+            provider = FakeEvaluationProvider(),
+            readStorage = FakeEvaluationReadStorage(),
+            writeStorage = writeStorage,
+        )
+
+        coordinator.fetchIfNeeded(evalKey, null, FetchReason.INITIALIZATION)
+        coordinator.fetchIfNeeded(evalKey, null, FetchReason.PERIODIC)
+
+        assertEquals(2, writeStorage.ensureCacheLoadedCalls.size)
+    }
 }

@@ -92,6 +92,11 @@ class FakeEvaluationReadStorage(
 class FakeEvaluationWriteStorage(private val upsertResult: Boolean = true) : EvaluationWriteStorage {
     val upsertCalls = mutableListOf<EvaluationChange>()
     val clearCalls = mutableListOf<EvaluationKey>()
+    val ensureCacheLoadedCalls = mutableListOf<EvaluationKey>()
+
+    override suspend fun ensureCacheLoaded(evalKey: EvaluationKey) {
+        ensureCacheLoadedCalls.add(evalKey)
+    }
 
     override fun upsert(change: EvaluationChange): Boolean {
         upsertCalls.add(change)

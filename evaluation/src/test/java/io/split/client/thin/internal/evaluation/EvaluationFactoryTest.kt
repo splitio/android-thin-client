@@ -1,5 +1,6 @@
 package io.split.client.thin.internal.evaluation
 
+import io.split.client.thin.EvaluationResult
 import io.split.client.thin.Key
 import io.split.client.thin.internal.observer.ObservableEventType
 import kotlinx.coroutines.test.runTest
@@ -16,10 +17,11 @@ class EvaluationFactoryTest {
     private fun makeComponents(
         responseBody: String? = emptyResponseJson,
         throwOnFetch: Throwable? = null,
+        cacheLoader: EvaluationCacheLoader? = null,
     ): Pair<EvaluationComponents, FakeCompositeObserver> {
         val observer = FakeCompositeObserver()
         val httpClient = FakeSecureHttpClient(responseBody = responseBody, throwOnFetch = throwOnFetch)
-        val components = createEvaluationComponents(httpClient, observer)
+        val components = createEvaluationComponents(httpClient, observer, cacheLoader)
         return components to observer
     }
 
@@ -135,5 +137,46 @@ class EvaluationFactoryTest {
         assertNotNull(result)
         assertEquals("my-flag", result?.result?.flag)
         assertEquals("on", result?.result?.treatment)
+    }
+
+    @Test
+    fun `cacheLoader loadLocal is called when wired via createEvaluationComponents`() = runTest {
+        val cachedChange = EvaluationChange(evalKey, 5L, listOf(StoredEvaluation(EvaluationResult(flag = "cached-flag", treatment = "off"))))
+        val loadCalls = mutableListOf<EvaluationKey>()
+        val loader = object : EvaluationCacheLoader {
+            override suspend fun loadLocal(evalKey: EvaluationKey): EvaluationChange? {
+                loadCalls.add(evalKey)
+                return cachedChange
+            }
+            override fun persistAsync(evalKey: EvaluationKey, changeNumber: Long, evaluations: List<StoredEvaluation>) = Unit
+        }
+
+        val (components, _) = makeComponents(cacheLoader = loader)
+
+        components.fetchCoordinator.fetchIfNeeded(evalKey, null, FetchReason.INITIALIZATION)
+
+        assertEquals(1, loadCalls.size)
+        assertEquals(evalKey, loadCalls[0])
+    }
+
+    @Test
+    fun `cacheLoader persistAsync is called after successful fetch via createEvaluationComponents`() = runTest {
+        val persistCalls = mutableListOf<EvaluationKey>()
+        val loader = object : EvaluationCacheLoader {
+            override suspend fun loadLocal(evalKey: EvaluationKey): EvaluationChange? = null
+            override fun persistAsync(evalKey: EvaluationKey, changeNumber: Long, evaluations: List<StoredEvaluation>) {
+                persistCalls.add(evalKey)
+            }
+        }
+
+        val (components, _) = makeComponents(
+            responseBody = """{"till": 1, "since": -1, "evaluations": [{"featureName": "f", "treatment": "on", "sets": []}]}""",
+            cacheLoader = loader,
+        )
+
+        components.fetchCoordinator.fetchIfNeeded(evalKey, null, FetchReason.INITIALIZATION)
+
+        assertEquals(1, persistCalls.size)
+        assertEquals(evalKey, persistCalls[0])
     }
 }

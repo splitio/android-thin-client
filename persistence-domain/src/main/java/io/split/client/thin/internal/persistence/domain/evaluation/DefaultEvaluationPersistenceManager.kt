@@ -39,7 +39,7 @@ internal class DefaultEvaluationPersistenceManager(
         }
     }
 
-    internal fun persistAsync(
+    override fun persistAsync(
         evalKey: EvaluationKey,
         changeNumber: Long,
         evaluations: List<StoredEvaluation>

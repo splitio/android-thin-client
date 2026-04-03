@@ -1,8 +1,11 @@
 package io.split.client.thin.internal.evaluation
 
+import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 
-class InMemoryEvaluationStorage : EvaluationReadStorage, EvaluationWriteStorage {
+class InMemoryEvaluationStorage(
+    private val cacheLoader: EvaluationCacheLoader? = null,
+) : EvaluationReadStorage, EvaluationWriteStorage {
 
     private class KeyEvaluations {
         @Volatile var evaluations: Map<String, StoredEvaluation> = emptyMap()
@@ -10,6 +13,19 @@ class InMemoryEvaluationStorage : EvaluationReadStorage, EvaluationWriteStorage 
     }
 
     private val store = ConcurrentHashMap<EvaluationKey, KeyEvaluations>()
+    private val loadedKeys: MutableSet<EvaluationKey> = Collections.newSetFromMap(ConcurrentHashMap())
+
+    override suspend fun ensureCacheLoaded(evalKey: EvaluationKey) {
+        if (!loadedKeys.add(evalKey)) return
+        try {
+            cacheLoader?.loadLocal(evalKey)?.let { cached ->
+                upsert(cached)
+            }
+        } catch (e: Throwable) {
+            loadedKeys.remove(evalKey)
+            throw e
+        }
+    }
 
     override fun get(flag: String, evalKey: EvaluationKey): StoredEvaluation? {
         return store[evalKey]?.evaluations?.get(flag)
@@ -42,6 +58,7 @@ class InMemoryEvaluationStorage : EvaluationReadStorage, EvaluationWriteStorage 
             if (!shouldUpdate) return false
             keyEvals.evaluations = change.evaluations.associateBy { it.result.flag }
             keyEvals.changeNumber = change.changeNumber
+            cacheLoader?.persistAsync(change.evaluationKey, change.changeNumber, change.evaluations)
             return true
         }
     }
