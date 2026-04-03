@@ -254,9 +254,10 @@ object SplitFactoryBuilder {
                 })
                 components.startTrigger()
             }
-        } else {
-            // Polling mode - create and start immediately
+        } else if (syncMode == SplitClientConfig.SyncMode.POLLING) {
             onPollingMode()
+            null
+        } else {
             null
         }
     }
