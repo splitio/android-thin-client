@@ -93,6 +93,6 @@ fun createEvaluationComponents(
     )
     return EvaluationComponents(
         fetchCoordinator = fetchCoordinator,
-        repository = DefaultEvaluationRepository(storage, fetchCoordinator),
+        repository = DefaultEvaluationRepository(storage, fetchCoordinator, persistenceBackedStorage = storage),
     )
 }

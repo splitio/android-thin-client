@@ -20,10 +20,12 @@ class DefaultEvaluationRepositoryTest {
     private fun makeRepository(
         readStorage: FakeEvaluationReadStorage = FakeEvaluationReadStorage(),
         coordinator: FakeEvaluationFetchCoordinator = FakeEvaluationFetchCoordinator(),
+        persistenceBackedStorage: PersistenceBackedStorage? = null,
     ): DefaultEvaluationRepository {
         return DefaultEvaluationRepository(
             readStorage = readStorage,
             fetchCoordinator = coordinator,
+            persistenceBackedStorage = persistenceBackedStorage,
         )
     }
 
@@ -109,5 +111,36 @@ class DefaultEvaluationRepositoryTest {
     fun `getFlagNames returns empty set for unknown key`() {
         val repo = makeRepository()
         assertEquals(emptySet<String>(), repo.getFlagNames(evalKey))
+    }
+
+    @Test
+    fun `setTarget_callsEnsureCacheLoadedBeforeFetchIfNeeded`() = runTest {
+        val callOrder = mutableListOf<String>()
+        val persistenceStorage = object : PersistenceBackedStorage {
+            override suspend fun ensureCacheLoaded(evalKey: EvaluationKey) {
+                callOrder.add("ensureCacheLoaded")
+            }
+        }
+        val coordinator = object : FakeEvaluationFetchCoordinator() {
+            override suspend fun fetchIfNeeded(evalKey: EvaluationKey, filters: EvaluationFilters?, reason: FetchReason): Boolean {
+                callOrder.add("fetchIfNeeded")
+                return super.fetchIfNeeded(evalKey, filters, reason)
+            }
+        }
+        val repo = makeRepository(coordinator = coordinator, persistenceBackedStorage = persistenceStorage)
+
+        repo.setTarget(target, null)
+
+        assertEquals(listOf("ensureCacheLoaded", "fetchIfNeeded"), callOrder)
+    }
+
+    @Test
+    fun `setTarget_doesNotCallEnsureCacheLoadedWhenPersistenceBackedStorageIsNull`() = runTest {
+        val coordinator = FakeEvaluationFetchCoordinator()
+        val repo = makeRepository(coordinator = coordinator, persistenceBackedStorage = null)
+
+        repo.setTarget(target, null)
+
+        assertEquals(1, coordinator.fetchCalls.size)
     }
 }

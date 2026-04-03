@@ -14,6 +14,7 @@ interface EvaluationRepository {
 class DefaultEvaluationRepository(
     private val readStorage: EvaluationReadStorage,
     private val fetchCoordinator: EvaluationFetchCoordinator,
+    private val persistenceBackedStorage: PersistenceBackedStorage? = null,
 ) : EvaluationRepository {
 
     override fun getTreatment(evalKey: EvaluationKey, flag: String): StoredEvaluation? {
@@ -30,6 +31,7 @@ class DefaultEvaluationRepository(
 
     override suspend fun setTarget(target: Target, filters: EvaluationFilters?) {
         val evalKey = target.toEvaluationKey()
+        persistenceBackedStorage?.ensureCacheLoaded(evalKey)
         fetchCoordinator.fetchIfNeeded(evalKey, filters, FetchReason.TARGET_SWITCH)
     }
 

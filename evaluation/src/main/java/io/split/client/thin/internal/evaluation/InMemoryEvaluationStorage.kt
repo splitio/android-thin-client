@@ -5,7 +5,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 class InMemoryEvaluationStorage(
     private val cacheLoader: EvaluationCacheLoader? = null,
-) : EvaluationReadStorage, EvaluationWriteStorage {
+) : EvaluationReadStorage, EvaluationWriteStorage, PersistenceBackedStorage {
 
     private class KeyEvaluations {
         @Volatile var evaluations: Map<String, StoredEvaluation> = emptyMap()

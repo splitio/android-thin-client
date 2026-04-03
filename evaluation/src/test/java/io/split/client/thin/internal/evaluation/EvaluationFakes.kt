@@ -92,11 +92,6 @@ class FakeEvaluationReadStorage(
 class FakeEvaluationWriteStorage(private val upsertResult: Boolean = true) : EvaluationWriteStorage {
     val upsertCalls = mutableListOf<EvaluationChange>()
     val clearCalls = mutableListOf<EvaluationKey>()
-    val ensureCacheLoadedCalls = mutableListOf<EvaluationKey>()
-
-    override suspend fun ensureCacheLoaded(evalKey: EvaluationKey) {
-        ensureCacheLoadedCalls.add(evalKey)
-    }
 
     override fun upsert(change: EvaluationChange): Boolean {
         upsertCalls.add(change)
@@ -105,6 +100,15 @@ class FakeEvaluationWriteStorage(private val upsertResult: Boolean = true) : Eva
 
     override fun clear(evalKey: EvaluationKey) {
         clearCalls.add(evalKey)
+    }
+}
+
+// FakePersistenceBackedStorage
+class FakePersistenceBackedStorage : PersistenceBackedStorage {
+    val ensureCacheLoadedCalls = mutableListOf<EvaluationKey>()
+
+    override suspend fun ensureCacheLoaded(evalKey: EvaluationKey) {
+        ensureCacheLoadedCalls.add(evalKey)
     }
 }
 
@@ -117,7 +121,7 @@ class FakeCompositeObserver : CompositeObserver {
 }
 
 // FakeEvaluationFetchCoordinator
-class FakeEvaluationFetchCoordinator(
+open class FakeEvaluationFetchCoordinator(
     private val fetchIfNeededResult: Boolean = true,
 ) : EvaluationFetchCoordinator {
 

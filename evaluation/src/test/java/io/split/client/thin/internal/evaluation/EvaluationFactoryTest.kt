@@ -2,6 +2,7 @@ package io.split.client.thin.internal.evaluation
 
 import io.split.client.thin.EvaluationResult
 import io.split.client.thin.Key
+import io.split.client.thin.Target
 import io.split.client.thin.internal.observer.ObservableEventType
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -153,7 +154,7 @@ class EvaluationFactoryTest {
 
         val (components, _) = makeComponents(cacheLoader = loader)
 
-        components.fetchCoordinator.fetchIfNeeded(evalKey, null, FetchReason.INITIALIZATION)
+        components.repository.setTarget(Target(Key("user-1")), null)
 
         assertEquals(1, loadCalls.size)
         assertEquals(evalKey, loadCalls[0])

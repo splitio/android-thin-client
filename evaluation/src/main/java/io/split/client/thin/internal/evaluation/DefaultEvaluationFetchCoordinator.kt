@@ -25,11 +25,6 @@ class DefaultEvaluationFetchCoordinator(
             return false
         }
         try {
-            // Ensure cache is loaded for this key before fetching from network.
-            // -1L is the sentinel for a key never fetched this session (in-memory store
-            // resets on each app start), so this implicitly identifies new keys.
-            writeStorage.ensureCacheLoaded(evalKey)
-
             val changeNumber = readStorage.lastChangeNumber(evalKey)
             val enrichedFilters = filters?.copy(changeNumber = changeNumber)
                 ?: EvaluationFilters(flagNames = null, flagSets = null, changeNumber = changeNumber)

@@ -8,8 +8,11 @@ interface EvaluationReadStorage {
     fun lastChangeNumber(evalKey: EvaluationKey): Long
 }
 
-interface EvaluationWriteStorage {
+interface PersistenceBackedStorage {
     suspend fun ensureCacheLoaded(evalKey: EvaluationKey)
+}
+
+interface EvaluationWriteStorage {
     fun upsert(change: EvaluationChange): Boolean
     fun clear(evalKey: EvaluationKey)
 }
