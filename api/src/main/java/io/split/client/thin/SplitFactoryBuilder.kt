@@ -1,19 +1,25 @@
 package io.split.client.thin
 
+import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import androidx.lifecycle.ProcessLifecycleOwner
 import io.split.android.client.network.HttpClientImpl
 import io.split.android.client.service.executor.SplitTaskType
 import io.split.android.client.submitter.RecorderSyncHelperImpl
+import io.split.android.client.submitter.StoragePusher
+import io.split.android.client.tracker.TrackerEvent
 import io.split.client.thin.events.CoroutineSplitTaskExecutor
 import io.split.client.thin.events.DefaultEventSubmissionCoordinator
 import io.split.client.thin.events.EventsPeriodicScheduler
 import io.split.client.thin.events.EventsPushHandler
 import io.split.client.thin.events.EventsRecorderTask
-import io.split.client.thin.events.EventsStorage
 import io.split.client.thin.events.HttpEventsSubmitter
 import io.split.client.thin.events.InBytesSizableStorageAdapter
+import io.split.client.thin.internal.persistence.ObserverEvaluationPersistenceCallbacks
+import io.split.client.thin.internal.persistence.ObserverEventsPersistenceCallbacks
+import io.split.client.thin.internal.persistence.domain.PersistenceConfig
+import io.split.client.thin.internal.persistence.domain.createPersistenceDomainComponents
 import io.split.client.thin.http.RetryableHttpClient
 import io.split.client.thin.http.createRetryableHttpClient
 import io.split.client.thin.internal.AsyncBridge
@@ -65,6 +71,7 @@ object SplitFactoryBuilder {
     @JvmStatic
     @JvmOverloads
     fun build(
+        context: Context,
         sdkKey: SdkKey,
         defaultTarget: Target,
         config: SplitClientConfig? = null,
@@ -108,8 +115,17 @@ object SplitFactoryBuilder {
         // Single factory-level scope for all async operations
         val factoryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+        // Persistence components
+        val persistenceComponents = createPersistenceDomainComponents(
+            context = context.applicationContext,
+            config = PersistenceConfig(prefix = config?.storage?.prefix),
+            evaluationCallbacks = ObserverEvaluationPersistenceCallbacks(compositeObserver),
+            eventsCallbacks = ObserverEventsPersistenceCallbacks(compositeObserver),
+            scope = factoryScope
+        )
+
         // Event tracking components
-        val eventsStorage = EventsStorage()
+        val eventsStorage = persistenceComponents.eventsStorage
         val httpEventsSubmitter = HttpEventsSubmitter(secureHttpClient::postEvents)
         val eventsRecorderTask = EventsRecorderTask(
             storage = eventsStorage,
@@ -117,7 +133,10 @@ object SplitFactoryBuilder {
             batchSize = EVENTS_BATCH_SIZE
         )
         val taskExecutor = CoroutineSplitTaskExecutor(factoryScope)
-        val storageAdapter = InBytesSizableStorageAdapter(eventsStorage)
+        // Safe: both EventsStorage and PersistentEventsStorage implement StoragePusher<TrackerEvent>;
+        // the declared type is RecorderStorage<TrackerEvent> but the runtime type always implements both.
+        @Suppress("UNCHECKED_CAST")
+        val storageAdapter = InBytesSizableStorageAdapter(eventsStorage as StoragePusher<TrackerEvent>)
         val syncHelper = RecorderSyncHelperImpl(
             /* taskType = */ SplitTaskType.GENERIC_TASK,
             /* storage = */ storageAdapter,
