@@ -54,11 +54,7 @@ internal class DefaultSplitFactory(
 ) : SplitFactory {
 
     init {
-        scope.launch {
-            runCatching {
-                evaluationRepository.setTarget(defaultTarget, filters)
-            }
-        }
+        clientManager.getOrCreate(defaultTarget)
 
         val timeoutSecs = config?.storage?.timeout ?: -1
         if (timeoutSecs > 0) {

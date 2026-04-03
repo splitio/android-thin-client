@@ -64,6 +64,11 @@ class DefaultSplitFactoryTest {
     }
 
     @Test
+    fun `factory init calls clientManager getOrCreate with defaultTarget`() {
+        assertEquals(defaultTarget, fakeClientManager.lastGetOrCreateTarget)
+    }
+
+    @Test
     fun `getClient null delegates to clientManager with defaultTarget`() {
         val client = factory.getClient(null)
 
@@ -244,7 +249,6 @@ class FetchReasonObserverMappingTest {
             },
             readStorage = FakeEvaluationReadStorage(),
             writeStorage = object : EvaluationWriteStorage {
-                override suspend fun ensureCacheLoaded(evalKey: EvaluationKey) {}
                 override fun upsert(change: EvaluationChange): Boolean = true
                 override fun clear(evalKey: EvaluationKey) {}
             },
