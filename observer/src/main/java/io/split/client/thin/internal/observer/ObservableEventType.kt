@@ -7,6 +7,17 @@ object ObservableEventType {
     const val SDK_READY_TIMEOUT_REACHED = "sdk_ready_timeout_reached"
     const val EVALUATIONS_UPDATED = "evaluations_updated"
 
+    // Persistence events
+    const val EVAL_STORAGE_LOAD_STARTED = "eval_storage_load_started"
+    const val EVAL_STORAGE_LOAD_SUCCEEDED = "eval_storage_load_succeeded"
+    const val EVAL_STORAGE_LOAD_FAILED = "eval_storage_load_failed"
+    const val EVAL_STORAGE_WRITE_SCHEDULED = "eval_storage_write_scheduled"
+    const val EVAL_STORAGE_WRITE_SUCCEEDED = "eval_storage_write_succeeded"
+    const val EVAL_STORAGE_WRITE_FAILED = "eval_storage_write_failed"
+    const val EVENT_PUSHED = "event_pushed"
+    const val EVENT_POPPED = "event_popped"
+    const val PERSISTENCE_FAILED = "persistence_failed"
+
     // Lifecycle events
     const val FACTORY_INIT_STARTED = "factory_init_started"
     const val FACTORY_INIT_COMPLETED = "factory_init_completed"
