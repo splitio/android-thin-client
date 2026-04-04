@@ -54,4 +54,12 @@ open class SplitEventListener {
     open fun onReadyFromCacheView(client: SplitClient, metadata: SdkReadyMetadata) {
         // not implemented by default
     }
+
+    open fun onTimeout(client: SplitClient) {
+        // not implemented by default
+    }
+
+    open fun onTimeoutView(client: SplitClient) {
+        // not implemented by default
+    }
 }

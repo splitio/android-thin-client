@@ -65,9 +65,9 @@ class SplitClientConfigTest {
     }
 
     @Test
-    fun `default storage config has timeout minus one`() {
+    fun `default sync config has timeout minus one`() {
         val config = defaultConfig()
-        assertEquals(-1, config.storage.timeout)
+        assertEquals(-1, config.sync.timeout)
     }
 
     @Test
@@ -142,11 +142,13 @@ class SplitClientConfigTest {
         val config = splitClientConfig {
             storage {
                 prefix = "test_prefix"
+            }
+            sync {
                 timeout = 30
             }
         }
         assertEquals("test_prefix", config.storage.prefix)
-        assertEquals(30, config.storage.timeout)
+        assertEquals(30, config.sync.timeout)
     }
 
     @Test
@@ -194,13 +196,13 @@ class SplitClientConfigTest {
                     .mode(SplitClientConfig.SyncMode.POLLING)
                     .evaluationRefreshRate(300)
                     .pushRate(60)
+                    .timeout(10)
                     .serviceEndpoints(endpoints)
                     .build()
             )
             .storage(
                 SplitClientConfig.StorageConfig.Builder()
                     .prefix("parity_prefix")
-                    .timeout(10)
                     .build()
             )
             .build()
@@ -214,6 +216,7 @@ class SplitClientConfigTest {
                 mode = SplitClientConfig.SyncMode.POLLING
                 evaluationRefreshRate = 300
                 pushRate = 60
+                timeout = 10
                 serviceEndpoints {
                     authUrl = endpoints.authUrl
                     evaluationsUrl = endpoints.evaluationsUrl
@@ -223,7 +226,6 @@ class SplitClientConfigTest {
             }
             storage {
                 prefix = "parity_prefix"
-                timeout = 10
             }
         }
 
@@ -270,11 +272,11 @@ class SplitClientConfigTest {
     }
 
     @Test
-    fun `builder falls back storage timeout to default when below minimum`() {
+    fun `builder falls back sync timeout to default when below minimum`() {
         val config = SplitClientConfig.Builder()
-            .storage(SplitClientConfig.StorageConfig.Builder().timeout(-2).build())
+            .sync(SplitClientConfig.SyncConfig.Builder().timeout(-2).build())
             .build()
-        assertEquals(-1, config.storage.timeout)
+        assertEquals(-1, config.sync.timeout)
     }
 
     @Test
@@ -296,9 +298,9 @@ class SplitClientConfigTest {
     }
 
     @Test
-    fun `DSL falls back storage timeout to default when below minimum`() {
-        val config = splitClientConfig { storage { timeout = -2 } }
-        assertEquals(-1, config.storage.timeout)
+    fun `DSL falls back sync timeout to default when below minimum`() {
+        val config = splitClientConfig { sync { timeout = -2 } }
+        assertEquals(-1, config.sync.timeout)
     }
 
     @Test
@@ -337,11 +339,11 @@ class SplitClientConfigTest {
     }
 
     @Test
-    fun `builder accepts storage timeout of zero`() {
+    fun `builder accepts sync timeout of zero`() {
         val config = SplitClientConfig.Builder()
-            .storage(SplitClientConfig.StorageConfig.Builder().timeout(0).build())
+            .sync(SplitClientConfig.SyncConfig.Builder().timeout(0).build())
             .build()
-        assertEquals(0, config.storage.timeout)
+        assertEquals(0, config.sync.timeout)
     }
 
     @Test
@@ -357,9 +359,9 @@ class SplitClientConfigTest {
     }
 
     @Test
-    fun `DSL accepts storage timeout of zero`() {
-        val config = splitClientConfig { storage { timeout = 0 } }
-        assertEquals(0, config.storage.timeout)
+    fun `DSL accepts sync timeout of zero`() {
+        val config = splitClientConfig { sync { timeout = 0 } }
+        assertEquals(0, config.sync.timeout)
     }
 
     @Test

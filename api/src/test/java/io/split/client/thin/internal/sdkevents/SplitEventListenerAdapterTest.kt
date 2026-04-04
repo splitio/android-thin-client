@@ -119,12 +119,44 @@ class SplitEventListenerAdapterTest {
         assertEquals(client, listener.onReadyFromCacheCalls[0].first)
         assertEquals(metadata, listener.onReadyFromCacheCalls[0].second)
     }
+
+    @Test
+    fun `SDK_READY_TIMEOUT handler calls onTimeout on listener`() {
+        val handlerCaptor = ArgumentCaptor.forClass(EventHandler::class.java) as ArgumentCaptor<EventHandler<SplitEvent, Any?>>
+        SplitEventListenerAdapter(listener, client).registerAll(eventsManager)
+        verify(eventsManager, atLeastOnce()).register(
+            org.mockito.ArgumentMatchers.eq(SplitEvent.SDK_READY_TIMEOUT),
+            handlerCaptor.capture()
+        )
+
+        handlerCaptor.value.handle(SplitEvent.SDK_READY_TIMEOUT, null)
+
+        assertEquals(1, listener.onTimeoutCalls.size)
+        assertEquals(client, listener.onTimeoutCalls[0])
+    }
+
+    @Test
+    fun `SDK_READY_TIMEOUT handler calls onTimeoutView on listener`() {
+        val handlerCaptor = ArgumentCaptor.forClass(EventHandler::class.java) as ArgumentCaptor<EventHandler<SplitEvent, Any?>>
+        SplitEventListenerAdapter(listener, client).registerAll(eventsManager)
+        verify(eventsManager, atLeastOnce()).register(
+            org.mockito.ArgumentMatchers.eq(SplitEvent.SDK_READY_TIMEOUT),
+            handlerCaptor.capture()
+        )
+
+        handlerCaptor.value.handle(SplitEvent.SDK_READY_TIMEOUT, null)
+
+        assertEquals(1, listener.onTimeoutViewCalls.size)
+        assertEquals(client, listener.onTimeoutViewCalls[0])
+    }
 }
 
 private class FakeSplitEventListener : SplitEventListener() {
     val onReadyCalls = mutableListOf<Pair<SplitClient, SdkReadyMetadata>>()
     val onReadyFromCacheCalls = mutableListOf<Pair<SplitClient, SdkReadyMetadata>>()
     val onUpdateCalls = mutableListOf<Pair<SplitClient, SdkUpdateMetadata>>()
+    val onTimeoutCalls = mutableListOf<SplitClient>()
+    val onTimeoutViewCalls = mutableListOf<SplitClient>()
 
     override fun onReady(client: SplitClient, metadata: SdkReadyMetadata) {
         onReadyCalls.add(client to metadata)
@@ -136,5 +168,13 @@ private class FakeSplitEventListener : SplitEventListener() {
 
     override fun onUpdate(client: SplitClient, metadata: SdkUpdateMetadata) {
         onUpdateCalls.add(client to metadata)
+    }
+
+    override fun onTimeout(client: SplitClient) {
+        onTimeoutCalls.add(client)
+    }
+
+    override fun onTimeoutView(client: SplitClient) {
+        onTimeoutViewCalls.add(client)
     }
 }

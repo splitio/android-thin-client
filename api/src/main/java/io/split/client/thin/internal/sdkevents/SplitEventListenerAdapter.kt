@@ -21,7 +21,8 @@ internal class SplitEventListenerAdapter(
             listener.onReadyFromCache(client, metadata as? SdkReadyMetadata ?: SdkReadyMetadata())
         })
         eventsManager.register(SplitEvent.SDK_READY_TIMEOUT, EventHandler { _, _ ->
-            // no callback on SplitEventListener for timeout; registered to allow suppression logic to work
+            listener.onTimeout(client)
+            listener.onTimeoutView(client)
         })
         eventsManager.register(SplitEvent.SDK_UPDATE, EventHandler { _, metadata ->
             listener.onUpdate(client, metadata as? SdkUpdateMetadata ?: SdkUpdateMetadata())

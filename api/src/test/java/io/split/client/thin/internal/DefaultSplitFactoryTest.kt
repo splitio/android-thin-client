@@ -321,7 +321,7 @@ class SdkReadyTimeoutTest {
         compositeObserver.register(fakeObserver)
 
         val config = SplitClientConfig.Builder()
-            .storage(SplitClientConfig.StorageConfig.Builder().timeout(1).build())
+            .sync(SplitClientConfig.SyncConfig.Builder().timeout(1).build())
             .build()
 
         DefaultSplitFactory(

@@ -49,6 +49,8 @@ class SplitEventListenerTest {
         listener.onReadyFromCacheView(noOpClient, readyMetadata)
         listener.onUpdate(noOpClient, updateMetadata)
         listener.onUpdateView(noOpClient, updateMetadata)
+        listener.onTimeout(noOpClient)
+        listener.onTimeoutView(noOpClient)
     }
 
     @Test
