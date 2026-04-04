@@ -41,8 +41,8 @@ import org.junit.Test
 class DefaultSplitFactoryTest {
 
     private val sdkKey = SdkKey("sdk-key")
-    private val defaultTarget = Target(Key("default-user"))
-    private val otherTarget = Target(Key("other-user"))
+    private val defaultTarget = Target(Key("default-user"), trafficType = "user")
+    private val otherTarget = Target(Key("other-user"), trafficType = "user")
 
     private lateinit var fakeClientManager: FakeClientManager
     private lateinit var fakeAsyncBridge: FakeAsyncBridge
@@ -312,7 +312,7 @@ class FetchReasonObserverMappingTest {
 @OptIn(ExperimentalCoroutinesApi::class)
 class SdkReadyTimeoutTest {
 
-    private val defaultTarget = Target(Key("user-1"))
+    private val defaultTarget = Target(Key("user-1"), trafficType = "user")
 
     @Test
     fun `emits SDK_READY_TIMEOUT_REACHED after configured timeout seconds`() = runTest {
@@ -391,7 +391,7 @@ private class StubSplitClient : SplitClient {
     override fun addEventListener(listener: SplitEventListener): Unit =
         throw UnsupportedOperationException()
 
-    override fun track(trafficType: String, eventType: String, value: Double?, properties: Map<String, Any?>?) =
+    override fun track(eventType: String, value: Double?, properties: Map<String, Any?>?) =
         throw UnsupportedOperationException()
 
     override suspend fun destroy() = Unit

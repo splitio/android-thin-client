@@ -6,5 +6,5 @@ data class Target @JvmOverloads constructor(
     /** Optional target attributes sent for remote evaluation. */
     val attributes: Map<String, Any?> = emptyMap(),
     /** Traffic type to be used when tracking events. */
-    val trafficType: String? = null,
+    val trafficType: String,
 )

@@ -4,6 +4,7 @@ import io.harness.events.EventsManager
 import io.split.android.client.tracker.Tracker
 import io.split.client.thin.EvaluationResult
 import io.split.client.thin.Key
+import io.split.client.thin.SplitClient
 import io.split.client.thin.SplitEvent
 import io.split.client.thin.SplitEventListener
 import io.split.client.thin.Target
@@ -42,7 +43,7 @@ class DefaultSplitClientTest {
     @Before
     fun setUp() {
         tracker = mock(Tracker::class.java)
-        target = Target(Key("user-1"))
+        target = Target(Key("user-1"), trafficType = "user")
         evaluationRepository = FakeEvaluationRepository()
         eventsManager = mock(EventsManager::class.java) as EventsManager<SplitEvent, SdkInternalEvent, Any?>
         `when`(eventsManager.eventAlreadyTriggered(SplitEvent.SDK_READY)).thenReturn(true)
@@ -58,8 +59,22 @@ class DefaultSplitClientTest {
     }
 
     @Test
-    fun `track delegates to tracker with matching key`() {
-        client.track("user", "purchase", 9.99, null)
+    fun `track uses default value and properties when omitted`() {
+        client.track("purchase")
+
+        verify(tracker).track(
+            eq("user-1"),
+            eq("user"),
+            eq("purchase"),
+            eq(0.0),
+            eq(null),
+            eq(true),
+        )
+    }
+
+    @Test
+    fun `track delegates to tracker using target traffic type`() {
+        client.track("purchase", 9.99, null)
 
         verify(tracker).track(
             eq("user-1"),
@@ -73,7 +88,7 @@ class DefaultSplitClientTest {
 
     @Test
     fun `track uses 0 dot 0 when value is null`() {
-        client.track("user", "purchase", null, null)
+        client.track("purchase", null, null)
 
         verify(tracker).track(
             eq("user-1"),
@@ -89,7 +104,7 @@ class DefaultSplitClientTest {
     fun `track passes isSdkReady from events manager`() {
         `when`(eventsManager.eventAlreadyTriggered(SplitEvent.SDK_READY)).thenReturn(false)
 
-        client.track("user", "purchase", 0.0, null)
+        client.track("purchase", 0.0, null)
 
         verify(tracker).track(
             eq("user-1"),
@@ -116,15 +131,15 @@ class DefaultSplitClientTest {
     }
 
     @Test
-    fun `setTarget updates key used for subsequent track calls`() = runTest {
-        val newTarget = Target(Key("user-2"))
+    fun `setTarget updates traffic type used for subsequent track calls`() = runTest {
+        val newTarget = Target(Key("user-2"), trafficType = "account")
         client.setTarget(newTarget)
 
-        client.track("user", "purchase", 0.0, null)
+        client.track("purchase", 0.0, null)
 
         verify(tracker).track(
             eq("user-2"),
-            eq("user"),
+            eq("account"),
             eq("purchase"),
             eq(0.0),
             eq(null),
@@ -134,7 +149,7 @@ class DefaultSplitClientTest {
 
     @Test
     fun `setTarget delegates to evaluation repository`() = testScope.runTest {
-        val newTarget = Target(Key("user-2"))
+        val newTarget = Target(Key("user-2"), trafficType = "user")
         client.setTarget(newTarget)
         testScheduler.advanceUntilIdle()
 
@@ -211,6 +226,22 @@ class DefaultSplitClientTest {
     fun `destroy does not throw`() = runTest {
         client.destroy()
     }
+
+    @Test
+    fun `track via SplitClient interface with only eventType uses target traffic type`() {
+        val splitClient: SplitClient = client
+        splitClient.track("purchase")
+
+        verify(tracker).track(
+            eq("user-1"),
+            eq("user"),
+            eq("purchase"),
+            eq(0.0),
+            eq(null),
+            eq(true),
+        )
+    }
+
 }
 
 // Test fakes

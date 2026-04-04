@@ -17,7 +17,7 @@ import org.mockito.Mockito.`when`
 class SplitFactoryBuilderTest {
 
     private val sdkKey = SdkKey("test-sdk-key")
-    private val defaultTarget = Target(Key("user-1"))
+    private val defaultTarget = Target(Key("user-1"), trafficType = "user")
     private val mockContext = mock(Context::class.java).also {
         `when`(it.applicationContext).thenReturn(it)
     }

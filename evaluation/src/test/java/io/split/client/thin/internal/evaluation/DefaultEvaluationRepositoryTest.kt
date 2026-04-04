@@ -12,7 +12,7 @@ import org.junit.Test
 class DefaultEvaluationRepositoryTest {
 
     private val evalKey = EvaluationKey(Key("user-1"))
-    private val target = Target(Key("user-1"))
+    private val target = Target(Key("user-1"), trafficType = "user")
 
     private fun storedEval(flag: String, treatment: String, sets: Set<String> = emptySet()) =
         StoredEvaluation(EvaluationResult(flag = flag, treatment = treatment), flagSets = sets)

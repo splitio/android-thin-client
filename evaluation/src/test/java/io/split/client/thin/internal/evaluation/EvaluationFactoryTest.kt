@@ -154,7 +154,7 @@ class EvaluationFactoryTest {
 
         val (components, _) = makeComponents(cacheLoader = loader)
 
-        components.repository.setTarget(Target(Key("user-1")), null)
+        components.repository.setTarget(Target(Key("user-1"), trafficType = "user"), null)
 
         assertEquals(1, loadCalls.size)
         assertEquals(evalKey, loadCalls[0])

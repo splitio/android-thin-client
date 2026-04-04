@@ -22,7 +22,6 @@ class SplitEventListenerTest {
         override fun addEventListener(listener: SplitEventListener) = Unit
 
         override fun track(
-            trafficType: String,
             eventType: String,
             value: Double?,
             properties: Map<String, Any?>?,
