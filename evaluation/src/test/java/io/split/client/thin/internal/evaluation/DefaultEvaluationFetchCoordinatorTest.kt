@@ -254,4 +254,35 @@ class DefaultEvaluationFetchCoordinatorTest {
         assertEquals(0, provider.fetchCalls.size)
     }
 
+    @Test
+    fun `refetchAll invokes delayProvider for each key before fetching`() = runTest {
+        val key1 = EvaluationKey(Key("user-1"))
+        val key2 = EvaluationKey(Key("user-2"))
+        val (coordinator, provider, _) = makeCoordinator()
+
+        coordinator.fetchIfNeeded(key1, null, FetchReason.INITIALIZATION)
+        coordinator.fetchIfNeeded(key2, null, FetchReason.INITIALIZATION)
+
+        val delayedKeys = mutableListOf<EvaluationKey>()
+        coordinator.refetchAll(null, FetchReason.PERIODIC, delayProvider = { key ->
+            delayedKeys.add(key)
+            0L
+        })
+
+        assertEquals(2, delayedKeys.size)
+        assertTrue(delayedKeys.contains(key1))
+        assertTrue(delayedKeys.contains(key2))
+    }
+
+    @Test
+    fun `refetchAll without delayProvider still fetches all keys`() = runTest {
+        val key1 = EvaluationKey(Key("user-1"))
+        val (coordinator, provider, _) = makeCoordinator()
+
+        coordinator.fetchIfNeeded(key1, null, FetchReason.INITIALIZATION)
+        coordinator.refetchAll(null, FetchReason.PERIODIC, delayProvider = null)
+
+        assertEquals(2, provider.fetchCalls.size)
+    }
+
 }

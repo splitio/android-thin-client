@@ -241,7 +241,7 @@ class FakeEvaluationReadStorage : EvaluationReadStorage {
 
 class FakeEvaluationFetchCoordinator : EvaluationFetchCoordinator {
     override suspend fun fetchIfNeeded(evalKey: EvaluationKey, filters: EvaluationFilters?, reason: FetchReason): Boolean = false
-    override suspend fun refetchAll(filters: EvaluationFilters?, reason: FetchReason) {}
+    override suspend fun refetchAll(filters: EvaluationFilters?, reason: FetchReason, delayProvider: ((EvaluationKey) -> Long)?) {}
 }
 
 class FakeEvaluationRepository : EvaluationRepository {

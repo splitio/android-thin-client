@@ -133,7 +133,7 @@ open class FakeEvaluationFetchCoordinator(
         return fetchIfNeededResult
     }
 
-    override suspend fun refetchAll(filters: EvaluationFilters?, reason: FetchReason) {
+    override suspend fun refetchAll(filters: EvaluationFilters?, reason: FetchReason, delayProvider: ((EvaluationKey) -> Long)?) {
         refetchAllCalls.add(filters to reason)
     }
 }
