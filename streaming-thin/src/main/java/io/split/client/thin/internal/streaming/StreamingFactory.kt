@@ -36,7 +36,7 @@ fun createStreamingComponents(
     streamingUrl: String,
     retryableHttpClient: RetryableHttpClient,
     tokenProvider: suspend () -> StreamingToken,
-    onEvaluationFetchNotification: suspend () -> Unit,
+    onEvaluationFetchNotification: suspend (EvaluationUpdateNotification?) -> Unit,
     onPushDisabled: suspend () -> Unit = {},
 ): StreamingComponents {
     val streamingScope = CoroutineScope(SupervisorJob())

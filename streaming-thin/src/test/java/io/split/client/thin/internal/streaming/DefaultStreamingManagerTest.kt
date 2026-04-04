@@ -122,7 +122,7 @@ class DefaultStreamingManagerTest {
         var notificationCount = 0
         val manager = createManager(
             eventSourceClientProvider = { eventSourceClient },
-            onEvaluationFetchNotification = { notificationCount++ }
+            onEvaluationFetchNotification = { _ -> notificationCount++ }
         )
 
         manager.start()
@@ -141,7 +141,7 @@ class DefaultStreamingManagerTest {
         tokenProvider: suspend () -> StreamingToken = { StreamingToken("test-token") },
         eventSourceClientProvider: () -> FakeEventSourceClient = { FakeEventSourceClient() },
         onOccupancyZero: suspend () -> Unit = {},
-        onEvaluationFetchNotification: suspend () -> Unit = {},
+        onEvaluationFetchNotification: suspend (EvaluationUpdateNotification?) -> Unit = {},
     ): DefaultStreamingManager = DefaultStreamingManager(
         streamingUrl = "https://streaming.test.io/sse",
         tokenProvider = tokenProvider,

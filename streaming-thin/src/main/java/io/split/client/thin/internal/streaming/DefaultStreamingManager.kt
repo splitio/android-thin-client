@@ -16,7 +16,7 @@ class DefaultStreamingManager(
     private val backoffCounterFactory: () -> BackoffCounter,
     private val scope: CoroutineScope,
     private val onOccupancyZero: suspend () -> Unit,
-    private val onEvaluationFetchNotification: suspend () -> Unit,
+    private val onEvaluationFetchNotification: suspend (EvaluationUpdateNotification?) -> Unit,
     private val onPushDisabled: suspend () -> Unit = {},
     private val connectionDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : StreamingManager {

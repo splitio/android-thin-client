@@ -28,7 +28,9 @@ import io.split.client.thin.internal.DefaultClientManager
 import io.split.client.thin.internal.DefaultSplitFactory
 import io.split.client.thin.internal.auth.createAuthProvider
 import io.split.client.thin.internal.evaluation.DefaultPollingScheduler
+import io.split.client.thin.internal.evaluation.DefaultSyncDelayCalculator
 import io.split.client.thin.internal.evaluation.FetchReason
+import io.split.client.thin.internal.evaluation.SyncDelayCalculator
 import io.split.client.thin.internal.evaluation.PollingScheduler
 import io.split.client.thin.internal.evaluation.createEvaluationComponents
 import io.split.client.thin.internal.evaluation.toEvaluationKey
@@ -42,6 +44,7 @@ import io.split.client.thin.internal.observer.ObservableEvent
 import io.split.client.thin.internal.observer.ObservableEventType
 import io.split.client.thin.internal.secure.EvaluationTarget
 import io.split.client.thin.internal.secure.createSecureHttpClient
+import io.split.client.thin.internal.streaming.EvaluationUpdateNotification
 import io.split.client.thin.internal.streaming.StreamingComponents
 import io.split.client.thin.internal.streaming.StreamingToken
 import io.split.client.thin.internal.streaming.createStreamingComponents
@@ -223,7 +226,9 @@ object SplitFactoryBuilder {
                 val cred = authProvider.credential()
                 StreamingToken(cred.token, cred.connDelaySeconds, cred.pushEnabled)
             },
-            onEvaluationFetchNotification = { fetchCoordinator.refetchAll(null, FetchReason.PUSH) },
+            onEvaluationFetchNotification = { notification ->
+                fetchCoordinator.refetchAll(null, FetchReason.PUSH, buildDelayProvider(notification))
+            },
             onPushDisabled = {
                 fetchCoordinator.refetchAll(null, FetchReason.PERIODIC)
                 getOrCreateScheduler().start()
@@ -256,7 +261,7 @@ object SplitFactoryBuilder {
         streamingUrl: String,
         retryableHttpClient: RetryableHttpClient,
         tokenProvider: suspend () -> StreamingToken,
-        onEvaluationFetchNotification: suspend () -> Unit,
+        onEvaluationFetchNotification: suspend (EvaluationUpdateNotification?) -> Unit,
         onPushDisabled: suspend () -> Unit,
         lifecycleManager: DefaultLifecycleManager,
         onPollingMode: () -> Unit,
@@ -283,4 +288,13 @@ object SplitFactoryBuilder {
         }
     }
 
+}
+
+internal fun buildDelayProvider(
+    notification: EvaluationUpdateNotification?,
+    calculator: SyncDelayCalculator = DefaultSyncDelayCalculator(),
+): ((io.split.client.thin.internal.evaluation.EvaluationKey) -> Long)? {
+    return notification?.let { n ->
+        { key -> calculator.calculateDelay(key.key.matchingKey, n.updateIntervalMs, n.algorithmSeed, n.hashingAlgorithm) }
+    }
 }

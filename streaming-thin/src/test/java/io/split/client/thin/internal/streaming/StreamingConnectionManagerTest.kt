@@ -131,7 +131,7 @@ class StreamingConnectionManagerTest {
         var fetchNotificationCount = 0
         val manager = createManager(
             eventSourceClientProvider = { eventSourceClient },
-            onEvaluationFetchNotification = { fetchNotificationCount++ },
+            onEvaluationFetchNotification = { _ -> fetchNotificationCount++ },
         )
 
         manager.start()
@@ -144,6 +144,47 @@ class StreamingConnectionManagerTest {
 
         // 1 from onOpen (catch-up fetch) + 1 from the push notification
         assertEquals(2, fetchNotificationCount)
+    }
+
+    @Test
+    fun `onOpen passes null notification to onEvaluationFetchNotification`() = runTest {
+        val eventSourceClient = FakeEventSourceClient()
+        var capturedNotification: EvaluationUpdateNotification? = EvaluationUpdateNotification(0L, null, 0L) // non-null sentinel
+        val manager = createManager(
+            eventSourceClientProvider = { eventSourceClient },
+            onEvaluationFetchNotification = { n -> capturedNotification = n },
+        )
+
+        manager.start()
+        advanceUntilIdle()
+
+        assertNull(capturedNotification)
+    }
+
+    @Test
+    fun `onMessage EVALUATION_UPDATE passes notification to onEvaluationFetchNotification`() = runTest {
+        val eventSourceClient = FakeEventSourceClient()
+        var capturedNotification: EvaluationUpdateNotification? = null
+        val manager = createManager(
+            eventSourceClientProvider = { eventSourceClient },
+            onEvaluationFetchNotification = { n -> capturedNotification = n },
+        )
+
+        manager.start()
+        advanceUntilIdle()
+        // Reset after onOpen's null call
+        capturedNotification = null
+
+        eventSourceClient.simulateMessage(
+            mapOf("data" to """{"channel":"evaluations","data":"{\"type\":\"EVALUATION_UPDATE\",\"changeNumber\":42,\"i\":60000,\"s\":10,\"h\":1}","timestamp":1000}""")
+        )
+        advanceUntilIdle()
+
+        assertNotNull(capturedNotification)
+        assertEquals(42L, capturedNotification!!.changeNumber)
+        assertEquals(60000L, capturedNotification!!.updateIntervalMs)
+        assertEquals(10, capturedNotification!!.algorithmSeed)
+        assertEquals(1, capturedNotification!!.hashingAlgorithm)
     }
 
     @Test
@@ -324,7 +365,7 @@ class StreamingConnectionManagerTest {
         eventSourceClientProvider: () -> FakeEventSourceClient = { FakeEventSourceClient() },
         backoffCounter: FakeBackoffCounter = FakeBackoffCounter(),
         onOccupancyZero: suspend () -> Unit = {},
-        onEvaluationFetchNotification: suspend () -> Unit = {},
+        onEvaluationFetchNotification: suspend (EvaluationUpdateNotification?) -> Unit = {},
         channelExtractor: (String) -> List<String> = { listOf("evaluations", "[?occupancy=metrics.publishers]control_pri") },
     ): StreamingConnectionManager = StreamingConnectionManager(
         streamingUrl = "https://streaming.test.io/sse",

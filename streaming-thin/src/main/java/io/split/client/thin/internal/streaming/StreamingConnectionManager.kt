@@ -28,7 +28,7 @@ class StreamingConnectionManager(
     private val backoffCounter: BackoffCounter,
     private val scope: CoroutineScope,
     private val onOccupancyZero: suspend () -> Unit,
-    private val onEvaluationFetchNotification: suspend () -> Unit,
+    private val onEvaluationFetchNotification: suspend (EvaluationUpdateNotification?) -> Unit,
     private val onPushDisabled: suspend () -> Unit = {},
     private val connectionDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
@@ -124,7 +124,7 @@ class StreamingConnectionManager(
     private fun createEventHandler() = object : EventSourceClient.EventHandler {
         override fun onOpen() {
             backoffCounter.resetCounter()
-            scope.launch { onEvaluationFetchNotification() }
+            scope.launch { onEvaluationFetchNotification(null) }
         }
 
         override fun onMessage(event: Map<String, String>) {
@@ -171,7 +171,7 @@ class StreamingConnectionManager(
         scope.launch {
             when (notification) {
                 is EvaluationUpdateNotification -> {
-                    onEvaluationFetchNotification.invoke()
+                    onEvaluationFetchNotification.invoke(notification)
                 }
                 is ThinControlNotification -> {
                     when (notification.controlType) {

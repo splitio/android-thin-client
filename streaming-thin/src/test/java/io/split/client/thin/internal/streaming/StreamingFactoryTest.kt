@@ -21,7 +21,7 @@ class StreamingFactoryTest {
                 tokenProviderCalled = true
                 StreamingToken("fake-jwt-token")
             },
-            onEvaluationFetchNotification = {
+            onEvaluationFetchNotification = { _ ->
                 fetchNotificationCalled = true
             },
         )
@@ -43,7 +43,7 @@ class StreamingFactoryTest {
                 tokenProviderCallCount++
                 StreamingToken("jwt-token-$tokenProviderCallCount")
             },
-            onEvaluationFetchNotification = { },
+            onEvaluationFetchNotification = { _ -> },
         )
 
         // Verify token provider is not eagerly evaluated during factory construction
@@ -62,7 +62,7 @@ class StreamingFactoryTest {
             streamingUrl = "https://streaming.example.com/sse",
             retryableHttpClient = fakeRetryableHttpClient,
             tokenProvider = { StreamingToken("jwt-token") },
-            onEvaluationFetchNotification = { },
+            onEvaluationFetchNotification = { _ -> },
         )
 
         // Verify start wasn't called during construction
@@ -85,7 +85,7 @@ class StreamingFactoryTest {
             streamingUrl = "https://streaming.example.com/sse",
             retryableHttpClient = fakeRetryableHttpClient,
             tokenProvider = { StreamingToken("jwt-token") },
-            onEvaluationFetchNotification = {
+            onEvaluationFetchNotification = { _ ->
                 fetchNotificationCallCount++
             },
         )

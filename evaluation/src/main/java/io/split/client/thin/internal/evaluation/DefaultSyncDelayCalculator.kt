@@ -2,7 +2,7 @@ package io.split.client.thin.internal.evaluation
 
 import com.goncalossilva.murmurhash.MurmurHash3
 
-internal class DefaultSyncDelayCalculator : SyncDelayCalculator {
+class DefaultSyncDelayCalculator : SyncDelayCalculator {
 
     companion object {
         private const val DEFAULT_INTERVAL_MS = 60_000L
