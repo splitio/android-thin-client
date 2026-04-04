@@ -270,4 +270,56 @@ class ThinNotificationParserTest {
 
         assertNull(result)
     }
+
+    @Test
+    fun `parse returns EvaluationUpdateNotification with sync delay fields when present`() {
+        val raw = RawThinNotification(
+            channel = "evaluations-channel",
+            data = """{"type":"EVALUATION_UPDATE","changeNumber":99,"i":60000,"s":42,"h":1}""",
+            timestamp = 1000L
+        )
+
+        val result = parser.parse(raw)
+
+        assertTrue(result is EvaluationUpdateNotification)
+        val notification = result as EvaluationUpdateNotification
+        assertEquals(99L, notification.changeNumber)
+        assertEquals(60000L, notification.updateIntervalMs)
+        assertEquals(42, notification.algorithmSeed)
+        assertEquals(1, notification.hashingAlgorithm)
+    }
+
+    @Test
+    fun `parse returns EvaluationUpdateNotification with null sync delay fields when absent`() {
+        val raw = RawThinNotification(
+            channel = "evaluations-channel",
+            data = """{"type":"EVALUATION_UPDATE","changeNumber":10}""",
+            timestamp = 1000L
+        )
+
+        val result = parser.parse(raw)
+
+        assertTrue(result is EvaluationUpdateNotification)
+        val notification = result as EvaluationUpdateNotification
+        assertNull(notification.updateIntervalMs)
+        assertNull(notification.algorithmSeed)
+        assertNull(notification.hashingAlgorithm)
+    }
+
+    @Test
+    fun `parse returns EvaluationUpdateNotification with hashing NONE (h=0)`() {
+        val raw = RawThinNotification(
+            channel = "evaluations-channel",
+            data = """{"type":"EVALUATION_UPDATE","changeNumber":5,"i":30000,"s":0,"h":0}""",
+            timestamp = 1000L
+        )
+
+        val result = parser.parse(raw)
+
+        assertTrue(result is EvaluationUpdateNotification)
+        val notification = result as EvaluationUpdateNotification
+        assertEquals(30000L, notification.updateIntervalMs)
+        assertEquals(0, notification.algorithmSeed)
+        assertEquals(0, notification.hashingAlgorithm)
+    }
 }

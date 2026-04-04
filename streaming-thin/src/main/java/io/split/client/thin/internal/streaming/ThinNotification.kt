@@ -9,7 +9,10 @@ internal sealed class ThinNotification(
 internal data class EvaluationUpdateNotification(
     val changeNumber: Long,
     val channelName: String?,
-    val eventTimestamp: Long
+    val eventTimestamp: Long,
+    val updateIntervalMs: Long? = null,
+    val algorithmSeed: Int? = null,
+    val hashingAlgorithm: Int? = null
 ) : ThinNotification(ThinNotificationType.EVALUATION_UPDATE, channelName, eventTimestamp)
 
 internal data class ThinControlNotification(
