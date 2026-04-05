@@ -79,8 +79,8 @@ internal class DefaultSplitClient(
         value: Double?,
         properties: Map<String, Any?>?
     ) {
-        val javaProperties =
-            runCatching { properties as? Map<String, Any> }.getOrDefault(emptyMap())
+        @Suppress("UNCHECKED_CAST")
+        val javaProperties = properties as? Map<String, Any>
         val isSdkReady = eventsManager.eventAlreadyTriggered(SplitEvent.SDK_READY)
         tracker.track(
             target.key.matchingKey,
