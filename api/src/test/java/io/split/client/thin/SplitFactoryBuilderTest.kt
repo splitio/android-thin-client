@@ -5,6 +5,8 @@ import io.split.client.thin.internal.DefaultSplitFactory
 import io.split.client.thin.internal.evaluation.EvaluationKey
 import io.split.client.thin.internal.evaluation.SyncDelayCalculator
 import io.split.client.thin.internal.streaming.EvaluationUpdateNotification
+import kotlinx.coroutines.runBlocking
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -22,13 +24,23 @@ class SplitFactoryBuilderTest {
         `when`(it.applicationContext).thenReturn(it)
     }
 
+    private val createdFactories = mutableListOf<SplitFactory>()
+
+    @After
+    fun tearDown() {
+        runBlocking {
+            createdFactories.forEach { runCatching { it.destroy() } }
+        }
+        createdFactories.clear()
+    }
+
     private fun buildFactory(config: SplitClientConfig? = null): SplitFactory =
         SplitFactoryBuilder.build(
             context = mockContext,
             sdkKey = sdkKey,
             defaultTarget = defaultTarget,
             config = config,
-        )
+        ).also { createdFactories.add(it) }
 
     private fun assertIsDefaultSplitFactory(factory: SplitFactory) {
         assertNotNull(factory)

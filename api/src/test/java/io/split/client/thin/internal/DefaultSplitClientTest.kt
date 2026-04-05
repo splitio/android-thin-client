@@ -158,6 +158,25 @@ class DefaultSplitClientTest {
     }
 
     @Test
+    fun `setTarget skips evaluationRepository when only trafficType changed`() = testScope.runTest {
+        val newTarget = Target(Key("user-1"), trafficType = "account")
+        client.setTarget(newTarget)
+        testScheduler.advanceUntilIdle()
+
+        assertTrue(evaluationRepository.setTargetCalls.isEmpty())
+    }
+
+    @Test
+    fun `setTarget calls evaluationRepository when key changes`() = testScope.runTest {
+        val newTarget = Target(Key("user-2"), trafficType = "user")
+        client.setTarget(newTarget)
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(1, evaluationRepository.setTargetCalls.size)
+        assertEquals(newTarget, evaluationRepository.setTargetCalls[0].first)
+    }
+
+    @Test
     fun `getTreatment returns stored evaluation result`() {
         val evalKey = EvaluationKey(target.key)
         val stored = StoredEvaluation(EvaluationResult("my_flag", "on"))

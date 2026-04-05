@@ -62,9 +62,11 @@ internal class DefaultSplitClient(
     }
 
     override fun setTarget(target: Target) {
+        val oldEvalKey = this.target.toEvaluationKey()
         this.target = target
-        scope.launch {
-            evaluationRepository.setTarget(target, filters)
+        val newEvalKey = target.toEvaluationKey()
+        if (oldEvalKey != newEvalKey) {
+            scope.launch { evaluationRepository.setTarget(target, filters) }
         }
     }
 
