@@ -74,12 +74,12 @@ class EvaluationFactoryTest {
     }
 
     @Test
-    fun `TARGET_SWITCH reason fires EVAL_STORAGE_UPDATED`() = runTest {
+    fun `TARGET_SWITCH reason fires EVALUATIONS_UPDATED`() = runTest {
         val (components, observer) = makeComponents()
 
         components.fetchCoordinator.fetchIfNeeded(evalKey, null, FetchReason.TARGET_SWITCH)
 
-        assertTrue(observer.capturedEvents.any { it.type == ObservableEventType.EVAL_STORAGE_UPDATED })
+        assertTrue(observer.capturedEvents.any { it.type == ObservableEventType.EVALUATIONS_UPDATED })
     }
 
     @Test

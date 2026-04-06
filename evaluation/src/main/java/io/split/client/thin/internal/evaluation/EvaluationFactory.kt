@@ -45,9 +45,9 @@ fun createEvaluationComponents(
         writeStorage = storage,
         onEvaluationsUpdated = { reason ->
             val eventType = when (reason) {
-                FetchReason.INITIALIZATION, FetchReason.TARGET_SWITCH ->
+                FetchReason.INITIALIZATION ->
                     ObservableEventType.EVAL_STORAGE_UPDATED
-                FetchReason.PERIODIC, FetchReason.PUSH ->
+                FetchReason.TARGET_SWITCH, FetchReason.PERIODIC, FetchReason.PUSH ->
                     ObservableEventType.EVALUATIONS_UPDATED
             }
             compositeObserver.notifyEvent(ObservableEvent(eventType))

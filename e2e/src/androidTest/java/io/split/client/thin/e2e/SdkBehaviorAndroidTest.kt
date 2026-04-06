@@ -20,7 +20,6 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
 /**
@@ -392,19 +391,13 @@ class SdkBehaviorAndroidTest {
         val server = MockSplitServer()
         server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_DISABLED))
 
-        // Latch fires when the server receives the user_2 evaluations request
-        val user2FetchLatch = CountDownLatch(1)
         val requestedUsers = mutableListOf<String>()
-
         server.evaluationsHandler = { request ->
             val user = request.requestUrl?.queryParameter("user") ?: ""
             requestedUsers.add(user)
             when (user) {
                 "user_1" -> MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1)
-                "user_2" -> {
-                    user2FetchLatch.countDown()
-                    MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_2)
-                }
+                "user_2" -> MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_2)
                 else -> MockResponse().setBody("""{"till":-1,"since":-1,"evaluations":[]}""")
             }
         }
@@ -421,17 +414,7 @@ class SdkBehaviorAndroidTest {
 
             client.setTarget(targetUser2)
 
-            // Wait for the TARGET_SWITCH evaluations request to reach the server
-            assertTrue("evaluations fetch for user_2 did not arrive within 10s",
-                user2FetchLatch.await(10, TimeUnit.SECONDS))
-
-            // Poll until the SDK has stored and surfaced the new evaluations
-            val deadline = System.currentTimeMillis() + 5_000L
-            while (client.getTreatment("flag_a").treatment == "on" &&
-                System.currentTimeMillis() < deadline) {
-                Thread.sleep(50)
-            }
-
+            assertTrue("onUpdate did not fire after setTarget", listener.awaitUpdate())
             assertEquals("off", client.getTreatment("flag_a").treatment)
             assertTrue("evaluations request for user_2 not observed",
                 requestedUsers.contains("user_2"))
