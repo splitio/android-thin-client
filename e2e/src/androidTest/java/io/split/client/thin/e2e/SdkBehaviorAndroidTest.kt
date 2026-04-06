@@ -222,6 +222,55 @@ class SdkBehaviorAndroidTest {
     }
 
     // -------------------------------------------------------------------------
+    // Test 4b — SDK emits update when evaluations change (STREAMING)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Given the SDK is configured in STREAMING mode
+     * And auth returns PUSH_ENABLED with a valid streaming JWT
+     * And the first evaluations call returns RESPONSE_1 (flag_a=on)
+     * And subsequent evaluations calls return RESPONSE_2 (flag_a=off)
+     * And the SSE endpoint delivers an EVALUATION_UPDATE event 2 seconds after connection
+     * When a client reaches onReady
+     * Then onReady fires with flag_a == "on"
+     * And after the SSE event triggers a re-fetch, onUpdate fires
+     * And getTreatment("flag_a") returns "off" after the update
+     */
+    @Test
+    fun sdkEmitsUpdateWhenEvaluationsChangeStreaming() {
+        val server = MockSplitServer()
+        server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_ENABLED))
+
+        var callCount = 0
+        server.evaluationsHandler = {
+            callCount++
+            if (callCount == 1) MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1)
+            else MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_2)
+        }
+
+        // Delay the SSE event 2 seconds so onReady fires from the initial fetch first
+        server.enqueueSse(
+            server.buildSseResponse(listOf(E2EFixtures.SSE_EVALUATION_UPDATE), delaySeconds = 2)
+        )
+
+        val factory = buildStreamingFactory(server, prefix = "e2e_update_streaming_$RUN_ID")
+        val client = factory.getClient()
+        val listener = TestEventListener()
+        client.addEventListener(listener.asSplitEventListener)
+
+        try {
+            assertTrue("onReady did not fire", listener.awaitReady())
+            assertEquals("on", client.getTreatment("flag_a").treatment)
+
+            assertTrue("onUpdate did not fire after SSE event", listener.awaitUpdate())
+            assertEquals("off", client.getTreatment("flag_a").treatment)
+        } finally {
+            runBlocking { factory.destroy() }
+            server.shutdown()
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // Test 4 — SDK emits timeout when ready conditions are not met
     // -------------------------------------------------------------------------
 
@@ -319,6 +368,34 @@ class SdkBehaviorAndroidTest {
                     evaluationsUrl = server.url("/api/v2/evaluations")
                     eventsUrl = server.url("/api/v1/events/bulk")
                     telemetryUrl = server.url("/api/v1/metrics/config")
+                }
+            }
+            storage { this.prefix = prefix }
+        }
+        return SplitFactoryBuilder.build(
+            context = context,
+            sdkKey = SdkKey("e2e-test-key"),
+            defaultTarget = Target(key = Key("user_a"), trafficType = "user"),
+            config = config,
+        )
+    }
+
+    /**
+     * Builds a STREAMING-mode factory pointed entirely at [server], including the SSE endpoint.
+     */
+    private fun buildStreamingFactory(
+        server: MockSplitServer,
+        prefix: String,
+    ): SplitFactory {
+        val config = splitClientConfig {
+            sync {
+                mode = SplitClientConfig.SyncMode.STREAMING
+                serviceEndpoints {
+                    authUrl = server.url("/api")
+                    evaluationsUrl = server.url("/api/v2/evaluations")
+                    eventsUrl = server.url("/api/v1/events/bulk")
+                    telemetryUrl = server.url("/api/v1/metrics/config")
+                    streamingUrl = server.url("/sse")
                 }
             }
             storage { this.prefix = prefix }

@@ -124,19 +124,22 @@ class MockSplitServer {
     // -------------------------------------------------------------------------
 
     /**
-     * Builds a [MockResponse] that streams the given SSE data lines followed by
-     * a keep-alive comment, then closes the connection.
+     * Builds a [MockResponse] that streams the given SSE data lines.
      *
      * Each element of [dataLines] is written as `data: <line>\n\n`.
+     *
+     * [delaySeconds] adds a body delay so the SSE event arrives after the SDK
+     * has already reached a ready state — useful when the test needs onReady to
+     * fire before the update notification.
      *
      * Example:
      * ```kotlin
      * server.enqueueSse(
-     *     MockSplitServer.buildSseResponse(E2EFixtures.SSE_EVALUATION_UPDATE)
+     *     server.buildSseResponse(listOf(E2EFixtures.SSE_EVALUATION_UPDATE), delaySeconds = 2)
      * )
      * ```
      */
-    fun buildSseResponse(vararg dataLines: String): MockResponse {
+    fun buildSseResponse(dataLines: List<String>, delaySeconds: Long = 0): MockResponse {
         val buffer = Buffer()
         for (line in dataLines) {
             buffer.writeUtf8("data: $line\n\n")
@@ -145,6 +148,7 @@ class MockSplitServer {
             .setResponseCode(200)
             .addHeader("Content-Type", "text/event-stream")
             .addHeader("Cache-Control", "no-cache")
+            .setBodyDelay(delaySeconds, TimeUnit.SECONDS)
             .setBody(buffer)
             .throttleBody(Long.MAX_VALUE, 1, TimeUnit.SECONDS)
     }
