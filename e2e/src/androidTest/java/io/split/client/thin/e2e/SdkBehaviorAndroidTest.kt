@@ -20,6 +20,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
 /**
@@ -373,6 +374,74 @@ class SdkBehaviorAndroidTest {
     }
 
     // -------------------------------------------------------------------------
+    // Test 5 — setTarget switches evaluation context
+    // -------------------------------------------------------------------------
+
+    /**
+     * Given a client is created with target user_1 and reaches ready with RESPONSE_1
+     * When setTarget is called with target user_2
+     * Then the SDK fetches evaluations for user_2
+     * And the evaluations request includes user=user_2 in the query parameters
+     * And getTreatment("flag_a") returns "off" (RESPONSE_2) for the new target
+     */
+    @Test
+    fun clientSetTargetSwitchesEvaluationContext() {
+        val targetUser1 = Target(key = Key("user_1"), trafficType = "user")
+        val targetUser2 = Target(key = Key("user_2"), trafficType = "user")
+
+        val server = MockSplitServer()
+        server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_DISABLED))
+
+        // Latch fires when the server receives the user_2 evaluations request
+        val user2FetchLatch = CountDownLatch(1)
+        val requestedUsers = mutableListOf<String>()
+
+        server.evaluationsHandler = { request ->
+            val user = request.requestUrl?.queryParameter("user") ?: ""
+            requestedUsers.add(user)
+            when (user) {
+                "user_1" -> MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1)
+                "user_2" -> {
+                    user2FetchLatch.countDown()
+                    MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_2)
+                }
+                else -> MockResponse().setBody("""{"till":-1,"since":-1,"evaluations":[]}""")
+            }
+        }
+
+        val factory = buildPollingFactory(server, prefix = "e2e_set_target_$RUN_ID",
+            defaultTarget = targetUser1)
+        val client = factory.getClient()
+        val listener = TestEventListener()
+        client.addEventListener(listener.asSplitEventListener)
+
+        try {
+            assertTrue("onReady did not fire", listener.awaitReady())
+            assertEquals("on", client.getTreatment("flag_a").treatment)
+
+            client.setTarget(targetUser2)
+
+            // Wait for the TARGET_SWITCH evaluations request to reach the server
+            assertTrue("evaluations fetch for user_2 did not arrive within 10s",
+                user2FetchLatch.await(10, TimeUnit.SECONDS))
+
+            // Poll until the SDK has stored and surfaced the new evaluations
+            val deadline = System.currentTimeMillis() + 5_000L
+            while (client.getTreatment("flag_a").treatment == "on" &&
+                System.currentTimeMillis() < deadline) {
+                Thread.sleep(50)
+            }
+
+            assertEquals("off", client.getTreatment("flag_a").treatment)
+            assertTrue("evaluations request for user_2 not observed",
+                requestedUsers.contains("user_2"))
+        } finally {
+            runBlocking { factory.destroy() }
+            server.shutdown()
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
 
@@ -410,6 +479,7 @@ class SdkBehaviorAndroidTest {
         server: MockSplitServer,
         prefix: String,
         refreshRate: Int = 3600,
+        defaultTarget: Target = Target(key = Key("user_a"), trafficType = "user"),
     ): SplitFactory {
         val config = splitClientConfig {
             sync {
@@ -427,7 +497,7 @@ class SdkBehaviorAndroidTest {
         return SplitFactoryBuilder.build(
             context = context,
             sdkKey = SdkKey("e2e-test-key"),
-            defaultTarget = Target(key = Key("user_a"), trafficType = "user"),
+            defaultTarget = defaultTarget,
             config = config,
         )
     }
