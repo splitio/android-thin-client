@@ -177,6 +177,56 @@ class SdkBehaviorAndroidTest {
     }
 
     // -------------------------------------------------------------------------
+    // Test 4 — SDK emits timeout when ready conditions are not met
+    // -------------------------------------------------------------------------
+
+    /**
+     * Given the SDK is configured with a 1-second ready timeout
+     * And the evaluations endpoint never responds (simulated by a 60-second delay)
+     * When a client is obtained and a listener registered
+     * Then onTimeout fires within the test's grace period
+     * And onReady never fires
+     */
+    @Test
+    fun sdkEmitsTimeoutWhenReadyConditionsNotMet() {
+        val server = MockSplitServer()
+        server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_DISABLED))
+        server.enqueueEvaluations(MockResponse().setBodyDelay(60, TimeUnit.SECONDS)
+            .setBody(E2EFixtures.EVALUATIONS_RESPONSE_1))
+
+        val config = splitClientConfig {
+            sync {
+                mode = SplitClientConfig.SyncMode.POLLING
+                timeout = 1 // 1 second — fires SDK_READY_TIMEOUT before evaluations arrive
+                serviceEndpoints {
+                    authUrl = server.url("/api")
+                    evaluationsUrl = server.url("/api/v2/evaluations")
+                    eventsUrl = server.url("/api/v1/events/bulk")
+                    telemetryUrl = server.url("/api/v1/metrics/config")
+                }
+            }
+            storage { this.prefix = "e2e_timeout_$RUN_ID" }
+        }
+        val factory = SplitFactoryBuilder.build(
+            context = context,
+            sdkKey = SdkKey("e2e-test-key"),
+            defaultTarget = Target(key = Key("user_timeout"), trafficType = "user"),
+            config = config,
+        )
+        val client = factory.getClient()
+        val listener = TestEventListener()
+        client.addEventListener(listener.asSplitEventListener)
+
+        try {
+            assertTrue("onTimeout did not fire within 10s", listener.awaitTimeout(10))
+            assertFalse("onReady should not fire when SDK timed out", listener.isReadyFired)
+        } finally {
+            runBlocking { factory.destroy() }
+            server.shutdown()
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
 
