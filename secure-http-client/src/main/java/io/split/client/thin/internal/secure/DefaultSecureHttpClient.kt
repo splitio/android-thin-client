@@ -21,8 +21,8 @@ internal class DefaultSecureHttpClient(
     private val sdkVersion: String = SDK_VERSION,
 ) : SecureHttpClient {
 
-    override suspend fun fetchEvaluations(target: EvaluationTarget, filters: EvaluationFilters?): HttpResponse {
-        val uri = buildEvaluationsUri(target, filters)
+    override suspend fun fetchEvaluations(target: EvaluationTarget, filters: EvaluationFilters?, changeNumber: Long): HttpResponse {
+        val uri = buildEvaluationsUri(target, filters, changeNumber)
         val body = buildEvaluationsBody(target)
         val token = authProvider.credential().token
         val request = buildEvaluationsRequest(uri, body, token)
@@ -91,11 +91,11 @@ internal class DefaultSecureHttpClient(
         )
     }
 
-    private fun buildEvaluationsUri(target: EvaluationTarget, filters: EvaluationFilters?): URI {
+    private fun buildEvaluationsUri(target: EvaluationTarget, filters: EvaluationFilters?, changeNumber: Long): URI {
         val params = mutableListOf<String>()
         params.add("user=${encode(target.matchingKey)}")
         target.bucketingKey?.let { params.add("bucketingKey=${encode(it)}") }
-        params.add("since=${filters?.changeNumber ?: -1}")
+        params.add("since=$changeNumber")
         filters?.flagNames?.forEach { params.add("flags=${encode(it)}") }
         filters?.flagSets?.forEach { params.add("sets=${encode(it)}") }
         filters?.withDynamicConfig?.let { params.add("withDynamicConfig=$it") }

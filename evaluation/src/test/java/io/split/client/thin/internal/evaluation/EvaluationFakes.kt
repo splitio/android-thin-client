@@ -19,7 +19,7 @@ class FakeSecureHttpClient(
     val lastFetchTarget: EvaluationTarget? get() = fetchCalls.lastOrNull()?.first
     val lastFetchFilters: EvaluationFilters? get() = fetchCalls.lastOrNull()?.second
 
-    override suspend fun fetchEvaluations(target: EvaluationTarget, filters: EvaluationFilters?): HttpResponse {
+    override suspend fun fetchEvaluations(target: EvaluationTarget, filters: EvaluationFilters?, changeNumber: Long): HttpResponse {
         fetchCalls.add(target to filters)
         throwOnFetch?.let { throw it }
         return FakeHttpResponse(statusCode, responseBody)
@@ -48,10 +48,11 @@ class FakeEvaluationProvider(
     val throwOnFetch: Throwable? = null,
 ) : EvaluationProvider {
 
-    val fetchCalls = mutableListOf<Pair<EvaluationKey, EvaluationFilters?>>()
+    data class FetchCall(val evalKey: EvaluationKey, val filters: EvaluationFilters?, val changeNumber: Long)
+    val fetchCalls = mutableListOf<FetchCall>()
 
-    override suspend fun fetch(evalKey: EvaluationKey, filters: EvaluationFilters?): EvaluationChange {
-        fetchCalls.add(evalKey to filters)
+    override suspend fun fetch(evalKey: EvaluationKey, filters: EvaluationFilters?, changeNumber: Long): EvaluationChange {
+        fetchCalls.add(FetchCall(evalKey, filters, changeNumber))
         throwOnFetch?.let { throw it }
         return changeToReturn ?: EvaluationChange(evalKey, -1L, emptyList())
     }

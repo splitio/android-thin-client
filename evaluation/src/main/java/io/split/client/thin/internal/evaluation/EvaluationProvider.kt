@@ -5,7 +5,7 @@ import io.split.client.thin.internal.secure.EvaluationTarget
 import io.split.client.thin.internal.secure.SecureHttpClient
 
 interface EvaluationProvider {
-    suspend fun fetch(evalKey: EvaluationKey, filters: EvaluationFilters?): EvaluationChange
+    suspend fun fetch(evalKey: EvaluationKey, filters: EvaluationFilters?, changeNumber: Long): EvaluationChange
 }
 
 fun EvaluationKey.toEvaluationTarget() = EvaluationTarget(
@@ -21,10 +21,10 @@ class DefaultEvaluationProvider(
     private val onEvalDeserializeFailed: (evalKey: EvaluationKey, error: Exception) -> Unit = { _, _ -> },
 ) : EvaluationProvider {
 
-    override suspend fun fetch(evalKey: EvaluationKey, filters: EvaluationFilters?): EvaluationChange {
+    override suspend fun fetch(evalKey: EvaluationKey, filters: EvaluationFilters?, changeNumber: Long): EvaluationChange {
         onEvalFetchStarted(evalKey)
         val target = evalKey.toEvaluationTarget()
-        val response = secureHttpClient.fetchEvaluations(target, filters)
+        val response = secureHttpClient.fetchEvaluations(target, filters, changeNumber)
         val body = response.getData()
         check(!body.isNullOrEmpty()) { "Empty or null response body from evaluations endpoint" }
         return try {

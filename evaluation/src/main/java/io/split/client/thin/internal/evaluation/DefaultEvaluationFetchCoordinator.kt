@@ -27,9 +27,7 @@ class DefaultEvaluationFetchCoordinator(
         }
         try {
             val changeNumber = readStorage.lastChangeNumber(evalKey)
-            val enrichedFilters = filters?.copy(changeNumber = changeNumber)
-                ?: EvaluationFilters(flagNames = null, flagSets = null, changeNumber = changeNumber)
-            val change = provider.fetch(evalKey, enrichedFilters)
+            val change = provider.fetch(evalKey, filters, changeNumber)
             val updated = writeStorage.upsert(change)
             val isFirstFetch = fetchedKeys.add(evalKey)
             onEvalFetchSucceeded(evalKey)

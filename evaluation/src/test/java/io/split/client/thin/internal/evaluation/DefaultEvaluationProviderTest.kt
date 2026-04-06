@@ -28,7 +28,7 @@ class DefaultEvaluationProviderTest {
         val (provider, httpClient) = makeProvider()
         val evalKey = EvaluationKey(Key("user-1", "bucket-1"), mapOf("plan" to "premium"))
 
-        provider.fetch(evalKey, null)
+        provider.fetch(evalKey, null, -1L)
 
         val target = httpClient.lastFetchTarget!!
         assertEquals("user-1", target.matchingKey)
@@ -41,7 +41,7 @@ class DefaultEvaluationProviderTest {
         val (provider, httpClient) = makeProvider()
         val evalKey = EvaluationKey(Key("user-1"))
 
-        provider.fetch(evalKey, null)
+        provider.fetch(evalKey, null, -1L)
 
         val target = httpClient.lastFetchTarget!!
         assertEquals(null, target.attributes)
@@ -53,7 +53,7 @@ class DefaultEvaluationProviderTest {
         val evalKey = EvaluationKey(Key("user-1"))
         val filters = EvaluationFilters(flagNames = setOf("flag-a"), flagSets = null)
 
-        provider.fetch(evalKey, filters)
+        provider.fetch(evalKey, filters, -1L)
 
         assertEquals(filters, httpClient.lastFetchFilters)
     }
@@ -68,7 +68,7 @@ class DefaultEvaluationProviderTest {
         val (provider, _) = makeProvider(responseBody = json)
         val evalKey = EvaluationKey(Key("user-1"))
 
-        val result = provider.fetch(evalKey, null)
+        val result = provider.fetch(evalKey, null, -1L)
 
         assertEquals(42L, result.changeNumber)
         assertEquals(1, result.evaluations.size)
@@ -79,13 +79,13 @@ class DefaultEvaluationProviderTest {
     @Test(expected = IllegalStateException::class)
     fun `throws on null body`() = runTest {
         val (provider, _) = makeProvider(responseBody = null)
-        provider.fetch(EvaluationKey(Key("user-1")), null)
+        provider.fetch(EvaluationKey(Key("user-1")), null, -1L)
     }
 
     @Test(expected = IllegalStateException::class)
     fun `throws on empty body`() = runTest {
         val (provider, _) = makeProvider(responseBody = "")
-        provider.fetch(EvaluationKey(Key("user-1")), null)
+        provider.fetch(EvaluationKey(Key("user-1")), null, -1L)
     }
 }
 

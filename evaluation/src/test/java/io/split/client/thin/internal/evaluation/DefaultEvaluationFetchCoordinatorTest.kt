@@ -47,7 +47,7 @@ class DefaultEvaluationFetchCoordinatorTest {
     }
 
     @Test
-    fun `includes lastChangeNumber from storage in filters`() = runTest {
+    fun `passes lastChangeNumber from storage as changeNumber to provider`() = runTest {
         val readStorage = FakeEvaluationReadStorage()
         readStorage.setChangeNumber(evalKey, 42L)
         val provider = FakeEvaluationProvider()
@@ -61,9 +61,9 @@ class DefaultEvaluationFetchCoordinatorTest {
 
         coordinator.fetchIfNeeded(evalKey, filters, FetchReason.PERIODIC)
 
-        val passedFilters = provider.fetchCalls[0].second
-        assertEquals(42L, passedFilters?.changeNumber)
-        assertEquals(setOf("flag-a"), passedFilters?.flagNames)
+        val call = provider.fetchCalls[0]
+        assertEquals(42L, call.changeNumber)
+        assertEquals(setOf("flag-a"), call.filters?.flagNames)
     }
 
     @Test
@@ -184,9 +184,9 @@ class DefaultEvaluationFetchCoordinatorTest {
         assertEquals(6, provider.fetchCalls.size)
         // Verify the last 3 calls were with PERIODIC reason
         val refetchCalls = provider.fetchCalls.drop(3)
-        assertTrue(refetchCalls.any { it.first == key1 })
-        assertTrue(refetchCalls.any { it.first == key2 })
-        assertTrue(refetchCalls.any { it.first == key3 })
+        assertTrue(refetchCalls.any { it.evalKey == key1 })
+        assertTrue(refetchCalls.any { it.evalKey == key2 })
+        assertTrue(refetchCalls.any { it.evalKey == key3 })
     }
 
     @Test
@@ -202,11 +202,11 @@ class DefaultEvaluationFetchCoordinatorTest {
         val filters = EvaluationFilters(flagNames = setOf("flag-a"), flagSets = null)
         coordinator.refetchAll(filters, FetchReason.PUSH)
 
-        // Verify the refetch calls (last 2) have correct filters
+        // Verify the refetch calls (last 2) have correct scope
         val refetchCalls = provider.fetchCalls.drop(2)
         assertEquals(2, refetchCalls.size)
-        refetchCalls.forEach { (_, passedFilters) ->
-            assertEquals(setOf("flag-a"), passedFilters?.flagNames)
+        refetchCalls.forEach { call ->
+            assertEquals(setOf("flag-a"), call.filters?.flagNames)
         }
     }
 
@@ -219,7 +219,7 @@ class DefaultEvaluationFetchCoordinatorTest {
         // Create a provider that throws on the second refetch call
         var fetchCount = 0
         val provider = object : EvaluationProvider {
-            override suspend fun fetch(evalKey: EvaluationKey, filters: EvaluationFilters?): EvaluationChange {
+            override suspend fun fetch(evalKey: EvaluationKey, filters: EvaluationFilters?, changeNumber: Long): EvaluationChange {
                 fetchCount++
                 // Throw on the 5th call overall (2nd refetch)
                 if (fetchCount == 5) throw RuntimeException("fetch failed")

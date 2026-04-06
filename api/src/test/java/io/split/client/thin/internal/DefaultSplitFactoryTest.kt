@@ -244,7 +244,7 @@ class FetchReasonObserverMappingTest {
     private fun makeCoordinator(compositeObserver: DefaultCompositeObserver): DefaultEvaluationFetchCoordinator {
         return DefaultEvaluationFetchCoordinator(
             provider = object : EvaluationProvider {
-                override suspend fun fetch(evalKey: EvaluationKey, filters: EvaluationFilters?): EvaluationChange =
+                override suspend fun fetch(evalKey: EvaluationKey, filters: EvaluationFilters?, changeNumber: Long): EvaluationChange =
                     EvaluationChange(evalKey, -1L, emptyList())
             },
             readStorage = FakeEvaluationReadStorage(),
