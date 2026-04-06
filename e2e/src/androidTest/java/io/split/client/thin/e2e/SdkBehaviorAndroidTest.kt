@@ -271,6 +271,58 @@ class SdkBehaviorAndroidTest {
     }
 
     // -------------------------------------------------------------------------
+    // Test 4c — SINGLE_SYNC mode never emits update
+    // -------------------------------------------------------------------------
+
+    /**
+     * Given the SDK is configured in SINGLE_SYNC mode
+     * And auth returns PUSH_DISABLED and evaluations returns RESPONSE_1
+     * When a client reaches onReady
+     * Then getTreatment("flag_a") returns "on"
+     * And onUpdate never fires (no background refresh in SINGLE_SYNC)
+     * And getTreatment("flag_a") still returns "on" after the wait
+     */
+    @Test
+    fun sdkInSingleSyncModeDoesNotEmitUpdate() {
+        val server = MockSplitServer()
+        server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_DISABLED))
+        server.enqueueEvaluations(MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1))
+
+        val config = splitClientConfig {
+            sync {
+                mode = SplitClientConfig.SyncMode.SINGLE_SYNC
+                serviceEndpoints {
+                    authUrl = server.url("/api")
+                    evaluationsUrl = server.url("/api/v2/evaluations")
+                    eventsUrl = server.url("/api/v1/events/bulk")
+                    telemetryUrl = server.url("/api/v1/metrics/config")
+                }
+            }
+            storage { this.prefix = "e2e_single_sync_$RUN_ID" }
+        }
+        val factory = SplitFactoryBuilder.build(
+            context = context,
+            sdkKey = SdkKey("e2e-test-key"),
+            defaultTarget = Target(key = Key("user_a"), trafficType = "user"),
+            config = config,
+        )
+        val client = factory.getClient()
+        val listener = TestEventListener()
+        client.addEventListener(listener.asSplitEventListener)
+
+        try {
+            assertTrue("onReady did not fire", listener.awaitReady())
+            assertEquals("on", client.getTreatment("flag_a").treatment)
+
+            assertTrue("onUpdate fired unexpectedly in SINGLE_SYNC mode", listener.noUpdate())
+            assertEquals("on", client.getTreatment("flag_a").treatment)
+        } finally {
+            runBlocking { factory.destroy() }
+            server.shutdown()
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // Test 4 — SDK emits timeout when ready conditions are not met
     // -------------------------------------------------------------------------
 
