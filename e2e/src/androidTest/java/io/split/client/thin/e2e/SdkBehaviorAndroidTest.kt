@@ -21,6 +21,7 @@ import org.junit.runner.RunWith
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Phase 2 behavioral E2E tests for the Android Thin Client SDK.
@@ -418,6 +419,119 @@ class SdkBehaviorAndroidTest {
             assertEquals("off", client.getTreatment("flag_a").treatment)
             assertTrue("evaluations request for user_2 not observed",
                 requestedUsers.contains("user_2"))
+        } finally {
+            runBlocking { factory.destroy() }
+            server.shutdown()
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Test 6 — Concurrent evaluation fetches for the same target are deduped
+    // -------------------------------------------------------------------------
+
+    /**
+     * Given a client is ready on user_1
+     * And the evaluations endpoint holds the user_2 response for 2 seconds
+     * When setTarget(user_2) is called from 5 threads simultaneously
+     * Then only 1 evaluations request for user_2 reaches the server
+     * And onUpdate fires once
+     * And getTreatment("flag_a") returns "off" (RESPONSE_2)
+     */
+    @Test
+    fun concurrentEvaluationFetchesAreDeduped() {
+        val targetUser1 = Target(key = Key("user_1"), trafficType = "user")
+        val targetUser2 = Target(key = Key("user_2"), trafficType = "user")
+
+        val server = MockSplitServer()
+        server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_DISABLED))
+
+        val user2RequestCount = AtomicInteger(0)
+        server.evaluationsHandler = { request ->
+            val user = request.requestUrl?.queryParameter("user") ?: ""
+            when (user) {
+                "user_1" -> MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1)
+                "user_2" -> {
+                    user2RequestCount.incrementAndGet()
+                    // 2-second delay keeps the first fetch in-flight while the other
+                    // setTarget calls arrive, exercising the dedup guard.
+                    MockResponse().setBodyDelay(2, TimeUnit.SECONDS)
+                        .setBody(E2EFixtures.EVALUATIONS_RESPONSE_2)
+                }
+                else -> MockResponse().setBody("""{"till":-1,"since":-1,"evaluations":[]}""")
+            }
+        }
+
+        val factory = buildPollingFactory(server, prefix = "e2e_dedup_$RUN_ID",
+            defaultTarget = targetUser1)
+        val client = factory.getClient()
+        val listener = TestEventListener()
+        client.addEventListener(listener.asSplitEventListener)
+
+        try {
+            assertTrue("onReady did not fire", listener.awaitReady())
+            assertEquals("on", client.getTreatment("flag_a").treatment)
+
+            // Fire 5 concurrent setTarget calls while the first fetch is still in-flight
+            val threads = (1..5).map { Thread { client.setTarget(targetUser2) }.also { it.start() } }
+            threads.forEach { it.join(10_000) }
+
+            assertTrue("onUpdate did not fire", listener.awaitUpdate())
+            assertEquals("off", client.getTreatment("flag_a").treatment)
+            assertEquals("expected exactly 1 evaluations request for user_2 (dedup)",
+                1, user2RequestCount.get())
+        } finally {
+            runBlocking { factory.destroy() }
+            server.shutdown()
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Test 7 — Auth token is refreshed after evaluations returns 401
+    // -------------------------------------------------------------------------
+
+    /**
+     * Given the SDK is configured in POLLING mode with a 1-second refresh rate
+     * And the first evaluations call returns RESPONSE_1 successfully (onReady fires)
+     * And the second evaluations call returns HTTP 401 (token expired)
+     * And a fresh auth token is available for re-authentication
+     * And the retry evaluations call (immediately after re-auth) returns RESPONSE_2
+     * When the second poll cycle occurs
+     * Then the auth endpoint is called a second time (token refresh)
+     * And onUpdate fires with the new evaluations
+     * And getTreatment("flag_a") returns "off" (RESPONSE_2)
+     */
+    @Test
+    fun authTokenIsRefreshedAfterEvaluations401() {
+        val server = MockSplitServer()
+        // Two auth responses: first for init, second for the re-auth after 401
+        server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_DISABLED))
+        server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_DISABLED))
+
+        var callCount = 0
+        server.evaluationsHandler = {
+            callCount++
+            when (callCount) {
+                1 -> MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1)
+                2 -> MockResponse().setResponseCode(401)
+                else -> MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_2)
+            }
+        }
+
+        val factory = buildPollingFactory(server, prefix = "e2e_auth_refresh_$RUN_ID",
+            refreshRate = 1)
+        val client = factory.getClient()
+        val listener = TestEventListener()
+        client.addEventListener(listener.asSplitEventListener)
+
+        try {
+            assertTrue("onReady did not fire", listener.awaitReady())
+            assertEquals("on", client.getTreatment("flag_a").treatment)
+
+            // The 401 on the second poll triggers re-auth + immediate retry
+            assertTrue("onUpdate did not fire after 401 re-auth cycle", listener.awaitUpdate())
+            assertEquals("off", client.getTreatment("flag_a").treatment)
+            assertEquals("auth endpoint should have been called twice (init + refresh)",
+                2, server.authRequestCount.get())
         } finally {
             runBlocking { factory.destroy() }
             server.shutdown()

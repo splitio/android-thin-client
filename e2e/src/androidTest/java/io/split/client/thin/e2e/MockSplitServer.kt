@@ -6,6 +6,7 @@ import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.RecordedRequest
 import okio.Buffer
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Wraps [MockWebServer] and dispatches requests by path to simulate the Split backend.
@@ -43,6 +44,9 @@ class MockSplitServer {
     private val _capturedEventBodies = mutableListOf<String>()
     private val _capturedTelemetryBodies = mutableListOf<String>()
 
+    /** Number of requests received at the auth endpoint. */
+    val authRequestCount: AtomicInteger = AtomicInteger(0)
+
     /** Bodies of all POST requests received at the events endpoint. */
     val capturedEventBodies: List<String> get() = _capturedEventBodies.toList()
 
@@ -73,9 +77,11 @@ class MockSplitServer {
                                 .setBody("""{"till":-1,"since":-1,"evaluations":[]}""")
 
                     // Auth endpoint — must be checked after /api/v2 prefix to avoid false match
-                    path.startsWith("/api") && request.method == "GET" ->
+                    path.startsWith("/api") && request.method == "GET" -> {
+                        authRequestCount.incrementAndGet()
                         authQueue.removeFirstOrNull() ?: MockResponse().setResponseCode(200)
                             .setBody(E2EFixtures.AUTH_PUSH_DISABLED)
+                    }
 
                     path.startsWith("/api/v1/events/bulk") -> {
                         _capturedEventBodies.add(request.body.readUtf8())
