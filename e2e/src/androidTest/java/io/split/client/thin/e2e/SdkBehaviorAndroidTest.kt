@@ -539,6 +539,90 @@ class SdkBehaviorAndroidTest {
     }
 
     // -------------------------------------------------------------------------
+    // Test 8 — track and flush submit events and telemetry
+    // -------------------------------------------------------------------------
+
+    /**
+     * Given the SDK is ready
+     * When client.track("purchase", 99.0, mapOf("item" to "book")) is called
+     * And client.flush() is called
+     * Then the events endpoint receives a POST containing the tracked event
+     * And the event body includes eventTypeId="purchase", value=99.0, key="user_a"
+     * And the telemetry endpoint receives a POST on SDK init
+     */
+    @Test
+    fun trackAndFlushSubmitEventsAndTelemetry() {
+        val server = MockSplitServer()
+        server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_DISABLED))
+        server.enqueueEvaluations(MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1))
+
+        val factory = buildPollingFactory(server, prefix = "e2e_track_$RUN_ID")
+        val client = factory.getClient()
+        val listener = TestEventListener()
+        client.addEventListener(listener.asSplitEventListener)
+
+        try {
+            assertTrue("onReady did not fire", listener.awaitReady())
+
+            client.track("purchase", 99.0, mapOf("item" to "book"))
+            runBlocking { client.flush() }
+
+            // Allow a brief moment for the HTTP POST to arrive
+            val deadline = System.currentTimeMillis() + 5_000L
+            while (server.capturedEventBodies.isEmpty() && System.currentTimeMillis() < deadline) {
+                Thread.sleep(50)
+            }
+
+            assertTrue("no events POST received", server.capturedEventBodies.isNotEmpty())
+            val eventsBody = server.capturedEventBodies.last()
+            assertTrue("eventTypeId not found in events body",
+                eventsBody.contains("\"eventTypeId\":\"purchase\""))
+            assertTrue("value not found in events body", eventsBody.contains("99.0"))
+            assertTrue("key not found in events body", eventsBody.contains("\"key\":\"user_a\""))
+            assertTrue("property not found in events body", eventsBody.contains("\"item\""))
+
+            assertTrue("no telemetry POST received", server.capturedTelemetryBodies.isNotEmpty())
+        } finally {
+            runBlocking { factory.destroy() }
+            server.shutdown()
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Test 9 — destroy flushes events before tearing down
+    // -------------------------------------------------------------------------
+
+    /**
+     * Given the SDK is ready
+     * And an event has been tracked but not yet flushed
+     * When factory.destroy() is called
+     * Then the events endpoint receives a POST containing the tracked event before destroy returns
+     */
+    @Test
+    fun destroyFlushesEventsBeforeTeardown() {
+        val server = MockSplitServer()
+        server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_DISABLED))
+        server.enqueueEvaluations(MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1))
+
+        val factory = buildPollingFactory(server, prefix = "e2e_destroy_$RUN_ID")
+        val client = factory.getClient()
+        val listener = TestEventListener()
+        client.addEventListener(listener.asSplitEventListener)
+
+        assertTrue("onReady did not fire", listener.awaitReady())
+
+        client.track("checkout")
+
+        // destroy() flushes the events coordinator before cancelling the scope
+        runBlocking { factory.destroy() }
+
+        assertTrue("events not flushed before destroy completed",
+            server.capturedEventBodies.any { it.contains("\"eventTypeId\":\"checkout\"") })
+
+        server.shutdown()
+    }
+
+    // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
 
