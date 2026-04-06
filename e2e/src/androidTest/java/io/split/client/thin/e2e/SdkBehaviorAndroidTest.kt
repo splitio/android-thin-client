@@ -5,6 +5,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.split.client.thin.Key
 import io.split.client.thin.SdkKey
+import io.split.client.thin.SdkUpdateMetadata
 import io.split.client.thin.SplitClientConfig
 import io.split.client.thin.SplitFactory
 import io.split.client.thin.SplitFactoryBuilder
@@ -170,6 +171,50 @@ class SdkBehaviorAndroidTest {
             assertTrue("client2 onUpdate did not fire", listener2.awaitUpdate())
             assertTrue("client1 received spurious onUpdate (event isolation failure)",
                 listener1.noUpdate())
+        } finally {
+            runBlocking { factory.destroy() }
+            server.shutdown()
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Test 4a — SDK emits update when evaluations change (POLLING)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Given the SDK is configured in POLLING mode with a 1-second refresh rate
+     * And the first evaluations call returns RESPONSE_1 (flag_a=on)
+     * And the second evaluations call returns RESPONSE_2 (flag_a=off)
+     * When a client reaches onReady
+     * Then onReady fires with flag_a == "on"
+     * And onUpdate fires on the next poll cycle
+     * And getTreatment("flag_a") returns "off" after the update
+     * And the update metadata type is FLAGS_UPDATE
+     */
+    @Test
+    fun sdkEmitsUpdateWhenEvaluationsChangePolling() {
+        val server = MockSplitServer()
+        server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_DISABLED))
+
+        var callCount = 0
+        server.evaluationsHandler = {
+            callCount++
+            if (callCount == 1) MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1)
+            else MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_2)
+        }
+
+        val factory = buildPollingFactory(server, prefix = "e2e_update_polling_$RUN_ID", refreshRate = 1)
+        val client = factory.getClient()
+        val listener = TestEventListener()
+        client.addEventListener(listener.asSplitEventListener)
+
+        try {
+            assertTrue("onReady did not fire", listener.awaitReady())
+            assertEquals("on", client.getTreatment("flag_a").treatment)
+
+            assertTrue("onUpdate did not fire within ${UPDATE_TIMEOUT_SECONDS}s", listener.awaitUpdate())
+            assertEquals("off", client.getTreatment("flag_a").treatment)
+            assertEquals(SdkUpdateMetadata.Type.FLAGS_UPDATE, listener.lastUpdateMetadata?.type)
         } finally {
             runBlocking { factory.destroy() }
             server.shutdown()
