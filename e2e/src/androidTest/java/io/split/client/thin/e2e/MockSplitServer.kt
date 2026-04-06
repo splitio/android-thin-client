@@ -49,6 +49,15 @@ class MockSplitServer {
     /** Bodies of all POST requests received at the telemetry endpoint. */
     val capturedTelemetryBodies: List<String> get() = _capturedTelemetryBodies.toList()
 
+    /**
+     * Optional per-request handler for the evaluations endpoint. When set, takes precedence
+     * over [evaluationsQueue]. Useful for dispatch-by-query-param logic in multi-client tests.
+     *
+     * The handler receives the full [RecordedRequest] and returns a [MockResponse] or `null`
+     * to fall through to [evaluationsQueue].
+     */
+    @Volatile var evaluationsHandler: ((RecordedRequest) -> MockResponse?)? = null
+
     init {
         server.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse {
@@ -58,8 +67,10 @@ class MockSplitServer {
                         sseQueue.removeFirstOrNull() ?: defaultSseResponse()
 
                     path.startsWith("/api/v2/evaluations") ->
-                        evaluationsQueue.removeFirstOrNull() ?: MockResponse().setResponseCode(200)
-                            .setBody("""{"till":-1,"since":-1,"evaluations":[]}""")
+                        evaluationsHandler?.invoke(request)
+                            ?: evaluationsQueue.removeFirstOrNull()
+                            ?: MockResponse().setResponseCode(200)
+                                .setBody("""{"till":-1,"since":-1,"evaluations":[]}""")
 
                     // Auth endpoint — must be checked after /api/v2 prefix to avoid false match
                     path.startsWith("/api") && request.method == "GET" ->

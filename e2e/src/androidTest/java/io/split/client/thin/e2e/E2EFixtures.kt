@@ -81,6 +81,16 @@ object E2EFixtures {
         """{"featureName":"flag_a","treatment":"off","sets":[],"config":null},""" +
         """{"featureName":"flag_b","treatment":"on","sets":[],"config":null}]}"""
 
+    /**
+     * Second-poll update for user_b: flag_b flips from "on" to "off".
+     *
+     * Used in the multi-client event-isolation test to trigger an [SdkUpdateMetadata]
+     * event on client2 while leaving client1 (user_a) unchanged.
+     */
+    const val EVALUATIONS_RESPONSE_2_UPDATED: String = """{"till":3000,"since":2000,"evaluations":[""" +
+        """{"featureName":"flag_a","treatment":"off","sets":[],"config":null},""" +
+        """{"featureName":"flag_b","treatment":"off","sets":[],"config":null}]}"""
+
     // -------------------------------------------------------------------------
     // SSE / streaming events
     // -------------------------------------------------------------------------
