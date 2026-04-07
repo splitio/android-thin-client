@@ -480,7 +480,7 @@ public class ConsumerJavaAndroidTest {
     public void eventListenerViewCallbacks() {
         SplitEventListener listener = new SplitEventListener() {
             @Override
-            public void onReadyView(SplitClient client, SdkReadyMetadata metadata) {
+            public void onReadyView(SplitClient client, @Nullable SdkReadyMetadata metadata) {
                 // no-op
             }
 
@@ -490,7 +490,7 @@ public class ConsumerJavaAndroidTest {
             }
 
             @Override
-            public void onReadyFromCacheView(SplitClient client, SdkReadyMetadata metadata) {
+            public void onReadyFromCacheView(SplitClient client, @Nullable SdkReadyMetadata metadata) {
                 // no-op
             }
         };

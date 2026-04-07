@@ -5,7 +5,6 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.split.client.thin.Key
 import io.split.client.thin.SdkKey
-import io.split.client.thin.SdkUpdateMetadata
 import io.split.client.thin.SplitClientConfig
 import io.split.client.thin.SplitFactory
 import io.split.client.thin.SplitFactoryBuilder
@@ -15,6 +14,7 @@ import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.MockResponse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -144,10 +144,10 @@ class SdkBehaviorAndroidTest {
         server.evaluationsHandler = { request ->
             val user = request.requestUrl?.queryParameter("user") ?: ""
             val count = callCounts.merge(user, 1, Int::plus)!!
-            when {
-                user == "user_a" -> MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1)
-                user == "user_b" && count == 1 -> MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_2)
-                user == "user_b" -> MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_2_UPDATED)
+            when (user) {
+                "user_a" -> MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1)
+                "user_b" if count == 1 -> MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_2)
+                "user_b" -> MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_2_UPDATED)
                 else -> MockResponse().setBody("""{"till":-1,"since":-1,"evaluations":[]}""")
             }
         }
@@ -215,7 +215,7 @@ class SdkBehaviorAndroidTest {
 
             assertTrue("onUpdate did not fire within ${UPDATE_TIMEOUT_SECONDS}s", listener.awaitUpdate())
             assertEquals("off", client.getTreatment("flag_a").treatment)
-            assertEquals(SdkUpdateMetadata.Type.FLAGS_UPDATE, listener.lastUpdateMetadata?.type)
+            assertNull("SDK_UPDATE metadata should be null for now", listener.lastUpdateMetadata)
         } finally {
             runBlocking { factory.destroy() }
             server.shutdown()
@@ -673,6 +673,7 @@ class SdkBehaviorAndroidTest {
                     telemetryUrl = server.url("/api/v1/metrics/config")
                 }
             }
+            logLevel = SplitClientConfig.LogLevel.VERBOSE
             storage { this.prefix = prefix }
         }
         return SplitFactoryBuilder.build(

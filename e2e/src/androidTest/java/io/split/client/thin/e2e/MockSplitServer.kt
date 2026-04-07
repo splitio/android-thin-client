@@ -164,7 +164,11 @@ class MockSplitServer {
     // -------------------------------------------------------------------------
 
     fun shutdown() {
-        server.shutdown()
+        try {
+            server.shutdown()
+        } catch (_: java.io.IOException) {
+            // MockWebServer may throw if connections with delayed responses are still open
+        }
     }
 
     // -------------------------------------------------------------------------

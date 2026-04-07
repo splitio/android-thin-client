@@ -259,7 +259,7 @@ class ConsumerAndroidTest {
     @Test
     fun splitEventListenerSubclass() {
         val listener = object : SplitEventListener() {
-            override fun onReady(client: SplitClient, metadata: SdkReadyMetadata) {
+            override fun onReady(client: SplitClient, metadata: SdkReadyMetadata?) {
                 // no-op
             }
         }
@@ -283,9 +283,9 @@ class ConsumerAndroidTest {
         )
         val client = factory.getClient()
         val listener = object : SplitEventListener() {
-            override fun onReady(client: SplitClient, metadata: SdkReadyMetadata) {}
-            override fun onReadyFromCache(client: SplitClient, metadata: SdkReadyMetadata) {}
-            override fun onUpdate(client: SplitClient, metadata: SdkUpdateMetadata) {}
+            override fun onReady(client: SplitClient, metadata: SdkReadyMetadata?) {}
+            override fun onReadyFromCache(client: SplitClient, metadata: SdkReadyMetadata?) {}
+            override fun onUpdate(client: SplitClient, metadata: SdkUpdateMetadata?) {}
         }
 
         client.addEventListener(listener)
@@ -507,15 +507,15 @@ class ConsumerAndroidTest {
     @Test
     fun eventListenerViewCallbacks() {
         val listener = object : SplitEventListener() {
-            override fun onReadyView(client: SplitClient, metadata: SdkReadyMetadata) {
+            override fun onReadyView(client: SplitClient, metadata: SdkReadyMetadata?) {
                 // no-op
             }
 
-            override fun onUpdateView(client: SplitClient, metadata: SdkUpdateMetadata) {
+            override fun onUpdateView(client: SplitClient, metadata: SdkUpdateMetadata?) {
                 // no-op
             }
 
-            override fun onReadyFromCacheView(client: SplitClient, metadata: SdkReadyMetadata) {
+            override fun onReadyFromCacheView(client: SplitClient, metadata: SdkReadyMetadata?) {
                 // no-op
             }
         }
