@@ -54,7 +54,6 @@ fun createPersistenceDomainComponents(
         roomEventsPersistence = RoomEventsPersistence(dao = database.eventDao()),
         serializer = eventSerializer,
         callbacks = eventsCallbacks,
-        scope = scope
     )
 
     return PersistenceDomainComponents(

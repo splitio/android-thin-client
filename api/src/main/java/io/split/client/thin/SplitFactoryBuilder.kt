@@ -137,7 +137,8 @@ object SplitFactoryBuilder {
             submitter = httpEventsSubmitter,
             batchSize = EVENTS_BATCH_SIZE
         )
-        val taskExecutor = CoroutineSplitTaskExecutor(factoryScope)
+        val eventsContext = factoryScope.coroutineContext + Dispatchers.IO.limitedParallelism(1)
+        val taskExecutor = CoroutineSplitTaskExecutor(CoroutineScope(eventsContext))
         // Safe: both EventsStorage and PersistentEventsStorage implement StoragePusher<TrackerEvent>;
         // the declared type is RecorderStorage<TrackerEvent> but the runtime type always implements both.
         @Suppress("UNCHECKED_CAST")
@@ -150,7 +151,7 @@ object SplitFactoryBuilder {
             /* splitTaskExecutor = */ taskExecutor
         )
         val eventsCoordinator = DefaultEventSubmissionCoordinator(
-            scope = factoryScope,
+            scope = CoroutineScope(eventsContext),
             task = { eventsRecorderTask.execute() }
         )
         val pushRateMillis = (config?.sync?.pushRate ?: 1800) * 1_000L
