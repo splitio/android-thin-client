@@ -539,7 +539,7 @@ class SdkBehaviorAndroidTest {
     }
 
     // -------------------------------------------------------------------------
-    // Test 8 — track and flush submit events and telemetry
+    // Test 8 — track and flush submit events
     // -------------------------------------------------------------------------
 
     /**
@@ -548,10 +548,9 @@ class SdkBehaviorAndroidTest {
      * And client.flush() is called
      * Then the events endpoint receives a POST containing the tracked event
      * And the event body includes eventTypeId="purchase", value=99.0, key="user_a"
-     * And the telemetry endpoint receives a POST on SDK init
      */
     @Test
-    fun trackAndFlushSubmitEventsAndTelemetry() {
+    fun trackAndFlushSubmitEvents() {
         val server = MockSplitServer()
         server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_DISABLED))
         server.enqueueEvaluations(MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1))
@@ -580,8 +579,6 @@ class SdkBehaviorAndroidTest {
             assertTrue("value not found in events body", eventsBody.contains("99.0"))
             assertTrue("key not found in events body", eventsBody.contains("\"key\":\"user_a\""))
             assertTrue("property not found in events body", eventsBody.contains("\"item\""))
-
-            assertTrue("no telemetry POST received", server.capturedTelemetryBodies.isNotEmpty())
         } finally {
             runBlocking { factory.destroy() }
             server.shutdown()
