@@ -25,7 +25,8 @@ internal class DefaultCredentialFetcher(
         onJwtFetchStarted(target)
         try {
             val response = retryableHttpClient.execute(request, RequestCategory.AUTH)
-            val credential = tokenDeserializer.deserialize(response.data)
+            val data = response.data ?: throw IllegalStateException("Auth response body is null")
+            val credential = tokenDeserializer.deserialize(data)
             onJwtFetchSucceeded(credential, target)
             return credential
         } catch (e: Exception) {

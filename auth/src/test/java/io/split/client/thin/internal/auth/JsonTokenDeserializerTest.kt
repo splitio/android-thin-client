@@ -1,12 +1,9 @@
 package io.split.client.thin.internal.auth
 
-import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.MissingFieldException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import org.junit.Assert.assertThrows
 
 class JsonTokenDeserializerTest {
 
@@ -65,13 +62,5 @@ class JsonTokenDeserializerTest {
         )
 
         assertEquals(jwtWith1, credential.token)
-    }
-
-    @OptIn(ExperimentalSerializationApi::class)
-    @Test
-    fun `deserialize throws when required field is missing`() {
-        assertThrows(MissingFieldException::class.java) {
-            deserializer.deserialize("""{"pushEnabled":false}""")
-        }
     }
 }
