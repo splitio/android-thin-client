@@ -5,6 +5,7 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.RecordedRequest
 import okio.Buffer
+import java.util.Collections
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -47,6 +48,16 @@ class MockSplitServer {
     /** Number of requests received at the auth endpoint. */
     val authRequestCount: AtomicInteger = AtomicInteger(0)
 
+    /** Number of requests received at the evaluations endpoint. */
+    val evaluationRequestCount: AtomicInteger = AtomicInteger(0)
+
+    /** Timestamps (ms) of each request received at the evaluations endpoint. */
+    val evaluationRequestTimestampsMs: MutableList<Long> =
+        Collections.synchronizedList(mutableListOf())
+
+    /** Number of SSE connections established. */
+    val sseConnectionCount: AtomicInteger = AtomicInteger(0)
+
     /** Bodies of all POST requests received at the events endpoint. */
     val capturedEventBodies: List<String> get() = _capturedEventBodies.toList()
 
@@ -67,14 +78,19 @@ class MockSplitServer {
             override fun dispatch(request: RecordedRequest): MockResponse {
                 val path = request.path.orEmpty()
                 return when {
-                    path.startsWith("/sse") ->
+                    path.startsWith("/sse") -> {
+                        sseConnectionCount.incrementAndGet()
                         sseQueue.removeFirstOrNull() ?: defaultSseResponse()
+                    }
 
-                    path.startsWith("/api/v2/evaluations") ->
+                    path.startsWith("/api/v2/evaluations") -> {
+                        evaluationRequestCount.incrementAndGet()
+                        evaluationRequestTimestampsMs.add(System.currentTimeMillis())
                         evaluationsHandler?.invoke(request)
                             ?: evaluationsQueue.removeFirstOrNull()
                             ?: MockResponse().setResponseCode(200)
                                 .setBody("""{"till":-1,"since":-1,"evaluations":[]}""")
+                    }
 
                     // Auth endpoint — must be checked after /api/v2 prefix to avoid false match
                     path.startsWith("/api") && request.method == "GET" -> {

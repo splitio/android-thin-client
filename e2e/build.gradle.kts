@@ -41,4 +41,5 @@ dependencies {
 
     androidTestImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
     androidTestImplementation("com.squareup.okhttp3:mockwebserver:4.10.0")
+    androidTestImplementation("androidx.test:core:1.6.1")
 }

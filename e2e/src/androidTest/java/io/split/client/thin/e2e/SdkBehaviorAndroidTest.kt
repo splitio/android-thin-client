@@ -1,8 +1,11 @@
 package io.split.client.thin.e2e
 
 import android.content.Context
+import androidx.lifecycle.Lifecycle
+import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import io.split.client.thin.internal.evaluation.DefaultSyncDelayCalculator
 import io.split.client.thin.Key
 import io.split.client.thin.SdkKey
 import io.split.client.thin.SplitClientConfig
@@ -620,8 +623,314 @@ class SdkBehaviorAndroidTest {
     }
 
     // -------------------------------------------------------------------------
+    // Test 10 — SDK delays fetch after SSE update with hashing params
+    // -------------------------------------------------------------------------
+
+    /**
+     * Given the SDK is in STREAMING mode and receives an SSE EVALUATION_UPDATE with hashing params
+     * When the delay is computed by [DefaultSyncDelayCalculator] for "user_a"
+     * Then the evaluations re-fetch happens no sooner than sseTs + expectedDelay (±500ms tolerance)
+     */
+    @Test
+    fun sdkDelaysFetchAfterSseUpdateWithHashingParams() {
+        val server = MockSplitServer()
+        server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_ENABLED))
+
+        var callCount = 0
+        server.evaluationsHandler = {
+            callCount++
+            if (callCount == 1) MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1)
+            else MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_2)
+        }
+
+        // Delay the SSE event 2 seconds so onReady fires from the initial fetch first
+        server.enqueueSse(
+            server.buildSseResponse(
+                listOf(E2EFixtures.SSE_EVALUATION_UPDATE_WITH_DELAY),
+                delaySeconds = 2,
+            )
+        )
+
+        val factory = buildStreamingFactory(server, prefix = "e2e_delay_fetch_$RUN_ID")
+        val client = factory.getClient()
+        val listener = TestEventListener()
+        client.addEventListener(listener.asSplitEventListener)
+
+        try {
+            assertTrue("onReady did not fire", listener.awaitReady())
+
+            // Record approximate time the SSE event will arrive (2s after factory start ≈ now)
+            val sseApproxTs = System.currentTimeMillis()
+            val expectedDelayMs = DefaultSyncDelayCalculator().calculateDelay(
+                "user_a",
+                E2EFixtures.DELAYED_FETCH_INTERVAL_MS,
+                E2EFixtures.DELAYED_FETCH_SEED,
+                1,
+            )
+
+            assertTrue("onUpdate did not fire after delayed SSE fetch", listener.awaitUpdate(20))
+
+            val secondFetchTs = server.evaluationRequestTimestampsMs.getOrNull(1)
+            assertFalse("expected a second evaluations fetch", secondFetchTs == null)
+            assertTrue(
+                "second fetch arrived too early: expected >= sseTs+${expectedDelayMs}ms, got offset ${secondFetchTs!! - sseApproxTs}ms",
+                secondFetchTs >= sseApproxTs + expectedDelayMs - 500,
+            )
+            assertEquals("off", client.getTreatment("flag_a").treatment)
+        } finally {
+            runBlocking { factory.destroy() }
+            server.shutdown()
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Test 11 — Streaming connection pauses and resumes on lifecycle
+    // -------------------------------------------------------------------------
+
+    /**
+     * Given the SDK is in STREAMING mode
+     * When the app goes to background (CREATED) then foreground (RESUMED)
+     * Then the SSE connection is closed on pause and re-established on resume
+     * And evaluations are re-fetched after reconnect
+     */
+    @Test
+    fun streamingConnectionPausesAndResumesOnLifecycle() {
+        val server = MockSplitServer()
+        server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_ENABLED))
+        // Quiet initial SSE response to keep connection open during ready
+        // (defaultSseResponse is served automatically when queue is empty)
+
+        var callCount = 0
+        server.evaluationsHandler = {
+            callCount++
+            if (callCount == 1) MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1)
+            else MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_2)
+        }
+
+        val factory = buildStreamingFactory(server, prefix = "e2e_sse_lifecycle_$RUN_ID")
+        val client = factory.getClient()
+        val listener = TestEventListener()
+        client.addEventListener(listener.asSplitEventListener)
+
+        val scenario = launchActivity()
+        try {
+            assertTrue("onReady did not fire", listener.awaitReady())
+            assertEquals(1, server.sseConnectionCount.get())
+
+            // Background — SSE should be paused/disconnected
+            scenario.moveToState(Lifecycle.State.CREATED)
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+
+            // Enqueue fresh SSE event + updated evaluations for when we reconnect
+            server.enqueueSse(
+                server.buildSseResponse(listOf(E2EFixtures.SSE_EVALUATION_UPDATE), delaySeconds = 0)
+            )
+
+            // Foreground — SSE should reconnect and deliver the event
+            scenario.moveToState(Lifecycle.State.RESUMED)
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+
+            assertTrue("onUpdate did not fire after SSE reconnect", listener.awaitUpdate(15))
+            assertEquals("SSE should have reconnected", 2, server.sseConnectionCount.get())
+            assertEquals("off", client.getTreatment("flag_a").treatment)
+        } finally {
+            scenario.close()
+            runBlocking { factory.destroy() }
+            server.shutdown()
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Test 12 — Polling scheduler pauses and resumes on lifecycle
+    // -------------------------------------------------------------------------
+
+    /**
+     * Given the SDK is in POLLING mode with a 1-second refresh rate
+     * When the app goes to background (CREATED)
+     * Then no evaluation fetches occur during the pause
+     * And when the app comes to foreground (RESUMED), polling resumes and onUpdate fires
+     */
+    @Test
+    fun pollingSchedulerPausesAndResumesOnLifecycle() {
+        val server = MockSplitServer()
+        server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_DISABLED))
+
+        var callCount = 0
+        server.evaluationsHandler = {
+            callCount++
+            if (callCount == 1) MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1)
+            else MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_2)
+        }
+
+        val factory = buildPollingFactory(
+            server,
+            prefix = "e2e_poll_lifecycle_$RUN_ID",
+            refreshRate = 1,
+        )
+        val client = factory.getClient()
+        val listener = TestEventListener()
+        client.addEventListener(listener.asSplitEventListener)
+
+        val scenario = launchActivity()
+        try {
+            assertTrue("onReady did not fire", listener.awaitReady())
+            val countAtPause = server.evaluationRequestCount.get()
+
+            // Background — polling should stop
+            scenario.moveToState(Lifecycle.State.CREATED)
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+
+            Thread.sleep(2_500) // spans 2+ poll cycles if polling were active
+
+            assertEquals(
+                "evaluations fetched during pause (polling not paused)",
+                countAtPause,
+                server.evaluationRequestCount.get(),
+            )
+
+            // Foreground — polling should resume and deliver update
+            scenario.moveToState(Lifecycle.State.RESUMED)
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+
+            assertTrue("onUpdate did not fire after polling resumed", listener.awaitUpdate(10))
+            assertEquals("off", client.getTreatment("flag_a").treatment)
+        } finally {
+            scenario.close()
+            runBlocking { factory.destroy() }
+            server.shutdown()
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Test 13 — Events periodic posting pauses and resumes on lifecycle
+    // -------------------------------------------------------------------------
+
+    /**
+     * Given the SDK is in POLLING mode and an event has been tracked
+     * When the app goes to background (CREATED)
+     * Then no events are posted during the pause
+     * And when the app returns to foreground (RESUMED), the events can be flushed
+     */
+    @Test
+    fun eventsPeriodicPostingPausesAndResumesOnLifecycle() {
+        val server = MockSplitServer()
+        server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_DISABLED))
+        server.enqueueEvaluations(MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1))
+
+        val factory = buildPollingFactory(server, prefix = "e2e_events_lifecycle_$RUN_ID")
+        val client = factory.getClient()
+        val listener = TestEventListener()
+        client.addEventListener(listener.asSplitEventListener)
+
+        val scenario = launchActivity()
+        try {
+            assertTrue("onReady did not fire", listener.awaitReady())
+
+            client.track("lifecycle_event")
+
+            // Background — events scheduler should stop; no periodic flush should occur
+            scenario.moveToState(Lifecycle.State.CREATED)
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+
+            Thread.sleep(3_000) // covers 1+ periodic push cycles if scheduler were active
+
+            assertTrue(
+                "events were posted during pause (periodic scheduler not paused)",
+                server.capturedEventBodies.isEmpty(),
+            )
+
+            // Foreground — resume and explicitly flush to confirm events are still queued
+            scenario.moveToState(Lifecycle.State.RESUMED)
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+
+            runBlocking { client.flush() }
+
+            val deadline = System.currentTimeMillis() + 5_000L
+            while (server.capturedEventBodies.isEmpty() && System.currentTimeMillis() < deadline) {
+                Thread.sleep(50)
+            }
+
+            assertTrue(
+                "lifecycle_event not found in flushed events body",
+                server.capturedEventBodies.any { it.contains("\"eventTypeId\":\"lifecycle_event\"") },
+            )
+        } finally {
+            scenario.close()
+            runBlocking { factory.destroy() }
+            server.shutdown()
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Test 14 — SINGLE_SYNC mode: lifecycle transitions are no-ops
+    // -------------------------------------------------------------------------
+
+    /**
+     * Given the SDK is in SINGLE_SYNC mode
+     * When the app cycles through background and foreground
+     * Then no additional evaluation fetches are triggered
+     * And the flag treatment remains unchanged
+     */
+    @Test
+    fun singleSyncModeLifecycleTransitionsAreNoOps() {
+        val server = MockSplitServer()
+        server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_DISABLED))
+        server.enqueueEvaluations(MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1))
+
+        val config = splitClientConfig {
+            sync {
+                mode = SplitClientConfig.SyncMode.SINGLE_SYNC
+                serviceEndpoints {
+                    authUrl = server.url("/api")
+                    evaluationsUrl = server.url("/api/v2/evaluations")
+                    eventsUrl = server.url("/api/v1/events/bulk")
+                    telemetryUrl = server.url("/api/v1/metrics/config")
+                }
+            }
+            storage { this.prefix = "e2e_single_sync_lifecycle_$RUN_ID" }
+        }
+        val factory = SplitFactoryBuilder.build(
+            context = context,
+            sdkKey = SdkKey("e2e-test-key"),
+            defaultTarget = Target(key = Key("user_a"), trafficType = "user"),
+            config = config,
+        )
+        val client = factory.getClient()
+        val listener = TestEventListener()
+        client.addEventListener(listener.asSplitEventListener)
+
+        val scenario = launchActivity()
+        try {
+            assertTrue("onReady did not fire", listener.awaitReady())
+            assertEquals("on", client.getTreatment("flag_a").treatment)
+            val countAtReady = server.evaluationRequestCount.get()
+
+            scenario.moveToState(Lifecycle.State.CREATED)
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+            Thread.sleep(500)
+            scenario.moveToState(Lifecycle.State.RESUMED)
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+
+            assertEquals(
+                "SINGLE_SYNC should not trigger extra evaluation fetches on lifecycle",
+                countAtReady,
+                server.evaluationRequestCount.get(),
+            )
+            assertEquals("on", client.getTreatment("flag_a").treatment)
+        } finally {
+            scenario.close()
+            runBlocking { factory.destroy() }
+            server.shutdown()
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
+
+    /** Launches [TestActivity] so [ProcessLifecycleOwner] can be driven in lifecycle tests. */
+    private fun launchActivity(): ActivityScenario<TestActivity> =
+        ActivityScenario.launch(TestActivity::class.java)
 
     /**
      * Runs a complete ready cycle against a fresh mock server to populate the Room DB at

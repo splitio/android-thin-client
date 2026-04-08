@@ -106,4 +106,28 @@ object E2EFixtures {
         """{"channel":"$STREAMING_CHANNEL",""" +
         """"data":"{\"type\":\"EVALUATION_UPDATE\",\"changeNumber\":2000}",""" +
         """"timestamp":1000000}"""
+
+    // -------------------------------------------------------------------------
+    // Delayed-fetch SSE fixture (SyncDelayCalculator / hashing params)
+    // -------------------------------------------------------------------------
+
+    /** Interval passed in the SSE payload for per-key delay calculation. */
+    const val DELAYED_FETCH_INTERVAL_MS: Long = 5_000L
+
+    /** Seed passed in the SSE payload for MurmurHash3 delay calculation. */
+    const val DELAYED_FETCH_SEED: Int = 42
+
+    /**
+     * SSE payload that includes hashing params (`i`, `s`, `h`).
+     *
+     * The SDK's [DefaultSyncDelayCalculator] uses these fields to compute a
+     * per-key delay before re-fetching evaluations after the notification arrives.
+     *
+     * `h=1` → MURMUR3_32 algorithm.
+     */
+    const val SSE_EVALUATION_UPDATE_WITH_DELAY: String =
+        """{"channel":"$STREAMING_CHANNEL",""" +
+        """"data":"{\"type\":\"EVALUATION_UPDATE\",\"changeNumber\":2000,""" +
+        """"\"i\":$DELAYED_FETCH_INTERVAL_MS,\"s\":$DELAYED_FETCH_SEED,\"h\":1}",""" +
+        """"timestamp":1000000}"""
 }
