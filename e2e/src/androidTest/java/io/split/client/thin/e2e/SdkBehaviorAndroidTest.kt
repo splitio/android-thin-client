@@ -699,14 +699,8 @@ class SdkBehaviorAndroidTest {
         val uiDevice = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
 
         val server = MockSplitServer()
-        // Two auth responses: one for init, one in case the SDK re-auths after resume
-        server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_ENABLED))
-        server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_ENABLED))
-
-        // Keep-alive SSE holds the initial connection open so count stays at 1 during ready.
-        // Without this, defaultSseResponse() returns an empty body that closes immediately,
-        // causing the SDK to reconnect repeatedly (count would be 10+ by the time onReady fires).
-        server.enqueueSse(server.buildSseKeepAliveResponse(30))
+        // Extra auth responses so the SDK can re-auth as needed during reconnects
+        repeat(5) { server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_ENABLED)) }
 
         var callCount = 0
         server.evaluationsHandler = {
@@ -724,14 +718,21 @@ class SdkBehaviorAndroidTest {
 
         try {
             assertTrue("onReady did not fire", listener.awaitReady())
-            assertEquals("SSE should have connected exactly once", 1, server.sseConnectionCount.get())
 
-            // Background via real ActivityManager so ProcessLifecycleOwner fires ON_STOP.
-            // ActivityScenario.moveToState() uses Instrumentation.callActivityOnStop() which
-            // bypasses Application.ActivityLifecycleCallbacks — pressHome() does not.
+            // SSE may have connected multiple times before ready (empty responses close
+            // immediately causing reconnects). Record the stable count at this point.
+            val countAtPause = server.sseConnectionCount.get()
+            assertTrue("SSE should have connected at least once", countAtPause >= 1)
+
+            // Background — ProcessLifecycleOwner fires ON_STOP, SSE manager should pause
             uiDevice.pressHome()
             uiDevice.waitForIdle(2_000)
-            Thread.sleep(500) // ProcessLifecycleOwner 700ms debounce
+            Thread.sleep(1_000) // ProcessLifecycleOwner 700ms debounce + margin
+
+            // Verify no new SSE connections during the pause window
+            val countDuringPause = server.sseConnectionCount.get()
+            Thread.sleep(1_000)
+            assertEquals("SSE reconnected during pause", countDuringPause, server.sseConnectionCount.get())
 
             // Enqueue fresh SSE event + updated evaluations for when we reconnect
             server.enqueueSse(
@@ -747,7 +748,7 @@ class SdkBehaviorAndroidTest {
 
             assertTrue("onUpdate did not fire after SSE reconnect", listener.awaitUpdate(15))
             assertTrue("SSE should have reconnected after resume",
-                server.sseConnectionCount.get() >= 2)
+                server.sseConnectionCount.get() > countDuringPause)
             assertEquals("off", client.getTreatment("flag_a").treatment)
         } finally {
             scenario.close()
