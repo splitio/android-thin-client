@@ -250,7 +250,7 @@ class SplitClientConfigTest {
     @Test
     fun `builder falls back evaluationRefreshRate to default when below minimum`() {
         val config = SplitClientConfig.Builder()
-            .sync(SplitClientConfig.SyncConfig.Builder().evaluationRefreshRate(1).build())
+            .sync(SplitClientConfig.SyncConfig.Builder().evaluationRefreshRate(0).build())
             .build()
         assertEquals(3600, config.sync.evaluationRefreshRate)
     }
@@ -281,7 +281,7 @@ class SplitClientConfigTest {
 
     @Test
     fun `DSL falls back evaluationRefreshRate to default when below minimum`() {
-        val config = splitClientConfig { sync { evaluationRefreshRate = 1 } }
+        val config = splitClientConfig { sync { evaluationRefreshRate = 0 } }
         assertEquals(3600, config.sync.evaluationRefreshRate)
     }
 
@@ -325,9 +325,9 @@ class SplitClientConfigTest {
     @Test
     fun `builder accepts evaluationRefreshRate at minimum boundary`() {
         val config = SplitClientConfig.Builder()
-            .sync(SplitClientConfig.SyncConfig.Builder().evaluationRefreshRate(60).build())
+            .sync(SplitClientConfig.SyncConfig.Builder().evaluationRefreshRate(1).build())
             .build()
-        assertEquals(60, config.sync.evaluationRefreshRate)
+        assertEquals(1, config.sync.evaluationRefreshRate)
     }
 
     @Test
@@ -348,8 +348,8 @@ class SplitClientConfigTest {
 
     @Test
     fun `DSL accepts evaluationRefreshRate at minimum boundary`() {
-        val config = splitClientConfig { sync { evaluationRefreshRate = 60 } }
-        assertEquals(60, config.sync.evaluationRefreshRate)
+        val config = splitClientConfig { sync { evaluationRefreshRate = 1 } }
+        assertEquals(1, config.sync.evaluationRefreshRate)
     }
 
     @Test

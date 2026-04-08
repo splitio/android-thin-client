@@ -12,6 +12,10 @@ android {
         version = release(36)
     }
 
+    buildFeatures {
+        buildConfig = true
+    }
+
     defaultConfig {
         minSdk = 21
         consumerProguardFiles("consumer-rules.pro")
@@ -20,8 +24,10 @@ android {
     buildTypes {
         debug {
             enableUnitTestCoverage = true
+            buildConfigField("int", "MIN_EVALUATION_REFRESH_RATE", "1")
         }
         release {
+            buildConfigField("int", "MIN_EVALUATION_REFRESH_RATE", "60")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
