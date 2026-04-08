@@ -697,9 +697,14 @@ class SdkBehaviorAndroidTest {
     @Test
     fun streamingConnectionPausesAndResumesOnLifecycle() {
         val server = MockSplitServer()
+        // Two auth responses: one for init, one in case the SDK re-auths after resume
         server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_ENABLED))
-        // Quiet initial SSE response to keep connection open during ready
-        // (defaultSseResponse is served automatically when queue is empty)
+        server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_ENABLED))
+
+        // Keep-alive SSE holds the initial connection open so count stays at 1 during ready.
+        // Without this, defaultSseResponse() returns an empty body that closes immediately,
+        // causing the SDK to reconnect repeatedly (count would be 10+ by the time onReady fires).
+        server.enqueueSse(server.buildSseKeepAliveResponse(30))
 
         var callCount = 0
         server.evaluationsHandler = {
@@ -716,7 +721,7 @@ class SdkBehaviorAndroidTest {
         val scenario = launchActivity()
         try {
             assertTrue("onReady did not fire", listener.awaitReady())
-            assertEquals(1, server.sseConnectionCount.get())
+            assertEquals("SSE should have connected exactly once", 1, server.sseConnectionCount.get())
 
             // Background — SSE should be paused/disconnected
             scenario.moveToState(Lifecycle.State.CREATED)
@@ -732,7 +737,8 @@ class SdkBehaviorAndroidTest {
             InstrumentationRegistry.getInstrumentation().waitForIdleSync()
 
             assertTrue("onUpdate did not fire after SSE reconnect", listener.awaitUpdate(15))
-            assertEquals("SSE should have reconnected", 2, server.sseConnectionCount.get())
+            assertTrue("SSE should have reconnected after resume",
+                server.sseConnectionCount.get() >= 2)
             assertEquals("off", client.getTreatment("flag_a").treatment)
         } finally {
             scenario.close()
@@ -775,17 +781,21 @@ class SdkBehaviorAndroidTest {
         val scenario = launchActivity()
         try {
             assertTrue("onReady did not fire", listener.awaitReady())
-            val countAtPause = server.evaluationRequestCount.get()
 
             // Background — polling should stop
             scenario.moveToState(Lifecycle.State.CREATED)
             InstrumentationRegistry.getInstrumentation().waitForIdleSync()
 
-            Thread.sleep(2_500) // spans 2+ poll cycles if polling were active
+            // ProcessLifecycleOwner fires ON_STOP with a ~700ms internal debounce after the last
+            // activity stops. Capture the baseline count only after that delay has elapsed.
+            Thread.sleep(1_100)
+            val countAfterPause = server.evaluationRequestCount.get()
+
+            Thread.sleep(2_000) // spans 2+ poll cycles if polling were still active
 
             assertEquals(
                 "evaluations fetched during pause (polling not paused)",
-                countAtPause,
+                countAfterPause,
                 server.evaluationRequestCount.get(),
             )
 

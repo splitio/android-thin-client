@@ -161,6 +161,25 @@ class MockSplitServer {
      * )
      * ```
      */
+    /**
+     * Builds a [MockResponse] that keeps the SSE connection open by dripping SSE comment
+     * lines (`: keepalive`) at one per second for [durationSeconds] seconds.
+     *
+     * Use this as the initial SSE response when a test needs exactly one stable connection
+     * before exercising lifecycle pause/resume — without it, an empty-body response closes
+     * immediately and the SDK reconnects repeatedly.
+     */
+    fun buildSseKeepAliveResponse(durationSeconds: Int = 30): MockResponse {
+        val buffer = Buffer()
+        repeat(durationSeconds) { buffer.writeUtf8(": keepalive\n\n") } // 13 bytes each
+        return MockResponse()
+            .setResponseCode(200)
+            .addHeader("Content-Type", "text/event-stream")
+            .addHeader("Cache-Control", "no-cache")
+            .setBody(buffer)
+            .throttleBody(13, 1, TimeUnit.SECONDS) // drip 1 comment per second
+    }
+
     fun buildSseResponse(dataLines: List<String>, delaySeconds: Long = 0): MockResponse {
         val buffer = Buffer()
         for (line in dataLines) {
