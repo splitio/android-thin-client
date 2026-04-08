@@ -25,6 +25,7 @@ import org.junit.runner.RunWith
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -637,19 +638,27 @@ class SdkBehaviorAndroidTest {
         val server = MockSplitServer()
         server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_ENABLED))
 
+        // callCount 1 = init fetch, 2 = onOpen PUSH fetch (immediate, no change),
+        // 3+ = SSE event delayed fetch (returns updated evaluations → SDK_UPDATE)
         var callCount = 0
         server.evaluationsHandler = {
             callCount++
-            if (callCount == 1) MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1)
+            if (callCount <= 2) MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1)
             else MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_2)
         }
 
-        // Delay the SSE event 2 seconds so onReady fires from the initial fetch first
+        // Build an SSE response that delivers the event immediately, then stays alive
+        // via keepalive comments so the connection doesn't close and trigger a reconnect.
+        val sseBuffer = okio.Buffer()
+        sseBuffer.writeUtf8("data: ${E2EFixtures.SSE_EVALUATION_UPDATE_WITH_DELAY}\n\n")
+        repeat(10_000) { sseBuffer.writeUtf8(": keepalive\n\n") }
         server.enqueueSse(
-            server.buildSseResponse(
-                listOf(E2EFixtures.SSE_EVALUATION_UPDATE_WITH_DELAY),
-                delaySeconds = 2,
-            )
+            MockResponse()
+                .setResponseCode(200)
+                .addHeader("Content-Type", "text/event-stream")
+                .addHeader("Cache-Control", "no-cache")
+                .setBody(sseBuffer)
+                .throttleBody(4096, 1, TimeUnit.SECONDS)
         )
 
         val factory = buildStreamingFactory(server, prefix = "e2e_delay_fetch_$RUN_ID")
@@ -660,7 +669,7 @@ class SdkBehaviorAndroidTest {
         try {
             assertTrue("onReady did not fire", listener.awaitReady())
 
-            // Record approximate time the SSE event will arrive (2s after factory start ≈ now)
+            // Record approximate time the SSE event arrived (shortly after SSE connected)
             val sseApproxTs = System.currentTimeMillis()
             val expectedDelayMs = DefaultSyncDelayCalculator().calculateDelay(
                 "user_a",
@@ -671,11 +680,12 @@ class SdkBehaviorAndroidTest {
 
             assertTrue("onUpdate did not fire after delayed SSE fetch", listener.awaitUpdate(20))
 
-            val secondFetchTs = server.evaluationRequestTimestampsMs.getOrNull(1)
-            assertFalse("expected a second evaluations fetch", secondFetchTs == null)
+            // Index 0 = init, 1 = onOpen PUSH, 2 = SSE event delayed fetch
+            val delayedFetchTs = server.evaluationRequestTimestampsMs.getOrNull(2)
+            assertFalse("expected a third evaluations fetch (SSE event delayed)", delayedFetchTs == null)
             assertTrue(
-                "second fetch arrived too early: expected >= sseTs+${expectedDelayMs}ms, got offset ${secondFetchTs!! - sseApproxTs}ms",
-                secondFetchTs >= sseApproxTs + expectedDelayMs - 500,
+                "delayed fetch arrived too early: expected >= sseTs+${expectedDelayMs}ms, got offset ${delayedFetchTs!! - sseApproxTs}ms",
+                delayedFetchTs >= sseApproxTs + expectedDelayMs - 500,
             )
             assertEquals("off", client.getTreatment("flag_a").treatment)
         } finally {
@@ -702,11 +712,13 @@ class SdkBehaviorAndroidTest {
         // Extra auth responses so the SDK can re-auth as needed during reconnects
         repeat(5) { server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_ENABLED)) }
 
-        var callCount = 0
+        // Return RESPONSE_1 during init (including onOpen PUSH fetches) so SDK_UPDATE
+        // doesn't fire prematurely and consume the one-shot update latch.
+        // Flip to RESPONSE_2 only after the background phase.
+        val returnUpdatedResponse = AtomicBoolean(false)
         server.evaluationsHandler = {
-            callCount++
-            if (callCount == 1) MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1)
-            else MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_2)
+            if (returnUpdatedResponse.get()) MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_2)
+            else MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1)
         }
 
         // Launch the activity to put the process in foreground before we background it.
@@ -719,8 +731,12 @@ class SdkBehaviorAndroidTest {
         try {
             assertTrue("onReady did not fire", listener.awaitReady())
 
-            // SSE may have connected multiple times before ready (empty responses close
-            // immediately causing reconnects). Record the stable count at this point.
+            // SSE connects asynchronously after auth — may not be open yet when
+            // awaitReady() returns (which fires from the evaluations fetch).
+            val sseDeadline = System.currentTimeMillis() + 5_000
+            while (server.sseConnectionCount.get() == 0 && System.currentTimeMillis() < sseDeadline) {
+                Thread.sleep(100)
+            }
             val countAtPause = server.sseConnectionCount.get()
             assertTrue("SSE should have connected at least once", countAtPause >= 1)
 
@@ -734,7 +750,8 @@ class SdkBehaviorAndroidTest {
             Thread.sleep(1_000)
             assertEquals("SSE reconnected during pause", countDuringPause, server.sseConnectionCount.get())
 
-            // Enqueue fresh SSE event + updated evaluations for when we reconnect
+            // Enqueue fresh SSE event + switch evaluations to RESPONSE_2 for reconnect
+            returnUpdatedResponse.set(true);
             server.enqueueSse(
                 server.buildSseResponse(listOf(E2EFixtures.SSE_EVALUATION_UPDATE), delaySeconds = 0)
             )
@@ -801,7 +818,7 @@ class SdkBehaviorAndroidTest {
             // dispatches ON_STOP. ActivityScenario.moveToState() bypasses those callbacks.
             uiDevice.pressHome()
             uiDevice.waitForIdle(2_000)
-            Thread.sleep(500) // ProcessLifecycleOwner 700ms debounce
+            Thread.sleep(1_000) // ProcessLifecycleOwner 700ms debounce + margin
 
             val countAfterPause = server.evaluationRequestCount.get()
 
@@ -1048,6 +1065,7 @@ class SdkBehaviorAndroidTest {
                     streamingUrl = server.url("/sse")
                 }
             }
+            logLevel = SplitClientConfig.LogLevel.VERBOSE
             storage { this.prefix = prefix }
         }
         return SplitFactoryBuilder.build(

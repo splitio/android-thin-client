@@ -13,6 +13,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.net.URI
+import kotlin.coroutines.cancellation.CancellationException
 
 data class StreamingToken(
     val token: String,
@@ -75,8 +76,8 @@ class StreamingConnectionManager(
         stateMutex.withLock {
             if (state is ConnectionState.Paused) {
                 state = ConnectionState.Started
-            } else if (state is ConnectionState.Stopped) {
-                // Resume when not started is a no-op
+            } else {
+                // Already started or stopped — nothing to do
                 return
             }
         }
@@ -86,8 +87,14 @@ class StreamingConnectionManager(
     private fun disconnectLocked() {
         connectionJob?.cancel()
         connectionJob = null
-        currentEventSourceClient?.disconnect()
+        val client = currentEventSourceClient
         currentEventSourceClient = null
+        // Disconnect asynchronously: BufferedReader.close() blocks while readLine()
+        // holds its lock on the IO thread. Running disconnect in background prevents
+        // pause() from holding the mutex for seconds, allowing resume() to proceed.
+        if (client != null) {
+            scope.launch(connectionDispatcher) { client.disconnect() }
+        }
     }
 
     private fun connect() {
@@ -114,6 +121,8 @@ class StreamingConnectionManager(
                 withContext(connectionDispatcher) {
                     client.connect(uri, createEventHandler())
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Logger.e("Streaming connection failed: ${e.message}")
                 handleConnectionError(retryable = true)

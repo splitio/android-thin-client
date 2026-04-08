@@ -95,6 +95,26 @@ class StreamingConnectionManagerTest {
     }
 
     @Test
+    fun `resume when already started does not reconnect`() = runTest {
+        var connectCount = 0
+        val manager = createManager(
+            eventSourceClientProvider = {
+                connectCount++
+                FakeEventSourceClient()
+            }
+        )
+
+        manager.start()
+        advanceUntilIdle()
+        assertEquals(1, connectCount)
+
+        // resume() while already Started should be a no-op
+        manager.resume()
+        advanceUntilIdle()
+        assertEquals(1, connectCount)
+    }
+
+    @Test
     fun `resume when not started does nothing`() = runTest {
         var connectCount = 0
         val manager = createManager(
