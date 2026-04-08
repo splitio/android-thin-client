@@ -285,6 +285,52 @@ class InMemoryEvaluationStorageTest {
         assertEquals(2, callCount)
         assertEquals("on", storageWithLoader.get("flag-loaded", key1)?.result?.treatment)
     }
+
+    @Test
+    fun `ensureCacheLoaded calls onCacheLoaded callback when cache is loaded successfully`() = runTest {
+        val cached = change(key1, 10L, storedEval("flag-cached", "on"))
+        val cacheLoader = FakeCacheLoader(onLoad = { cached })
+        val callbackCalls = mutableListOf<EvaluationKey>()
+        val storageWithLoader = InMemoryEvaluationStorage(
+            cacheLoader = cacheLoader,
+            onCacheLoaded = { evalKey -> callbackCalls.add(evalKey) }
+        )
+
+        storageWithLoader.ensureCacheLoaded(key1)
+
+        assertEquals(1, callbackCalls.size)
+        assertEquals(key1, callbackCalls[0])
+    }
+
+    @Test
+    fun `ensureCacheLoaded does not call onCacheLoaded when loadLocal returns null`() = runTest {
+        val cacheLoader = FakeCacheLoader(onLoad = { null })
+        val callbackCalls = mutableListOf<EvaluationKey>()
+        val storageWithLoader = InMemoryEvaluationStorage(
+            cacheLoader = cacheLoader,
+            onCacheLoaded = { evalKey -> callbackCalls.add(evalKey) }
+        )
+
+        storageWithLoader.ensureCacheLoaded(key1)
+
+        assertTrue(callbackCalls.isEmpty())
+    }
+
+    @Test
+    fun `ensureCacheLoaded does not call onCacheLoaded when key already loaded`() = runTest {
+        val cached = change(key1, 10L, storedEval("flag-cached", "on"))
+        val cacheLoader = FakeCacheLoader(onLoad = { cached })
+        val callbackCalls = mutableListOf<EvaluationKey>()
+        val storageWithLoader = InMemoryEvaluationStorage(
+            cacheLoader = cacheLoader,
+            onCacheLoaded = { evalKey -> callbackCalls.add(evalKey) }
+        )
+
+        storageWithLoader.ensureCacheLoaded(key1)
+        storageWithLoader.ensureCacheLoaded(key1) // Second call
+
+        assertEquals(1, callbackCalls.size) // Should only fire once
+    }
 }
 
 private class FakeCacheLoader(

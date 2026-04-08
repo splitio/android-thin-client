@@ -154,7 +154,7 @@ class EvaluationFactoryTest {
 
         val (components, _) = makeComponents(cacheLoader = loader)
 
-        components.repository.setTarget(Target(Key("user-1"), trafficType = "user"), null)
+        components.repository.setTarget(Target(Key("user-1"), trafficType = "user"), null, isInitialization = false)
 
         assertEquals(1, loadCalls.size)
         assertEquals(evalKey, loadCalls[0])
@@ -179,5 +179,41 @@ class EvaluationFactoryTest {
 
         assertEquals(1, persistCalls.size)
         assertEquals(evalKey, persistCalls[0])
+    }
+
+    @Test
+    fun `EVAL_LOADED_FROM_STORAGE fires when cache is loaded successfully`() = runTest {
+        val cachedChange = EvaluationChange(
+            evalKey,
+            5L,
+            listOf(StoredEvaluation(EvaluationResult(flag = "cached-flag", treatment = "off")))
+        )
+        val loader = object : EvaluationCacheLoader {
+            override suspend fun loadLocal(evalKey: EvaluationKey): EvaluationChange? = cachedChange
+            override fun persistAsync(evalKey: EvaluationKey, changeNumber: Long, evaluations: List<StoredEvaluation>) = Unit
+        }
+
+        val (components, observer) = makeComponents(cacheLoader = loader)
+
+        components.repository.setTarget(Target(Key("user-1"), trafficType = "user"), null, isInitialization = false)
+
+        val event = observer.capturedEvents.firstOrNull { it.type == ObservableEventType.EVAL_LOADED_FROM_STORAGE }
+        assertNotNull(event)
+        assertEquals("user-1", event?.properties?.get("matchingKey"))
+    }
+
+    @Test
+    fun `EVAL_LOADED_FROM_STORAGE does not fire when loadLocal returns null`() = runTest {
+        val loader = object : EvaluationCacheLoader {
+            override suspend fun loadLocal(evalKey: EvaluationKey): EvaluationChange? = null
+            override fun persistAsync(evalKey: EvaluationKey, changeNumber: Long, evaluations: List<StoredEvaluation>) = Unit
+        }
+
+        val (components, observer) = makeComponents(cacheLoader = loader)
+
+        components.repository.setTarget(Target(Key("user-1"), trafficType = "user"), null, isInitialization = false)
+
+        val event = observer.capturedEvents.firstOrNull { it.type == ObservableEventType.EVAL_LOADED_FROM_STORAGE }
+        assertEquals(null, event)
     }
 }

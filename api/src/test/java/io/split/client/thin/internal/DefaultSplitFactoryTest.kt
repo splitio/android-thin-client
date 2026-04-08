@@ -252,14 +252,16 @@ class FetchReasonObserverMappingTest {
                 override fun upsert(change: EvaluationChange): Boolean = true
                 override fun clear(evalKey: EvaluationKey) {}
             },
-            onEvaluationsUpdated = { reason ->
+            onEvaluationsUpdated = { evalKey, reason ->
                 val eventType = when (reason) {
                     FetchReason.INITIALIZATION, FetchReason.TARGET_SWITCH ->
                         ObservableEventType.EVAL_STORAGE_UPDATED
                     FetchReason.PERIODIC, FetchReason.PUSH ->
                         ObservableEventType.EVALUATIONS_UPDATED
                 }
-                compositeObserver.notifyEvent(ObservableEvent(eventType))
+                compositeObserver.notifyEvent(
+                    ObservableEvent(eventType, mapOf("matchingKey" to evalKey.key.matchingKey))
+                )
             },
         )
     }

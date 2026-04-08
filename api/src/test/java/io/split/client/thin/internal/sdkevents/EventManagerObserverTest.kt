@@ -55,4 +55,74 @@ class EventManagerObserverTest {
 
         verifyNoInteractions(eventsManager)
     }
+
+    // -------------------------------------------------------------------------
+    // matchingKey scoping — observer ignores events for other targets
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `eval_storage_updated for own matchingKey fires event`() {
+        val scopedObserver = EventManagerObserver(eventsManager, "user_a")
+
+        scopedObserver.notifyEvent(
+            ObservableEvent("eval_storage_updated", mapOf("matchingKey" to "user_a"))
+        )
+
+        verify(eventsManager).notifyInternalEvent(SdkInternalEvent.EVALUATIONS_SYNC_COMPLETE, null)
+    }
+
+    @Test
+    fun `eval_storage_updated for different matchingKey is ignored`() {
+        val scopedObserver = EventManagerObserver(eventsManager, "user_a")
+
+        scopedObserver.notifyEvent(
+            ObservableEvent("eval_storage_updated", mapOf("matchingKey" to "user_b"))
+        )
+
+        verifyNoInteractions(eventsManager)
+    }
+
+    @Test
+    fun `evaluations_updated for different matchingKey is ignored`() {
+        val scopedObserver = EventManagerObserver(eventsManager, "user_a")
+
+        scopedObserver.notifyEvent(
+            ObservableEvent("evaluations_updated", mapOf("matchingKey" to "user_b"))
+        )
+
+        verifyNoInteractions(eventsManager)
+    }
+
+    @Test
+    fun `sdk_ready_timeout_reached fires regardless of matchingKey`() {
+        val scopedObserver = EventManagerObserver(eventsManager, "user_a")
+
+        scopedObserver.notifyEvent(ObservableEvent("sdk_ready_timeout_reached"))
+
+        verify(eventsManager).notifyInternalEvent(SdkInternalEvent.SDK_READY_TIMEOUT_REACHED, null)
+    }
+
+    @Test
+    fun `observer reacts to new matchingKey after update`() {
+        val scopedObserver = EventManagerObserver(eventsManager, "user_a")
+        scopedObserver.matchingKey = "user_b"
+
+        scopedObserver.notifyEvent(
+            ObservableEvent("evaluations_updated", mapOf("matchingKey" to "user_b"))
+        )
+
+        verify(eventsManager).notifyInternalEvent(SdkInternalEvent.EVALUATIONS_UPDATED, null)
+    }
+
+    @Test
+    fun `observer ignores old matchingKey after update`() {
+        val scopedObserver = EventManagerObserver(eventsManager, "user_a")
+        scopedObserver.matchingKey = "user_b"
+
+        scopedObserver.notifyEvent(
+            ObservableEvent("evaluations_updated", mapOf("matchingKey" to "user_a"))
+        )
+
+        verifyNoInteractions(eventsManager)
+    }
 }

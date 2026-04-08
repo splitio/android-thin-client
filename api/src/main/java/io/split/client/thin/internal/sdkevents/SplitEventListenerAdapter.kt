@@ -14,18 +14,18 @@ internal class SplitEventListenerAdapter(
 ) {
 
     fun registerAll(eventsManager: EventsManager<SplitEvent, SdkInternalEvent, Any?>) {
-        eventsManager.register(SplitEvent.SDK_READY, EventHandler { _, metadata ->
-            listener.onReady(client, metadata as? SdkReadyMetadata ?: SdkReadyMetadata())
+        eventsManager.register(SplitEvent.SDK_READY, EventHandler { _, _ ->
+            listener.onReady(client, null)
         })
-        eventsManager.register(SplitEvent.SDK_READY_FROM_CACHE, EventHandler { _, metadata ->
-            listener.onReadyFromCache(client, metadata as? SdkReadyMetadata ?: SdkReadyMetadata())
+        eventsManager.register(SplitEvent.SDK_READY_FROM_CACHE, EventHandler { _, _ ->
+            listener.onReadyFromCache(client, null)
         })
         eventsManager.register(SplitEvent.SDK_READY_TIMEOUT, EventHandler { _, _ ->
             listener.onTimeout(client)
             listener.onTimeoutView(client)
         })
-        eventsManager.register(SplitEvent.SDK_UPDATE, EventHandler { _, metadata ->
-            listener.onUpdate(client, metadata as? SdkUpdateMetadata ?: SdkUpdateMetadata())
+        eventsManager.register(SplitEvent.SDK_UPDATE, EventHandler { _, _ ->
+            listener.onUpdate(client, null)
         })
     }
 }

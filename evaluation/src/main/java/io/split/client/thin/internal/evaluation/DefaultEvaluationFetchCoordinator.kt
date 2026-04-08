@@ -9,7 +9,7 @@ class DefaultEvaluationFetchCoordinator(
     private val provider: EvaluationProvider,
     private val readStorage: EvaluationReadStorage,
     private val writeStorage: EvaluationWriteStorage,
-    private val onEvaluationsUpdated: (FetchReason) -> Unit = {},
+    private val onEvaluationsUpdated: (EvaluationKey, FetchReason) -> Unit = { _, _ -> },
     private val onEvalFetchRequested: (evalKey: EvaluationKey, reason: FetchReason) -> Unit = { _, _ -> },
     private val onEvalFetchDeduped: (evalKey: EvaluationKey) -> Unit = {},
     private val onEvalFetchSucceeded: (evalKey: EvaluationKey) -> Unit = {},
@@ -31,7 +31,7 @@ class DefaultEvaluationFetchCoordinator(
             val updated = writeStorage.upsert(change)
             val isFirstFetch = fetchedKeys.add(evalKey)
             onEvalFetchSucceeded(evalKey)
-            if (isFirstFetch || updated) onEvaluationsUpdated(reason)
+            if (isFirstFetch || updated) onEvaluationsUpdated(evalKey, reason)
             return true
         } catch (t: Throwable) {
             onEvalFetchFailed(evalKey, t)

@@ -104,7 +104,7 @@ class DefaultEvaluationFetchCoordinatorTest {
             provider = FakeEvaluationProvider(),
             readStorage = FakeEvaluationReadStorage(),
             writeStorage = FakeEvaluationWriteStorage(),
-            onEvaluationsUpdated = { capturedReason.add(it) },
+            onEvaluationsUpdated = { _, reason -> capturedReason.add(reason) },
         )
 
         coordinator.fetchIfNeeded(evalKey, null, FetchReason.INITIALIZATION)
@@ -119,7 +119,7 @@ class DefaultEvaluationFetchCoordinatorTest {
             provider = FakeEvaluationProvider(),
             readStorage = FakeEvaluationReadStorage(),
             writeStorage = FakeEvaluationWriteStorage(upsertResult = false),
-            onEvaluationsUpdated = { callbackInvoked = true },
+            onEvaluationsUpdated = { _, _ -> callbackInvoked = true },
         )
 
         coordinator.fetchIfNeeded(evalKey, null, FetchReason.INITIALIZATION)
@@ -134,7 +134,7 @@ class DefaultEvaluationFetchCoordinatorTest {
             provider = FakeEvaluationProvider(),
             readStorage = FakeEvaluationReadStorage(),
             writeStorage = FakeEvaluationWriteStorage(upsertResult = false),
-            onEvaluationsUpdated = { capturedReasons.add(it) },
+            onEvaluationsUpdated = { _, reason -> capturedReasons.add(reason) },
         )
 
         coordinator.fetchIfNeeded(evalKey, null, FetchReason.INITIALIZATION)
@@ -151,7 +151,7 @@ class DefaultEvaluationFetchCoordinatorTest {
             provider = FakeEvaluationProvider(throwOnFetch = RuntimeException("fetch failed")),
             readStorage = FakeEvaluationReadStorage(),
             writeStorage = FakeEvaluationWriteStorage(),
-            onEvaluationsUpdated = { callbackInvoked = true },
+            onEvaluationsUpdated = { _, _ -> callbackInvoked = true },
         )
 
         var caughtError: Throwable? = null

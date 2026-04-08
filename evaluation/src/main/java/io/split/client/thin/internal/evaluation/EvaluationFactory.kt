@@ -15,7 +15,17 @@ fun createEvaluationComponents(
     compositeObserver: CompositeObserver,
     cacheLoader: EvaluationCacheLoader? = null,
 ): EvaluationComponents {
-    val storage = InMemoryEvaluationStorage(cacheLoader)
+    val storage = InMemoryEvaluationStorage(
+        cacheLoader = cacheLoader,
+        onCacheLoaded = { evalKey ->
+            compositeObserver.notifyEvent(
+                ObservableEvent(
+                    type = ObservableEventType.EVAL_LOADED_FROM_STORAGE,
+                    properties = mapOf("matchingKey" to evalKey.key.matchingKey)
+                )
+            )
+        },
+    )
     val provider = DefaultEvaluationProvider(
         secureHttpClient = secureHttpClient,
         deserializer = JsonEvaluationResponseDeserializer(),
@@ -43,14 +53,16 @@ fun createEvaluationComponents(
         provider = provider,
         readStorage = storage,
         writeStorage = storage,
-        onEvaluationsUpdated = { reason ->
+        onEvaluationsUpdated = { evalKey, reason ->
             val eventType = when (reason) {
                 FetchReason.INITIALIZATION ->
                     ObservableEventType.EVAL_STORAGE_UPDATED
                 FetchReason.TARGET_SWITCH, FetchReason.PERIODIC, FetchReason.PUSH ->
                     ObservableEventType.EVALUATIONS_UPDATED
             }
-            compositeObserver.notifyEvent(ObservableEvent(eventType))
+            compositeObserver.notifyEvent(
+                ObservableEvent(eventType, mapOf("matchingKey" to evalKey.key.matchingKey))
+            )
         },
         onEvalFetchRequested = { evalKey, reason ->
             compositeObserver.notifyEvent(

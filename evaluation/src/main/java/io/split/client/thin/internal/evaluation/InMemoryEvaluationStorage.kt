@@ -5,6 +5,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 class InMemoryEvaluationStorage(
     private val cacheLoader: EvaluationCacheLoader? = null,
+    private val onCacheLoaded: (evalKey: EvaluationKey) -> Unit = {},
 ) : EvaluationReadStorage, EvaluationWriteStorage, PersistenceBackedStorage {
 
     private class KeyEvaluations {
@@ -20,6 +21,7 @@ class InMemoryEvaluationStorage(
         try {
             cacheLoader?.loadLocal(evalKey)?.let { cached ->
                 upsert(cached)
+                onCacheLoaded(evalKey)
             }
         } catch (e: Throwable) {
             loadedKeys.remove(evalKey)

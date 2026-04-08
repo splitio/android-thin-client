@@ -230,6 +230,44 @@ class DefaultSplitClientTest {
     }
 
     @Test
+    fun `setTarget invokes onTargetChanged with new matchingKey`() = testScope.runTest {
+        val capturedKeys = mutableListOf<String>()
+        val clientWithCallback = DefaultSplitClient(
+            initialTarget = target,
+            tracker = tracker,
+            eventsManager = eventsManager,
+            evaluationRepository = evaluationRepository,
+            filters = null,
+            fallbackCalculator = null,
+            scope = testScope,
+            onTargetChanged = { capturedKeys.add(it) },
+        )
+
+        clientWithCallback.setTarget(Target(Key("user-2"), trafficType = "user"))
+
+        assertEquals(listOf("user-2"), capturedKeys)
+    }
+
+    @Test
+    fun `setTarget does not invoke onTargetChanged when evalKey unchanged`() = testScope.runTest {
+        val capturedKeys = mutableListOf<String>()
+        val clientWithCallback = DefaultSplitClient(
+            initialTarget = target,
+            tracker = tracker,
+            eventsManager = eventsManager,
+            evaluationRepository = evaluationRepository,
+            filters = null,
+            fallbackCalculator = null,
+            scope = testScope,
+            onTargetChanged = { capturedKeys.add(it) },
+        )
+
+        clientWithCallback.setTarget(Target(Key("user-1"), trafficType = "account"))
+
+        assertTrue(capturedKeys.isEmpty())
+    }
+
+    @Test
     fun `addEventListener registers all event handlers with events manager`() {
         val listener = object : SplitEventListener() {}
 
@@ -313,7 +351,7 @@ class FakeEvaluationRepository : EvaluationRepository {
             .filter { (key, stored) -> key.second == evalKey && stored.flagSets.any { it in flagSets } }
             .mapKeys { it.key.first }
 
-    override suspend fun setTarget(target: Target, filters: EvaluationFilters?) {
+    override suspend fun setTarget(target: Target, filters: EvaluationFilters?, isInitialization: Boolean) {
         setTargetCalls.add(target to filters)
     }
 
