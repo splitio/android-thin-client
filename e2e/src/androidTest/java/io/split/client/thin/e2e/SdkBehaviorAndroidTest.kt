@@ -1,6 +1,7 @@
 package io.split.client.thin.e2e
 
 import android.content.Context
+import android.content.Intent
 import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -930,7 +931,7 @@ class SdkBehaviorAndroidTest {
 
     /** Launches [TestActivity] so [ProcessLifecycleOwner] can be driven in lifecycle tests. */
     private fun launchActivity(): ActivityScenario<TestActivity> =
-        ActivityScenario.launch(TestActivity::class.java)
+        ActivityScenario.launch(Intent(context, TestActivity::class.java))
 
     /**
      * Runs a complete ready cycle against a fresh mock server to populate the Room DB at
