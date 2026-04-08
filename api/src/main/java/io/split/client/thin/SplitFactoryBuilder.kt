@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import androidx.lifecycle.ProcessLifecycleOwner
+import io.split.android.client.network.HttpClient
 import io.split.android.client.network.HttpClientImpl
 import io.split.android.client.service.executor.SplitTaskType
 import io.split.android.client.submitter.RecorderSyncHelperImpl
@@ -223,7 +224,7 @@ object SplitFactoryBuilder {
         createAndRegisterStreaming(
             syncMode = syncMode,
             streamingUrl = endpoints?.streamingUrl ?: DEFAULT_STREAMING_URL,
-            retryableHttpClient = retryableHttpClient,
+            httpClient = httpClient,
             tokenProvider = {
                 val cred = authProvider.credential()
                 StreamingToken(cred.token, cred.connDelaySeconds, cred.pushEnabled)
@@ -261,7 +262,7 @@ object SplitFactoryBuilder {
     private fun createAndRegisterStreaming(
         syncMode: SplitClientConfig.SyncMode,
         streamingUrl: String,
-        retryableHttpClient: RetryableHttpClient,
+        httpClient: HttpClient,
         tokenProvider: suspend () -> StreamingToken,
         onEvaluationFetchNotification: suspend (EvaluationUpdateNotification?) -> Unit,
         onPushDisabled: suspend () -> Unit,
@@ -271,7 +272,7 @@ object SplitFactoryBuilder {
         return if (syncMode == SplitClientConfig.SyncMode.STREAMING) {
             createStreamingComponents(
                 streamingUrl = streamingUrl,
-                retryableHttpClient = retryableHttpClient,
+                httpClient = httpClient,
                 tokenProvider = tokenProvider,
                 onEvaluationFetchNotification = onEvaluationFetchNotification,
                 onPushDisabled = onPushDisabled,

@@ -10,13 +10,13 @@ class StreamingFactoryTest {
     @Test
     fun `createStreamingComponents returns valid components`() = runTest {
         // This test will fail until we implement the factory function
-        val fakeRetryableHttpClient = FakeRetryableHttpClient()
+
         var tokenProviderCalled = false
         var fetchNotificationCalled = false
 
         val components = createStreamingComponents(
             streamingUrl = "https://streaming.example.com/sse",
-            retryableHttpClient = fakeRetryableHttpClient,
+            httpClient = FakeHttpClient(),
             tokenProvider = {
                 tokenProviderCalled = true
                 StreamingToken("fake-jwt-token")
@@ -33,12 +33,12 @@ class StreamingFactoryTest {
 
     @Test
     fun `tokenProvider is wired correctly and not called during construction`() = runTest {
-        val fakeRetryableHttpClient = FakeRetryableHttpClient()
+
         var tokenProviderCallCount = 0
 
         val components = createStreamingComponents(
             streamingUrl = "https://streaming.example.com/sse",
-            retryableHttpClient = fakeRetryableHttpClient,
+            httpClient = FakeHttpClient(),
             tokenProvider = {
                 tokenProviderCallCount++
                 StreamingToken("jwt-token-$tokenProviderCallCount")
@@ -56,11 +56,11 @@ class StreamingFactoryTest {
 
     @Test
     fun `startTrigger invokes manager start`() = runTest {
-        val fakeRetryableHttpClient = FakeRetryableHttpClient()
+
 
         val components = createStreamingComponents(
             streamingUrl = "https://streaming.example.com/sse",
-            retryableHttpClient = fakeRetryableHttpClient,
+            httpClient = FakeHttpClient(),
             tokenProvider = { StreamingToken("jwt-token") },
             onEvaluationFetchNotification = { _ -> },
         )
@@ -78,12 +78,12 @@ class StreamingFactoryTest {
 
     @Test
     fun `onEvaluationFetchNotification callback is wired correctly`() = runTest {
-        val fakeRetryableHttpClient = FakeRetryableHttpClient()
+
         var fetchNotificationCallCount = 0
 
         val components = createStreamingComponents(
             streamingUrl = "https://streaming.example.com/sse",
-            retryableHttpClient = fakeRetryableHttpClient,
+            httpClient = FakeHttpClient(),
             tokenProvider = { StreamingToken("jwt-token") },
             onEvaluationFetchNotification = { _ ->
                 fetchNotificationCallCount++

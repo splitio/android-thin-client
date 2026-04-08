@@ -3,7 +3,7 @@ package io.split.client.thin.internal.streaming
 import io.split.android.client.backoff.ExponentialBackoffCounter
 import io.split.android.client.service.sseclient.EventStreamParser
 import io.split.android.client.service.sseclient.sseclient.EventSourceClientImpl
-import io.split.client.thin.http.RetryableHttpClient
+import io.split.android.client.network.HttpClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
@@ -34,7 +34,7 @@ data class StreamingComponents(
  */
 fun createStreamingComponents(
     streamingUrl: String,
-    retryableHttpClient: RetryableHttpClient,
+    httpClient: HttpClient,
     tokenProvider: suspend () -> StreamingToken,
     onEvaluationFetchNotification: suspend (EvaluationUpdateNotification?) -> Unit,
     onPushDisabled: suspend () -> Unit = {},
@@ -46,7 +46,7 @@ fun createStreamingComponents(
         tokenProvider = tokenProvider,
         eventSourceClientProvider = {
             EventSourceClientImpl(
-                StreamingTransportImpl(retryableHttpClient),
+                StreamingTransportImpl(httpClient),
                 EventStreamParser(),
             )
         },
