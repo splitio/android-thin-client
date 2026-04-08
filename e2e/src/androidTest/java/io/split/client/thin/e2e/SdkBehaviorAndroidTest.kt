@@ -2,10 +2,10 @@ package io.split.client.thin.e2e
 
 import android.content.Context
 import android.content.Intent
-import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.uiautomator.UiDevice
 import io.split.client.thin.internal.evaluation.DefaultSyncDelayCalculator
 import io.split.client.thin.Key
 import io.split.client.thin.SdkKey
@@ -696,6 +696,8 @@ class SdkBehaviorAndroidTest {
      */
     @Test
     fun streamingConnectionPausesAndResumesOnLifecycle() {
+        val uiDevice = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+
         val server = MockSplitServer()
         // Two auth responses: one for init, one in case the SDK re-auths after resume
         server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_ENABLED))
@@ -713,28 +715,35 @@ class SdkBehaviorAndroidTest {
             else MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_2)
         }
 
+        // Launch the activity to put the process in foreground before we background it.
+        val scenario = launchActivity()
         val factory = buildStreamingFactory(server, prefix = "e2e_sse_lifecycle_$RUN_ID")
         val client = factory.getClient()
         val listener = TestEventListener()
         client.addEventListener(listener.asSplitEventListener)
 
-        val scenario = launchActivity()
         try {
             assertTrue("onReady did not fire", listener.awaitReady())
             assertEquals("SSE should have connected exactly once", 1, server.sseConnectionCount.get())
 
-            // Background — SSE should be paused/disconnected
-            scenario.moveToState(Lifecycle.State.CREATED)
-            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+            // Background via real ActivityManager so ProcessLifecycleOwner fires ON_STOP.
+            // ActivityScenario.moveToState() uses Instrumentation.callActivityOnStop() which
+            // bypasses Application.ActivityLifecycleCallbacks — pressHome() does not.
+            uiDevice.pressHome()
+            uiDevice.waitForIdle(2_000)
+            Thread.sleep(500) // ProcessLifecycleOwner 700ms debounce
 
             // Enqueue fresh SSE event + updated evaluations for when we reconnect
             server.enqueueSse(
                 server.buildSseResponse(listOf(E2EFixtures.SSE_EVALUATION_UPDATE), delaySeconds = 0)
             )
 
-            // Foreground — SSE should reconnect and deliver the event
-            scenario.moveToState(Lifecycle.State.RESUMED)
-            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+            // Foreground — bring TestActivity back so ProcessLifecycleOwner fires ON_START
+            InstrumentationRegistry.getInstrumentation().targetContext.startActivity(
+                Intent(InstrumentationRegistry.getInstrumentation().targetContext, TestActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+            uiDevice.waitForIdle(2_000)
 
             assertTrue("onUpdate did not fire after SSE reconnect", listener.awaitUpdate(15))
             assertTrue("SSE should have reconnected after resume",
@@ -759,6 +768,8 @@ class SdkBehaviorAndroidTest {
      */
     @Test
     fun pollingSchedulerPausesAndResumesOnLifecycle() {
+        val uiDevice = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+
         val server = MockSplitServer()
         server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_DISABLED))
 
@@ -769,6 +780,9 @@ class SdkBehaviorAndroidTest {
             else MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_2)
         }
 
+        // Launch the activity first so the process is in foreground when the factory registers
+        // with ProcessLifecycleOwner.
+        val scenario = launchActivity()
         val factory = buildPollingFactory(
             server,
             prefix = "e2e_poll_lifecycle_$RUN_ID",
@@ -778,17 +792,16 @@ class SdkBehaviorAndroidTest {
         val listener = TestEventListener()
         client.addEventListener(listener.asSplitEventListener)
 
-        val scenario = launchActivity()
         try {
             assertTrue("onReady did not fire", listener.awaitReady())
 
-            // Background — polling should stop
-            scenario.moveToState(Lifecycle.State.CREATED)
-            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+            // Background via pressHome() — goes through the real ActivityManager so
+            // Application.ActivityLifecycleCallbacks fires and ProcessLifecycleOwner
+            // dispatches ON_STOP. ActivityScenario.moveToState() bypasses those callbacks.
+            uiDevice.pressHome()
+            uiDevice.waitForIdle(2_000)
+            Thread.sleep(500) // ProcessLifecycleOwner 700ms debounce
 
-            // ProcessLifecycleOwner fires ON_STOP with a ~700ms internal debounce after the last
-            // activity stops. Capture the baseline count only after that delay has elapsed.
-            Thread.sleep(1_100)
             val countAfterPause = server.evaluationRequestCount.get()
 
             Thread.sleep(2_000) // spans 2+ poll cycles if polling were still active
@@ -799,9 +812,12 @@ class SdkBehaviorAndroidTest {
                 server.evaluationRequestCount.get(),
             )
 
-            // Foreground — polling should resume and deliver update
-            scenario.moveToState(Lifecycle.State.RESUMED)
-            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+            // Foreground — bring TestActivity back so ProcessLifecycleOwner fires ON_START
+            InstrumentationRegistry.getInstrumentation().targetContext.startActivity(
+                Intent(InstrumentationRegistry.getInstrumentation().targetContext, TestActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+            uiDevice.waitForIdle(2_000)
 
             assertTrue("onUpdate did not fire after polling resumed", listener.awaitUpdate(10))
             assertEquals("off", client.getTreatment("flag_a").treatment)
@@ -824,24 +840,27 @@ class SdkBehaviorAndroidTest {
      */
     @Test
     fun eventsPeriodicPostingPausesAndResumesOnLifecycle() {
+        val uiDevice = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+
         val server = MockSplitServer()
         server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_DISABLED))
         server.enqueueEvaluations(MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1))
 
+        val scenario = launchActivity()
         val factory = buildPollingFactory(server, prefix = "e2e_events_lifecycle_$RUN_ID")
         val client = factory.getClient()
         val listener = TestEventListener()
         client.addEventListener(listener.asSplitEventListener)
 
-        val scenario = launchActivity()
         try {
             assertTrue("onReady did not fire", listener.awaitReady())
 
             client.track("lifecycle_event")
 
-            // Background — events scheduler should stop; no periodic flush should occur
-            scenario.moveToState(Lifecycle.State.CREATED)
-            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+            // Background — events scheduler should stop; no periodic flush should occur.
+            uiDevice.pressHome()
+            uiDevice.waitForIdle(2_000)
+            Thread.sleep(500) // ProcessLifecycleOwner 700ms debounce
 
             Thread.sleep(3_000) // covers 1+ periodic push cycles if scheduler were active
 
@@ -850,9 +869,13 @@ class SdkBehaviorAndroidTest {
                 server.capturedEventBodies.isEmpty(),
             )
 
-            // Foreground — resume and explicitly flush to confirm events are still queued
-            scenario.moveToState(Lifecycle.State.RESUMED)
-            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+            // Foreground — bring TestActivity back, then explicitly flush to confirm events
+            // are still buffered and can be posted after lifecycle resumes.
+            InstrumentationRegistry.getInstrumentation().targetContext.startActivity(
+                Intent(InstrumentationRegistry.getInstrumentation().targetContext, TestActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+            uiDevice.waitForIdle(2_000)
 
             runBlocking { client.flush() }
 
@@ -910,17 +933,22 @@ class SdkBehaviorAndroidTest {
         val listener = TestEventListener()
         client.addEventListener(listener.asSplitEventListener)
 
+        val uiDevice = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
         val scenario = launchActivity()
         try {
             assertTrue("onReady did not fire", listener.awaitReady())
             assertEquals("on", client.getTreatment("flag_a").treatment)
             val countAtReady = server.evaluationRequestCount.get()
 
-            scenario.moveToState(Lifecycle.State.CREATED)
-            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
-            Thread.sleep(500)
-            scenario.moveToState(Lifecycle.State.RESUMED)
-            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+            uiDevice.pressHome()
+            uiDevice.waitForIdle(2_000)
+            Thread.sleep(500) // ProcessLifecycleOwner 700ms debounce + margin
+
+            InstrumentationRegistry.getInstrumentation().targetContext.startActivity(
+                Intent(InstrumentationRegistry.getInstrumentation().targetContext, TestActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+            uiDevice.waitForIdle(2_000)
 
             assertEquals(
                 "SINGLE_SYNC should not trigger extra evaluation fetches on lifecycle",
