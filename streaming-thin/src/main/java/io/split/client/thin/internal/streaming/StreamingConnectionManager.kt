@@ -159,7 +159,7 @@ class StreamingConnectionManager(
                 return@launch
             }
 
-            val delayMs = backoffCounter.getNextRetryTime()
+            val delayMs = backoffCounter.getNextRetryTime() * 1_000L
             delay(delayMs)
 
             val stillStarted = stateMutex.withLock {

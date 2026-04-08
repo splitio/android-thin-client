@@ -49,7 +49,7 @@ class SdkBehaviorAndroidTest {
     private val context: Context
         get() = InstrumentationRegistry.getInstrumentation().targetContext
 
-    // -------------------------------------------------------------------------
+// -------------------------------------------------------------------------
     // Test 1 — SDK initializes and reaches ready
     // -------------------------------------------------------------------------
 

@@ -3,6 +3,7 @@ package io.split.client.thin.internal.streaming
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
@@ -360,6 +361,29 @@ class StreamingConnectionManagerTest {
         advanceUntilIdle()
 
         assertTrue(connectCount >= 2)
+    }
+
+    @Test
+    fun `connection error waits backoff seconds converted to milliseconds before reconnecting`() = runTest {
+        var connectCount = 0
+        val backoffCounter = FakeBackoffCounter(delays = listOf(1)) // counter returns 1 (second)
+        val manager = createManager(
+            eventSourceClientProvider = {
+                connectCount++
+                FakeEventSourceClient().apply {
+                    if (connectCount == 1) shouldFailConnect = true
+                }
+            },
+            backoffCounter = backoffCounter,
+        )
+
+        manager.start()
+        advanceTimeBy(999) // just under 1 second — reconnect must NOT have happened yet
+        assertEquals("reconnect should not happen before 1000ms", 1, connectCount)
+
+        advanceTimeBy(2)   // now past 1000ms — reconnect should happen
+        advanceUntilIdle()
+        assertEquals("reconnect should happen after 1000ms", 2, connectCount)
     }
 
     @Test
