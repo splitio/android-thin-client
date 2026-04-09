@@ -20,7 +20,7 @@ internal class DefaultEvaluationPersistenceManager(
         callbacks.onLoadStarted()
         return try {
             val hashed = targetHasher.hash(evalKey)
-            val persistedData = persistentStorage.loadForKey(hashed.keyHash) ?: return null
+            val persistedData = persistentStorage.loadForKey(hashed.keyHash, hashed.attrsHash) ?: return null
 
             val evaluations = persistedData.evaluations.map { evalSerializer.deserialize(it) }
             val change = EvaluationChange(

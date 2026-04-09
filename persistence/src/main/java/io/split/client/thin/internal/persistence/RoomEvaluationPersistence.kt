@@ -7,10 +7,11 @@ class RoomEvaluationPersistence(
     private val evaluationDao get() = database.evaluationDao()
     private val attributesDao get() = database.attributesDao()
 
-    override fun loadForKey(keyHash: String): PersistentEvaluationData? {
+    override fun loadForKey(keyHash: String, attrHash: String): PersistentEvaluationData? {
         var result: PersistentEvaluationData? = null
         database.runInTransaction {
             val attrs = attributesDao.getByKey(keyHash) ?: return@runInTransaction
+            if (attrs.attrHash != attrHash) return@runInTransaction
             val entities = evaluationDao.getByKey(keyHash)
 
             if (entities.isEmpty()) {

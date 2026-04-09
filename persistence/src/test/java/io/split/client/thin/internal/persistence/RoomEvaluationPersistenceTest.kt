@@ -36,7 +36,7 @@ class RoomEvaluationPersistenceTest {
 
     @Test
     fun `loadForKey returns null when no data exists`() {
-        val data = persistence.loadForKey("keyHash1")
+        val data = persistence.loadForKey("keyHash1", "attrHash1")
         assertNull(data)
     }
 
@@ -52,7 +52,7 @@ class RoomEvaluationPersistenceTest {
 
         persistence.persistForKey("keyHash1", "attrHash1", 100L, evaluations)
 
-        val loaded = persistence.loadForKey("keyHash1")
+        val loaded = persistence.loadForKey("keyHash1", "attrHash1")
         assertEquals(100L, loaded?.changeNumber)
         assertEquals(2, loaded?.evaluations?.size)
         assertTrue(loaded?.evaluations?.contains(flag1Json) == true)
@@ -71,7 +71,7 @@ class RoomEvaluationPersistenceTest {
             SerializedEvaluation("flag3", flag3Json)
         ))
 
-        val loaded = persistence.loadForKey("keyHash1")
+        val loaded = persistence.loadForKey("keyHash1", "attrHash2")
         assertEquals(200L, loaded?.changeNumber)
         assertEquals(2, loaded?.evaluations?.size)
         assertTrue(loaded?.evaluations?.contains(flag2Json) == true)
@@ -85,7 +85,7 @@ class RoomEvaluationPersistenceTest {
 
         persistence.clearForKey("keyHash1")
 
-        assertNull(persistence.loadForKey("keyHash1"))
+        assertNull(persistence.loadForKey("keyHash1", "attrHash1"))
     }
 
     @Test
@@ -96,11 +96,11 @@ class RoomEvaluationPersistenceTest {
         persistence.persistForKey("keyHash1", "attrHash1", 100L, listOf(SerializedEvaluation("flag1", flag1Json)))
         persistence.persistForKey("keyHash2", "attrHash1", 200L, listOf(SerializedEvaluation("flag2", flag2Json)))
 
-        val loaded1 = persistence.loadForKey("keyHash1")
+        val loaded1 = persistence.loadForKey("keyHash1", "attrHash1")
         assertEquals(100L, loaded1?.changeNumber)
         assertTrue(loaded1?.evaluations?.contains(flag1Json) == true)
 
-        val loaded2 = persistence.loadForKey("keyHash2")
+        val loaded2 = persistence.loadForKey("keyHash2", "attrHash1")
         assertEquals(200L, loaded2?.changeNumber)
         assertTrue(loaded2?.evaluations?.contains(flag2Json) == true)
     }
@@ -112,7 +112,24 @@ class RoomEvaluationPersistenceTest {
 
         persistence.persistForKey("keyHash1", "attrHash1", 200L, emptyList())
 
-        assertNull(persistence.loadForKey("keyHash1"))
+        assertNull(persistence.loadForKey("keyHash1", "attrHash1"))
+    }
+
+    @Test
+    fun `loadForKey returns null when attrHash does not match stored attrHash`() {
+        val flag1Json = """{"result":{"flag":"flag1","treatment":"on","config":null,"label":null,"changeNumber":100},"flagSets":[]}"""
+        persistence.persistForKey("keyHash1", "attrHash1", 100L, listOf(SerializedEvaluation("flag1", flag1Json)))
+
+        assertNull(persistence.loadForKey("keyHash1", "attrHashDifferent"))
+    }
+
+    @Test
+    fun `loadForKey returns data when attrHash matches stored attrHash`() {
+        val flag1Json = """{"result":{"flag":"flag1","treatment":"on","config":null,"label":null,"changeNumber":100},"flagSets":[]}"""
+        persistence.persistForKey("keyHash1", "attrHash1", 100L, listOf(SerializedEvaluation("flag1", flag1Json)))
+
+        val loaded = persistence.loadForKey("keyHash1", "attrHash1")
+        assertEquals(100L, loaded?.changeNumber)
     }
 
     @Test
