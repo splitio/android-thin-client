@@ -1,72 +1,54 @@
 package io.split.client.thin.internal.persistence
 
-import org.json.JSONObject
-
 class RoomEvaluationPersistence(
     private val database: ThinClientDatabase
 ) : PersistentEvaluationStorage {
 
     private val evaluationDao get() = database.evaluationDao()
-    private val generalInfoDao get() = database.generalInfoDao()
+    private val attributesDao get() = database.attributesDao()
 
-    override fun loadForKey(keyHash: String, attrsHash: String): PersistentEvaluationData? {
+    override fun loadForKey(keyHash: String): PersistentEvaluationData? {
         var result: PersistentEvaluationData? = null
         database.runInTransaction {
-            val info = generalInfoDao.getByKeyAndAttrs(keyHash, attrsHash) ?: return@runInTransaction
-            val entities = evaluationDao.getByKeyAndAttrs(keyHash, attrsHash)
+            val attrs = attributesDao.getByKey(keyHash) ?: return@runInTransaction
+            val entities = evaluationDao.getByKey(keyHash)
 
             if (entities.isEmpty()) {
-                generalInfoDao.deleteByKeyAndAttrs(keyHash, attrsHash)
+                attributesDao.deleteByKey(keyHash)
                 return@runInTransaction
             }
 
-            val changeNumber = JSONObject(info.value).getLong(FIELD_CHANGE_NUMBER)
-            result = PersistentEvaluationData(changeNumber, entities.map { it.body })
+            result = PersistentEvaluationData(attrs.changeNumber, entities.map { it.evalJson })
         }
         return result
     }
 
     override fun persistForKey(
         keyHash: String,
-        attrsHash: String,
+        attrHash: String,
         changeNumber: Long,
         evaluations: List<SerializedEvaluation>
     ) {
         database.runInTransaction {
             if (evaluations.isEmpty()) {
-                generalInfoDao.deleteByKeyAndAttrs(keyHash, attrsHash)
-                evaluationDao.deleteByKeyAndAttrs(keyHash, attrsHash)
+                attributesDao.deleteByKey(keyHash)
+                evaluationDao.deleteByKeyHash(keyHash)
                 return@runInTransaction
             }
 
-            val value = JSONObject()
-                .put(FIELD_CHANGE_NUMBER, changeNumber)
-                .put(FIELD_UPDATED_AT, System.currentTimeMillis())
-                .toString()
-            generalInfoDao.insert(GeneralInfoEntity(keyHash, attrsHash, value))
+            attributesDao.insert(AttributesEntity(keyHash, attrHash, changeNumber))
 
             val entities = evaluations.map { serialized ->
-                EvaluationEntity(
-                    keyHash,
-                    serialized.flagName,
-                    attrsHash,
-                    serialized.json,
-                    System.currentTimeMillis()
-                )
+                EvaluationEntity(keyHash, serialized.flagName, serialized.json)
             }
-            evaluationDao.replaceForKeyAndAttrs(keyHash, attrsHash, entities)
+            evaluationDao.replaceForKey(keyHash, entities)
         }
     }
 
     override fun clearForKey(keyHash: String) {
         database.runInTransaction {
-            generalInfoDao.deleteByKeyHash(keyHash)
+            attributesDao.deleteByKey(keyHash)
             evaluationDao.deleteByKeyHash(keyHash)
         }
-    }
-
-    private companion object {
-        const val FIELD_CHANGE_NUMBER = "changeNumber"
-        const val FIELD_UPDATED_AT = "updatedAt"
     }
 }

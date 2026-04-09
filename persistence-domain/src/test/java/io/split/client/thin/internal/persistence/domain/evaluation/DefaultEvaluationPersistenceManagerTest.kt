@@ -13,7 +13,6 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
@@ -62,7 +61,7 @@ class DefaultEvaluationPersistenceManagerTest {
 
     @Test
     fun `loadLocal returns null when no persisted data`() = scope.runTest {
-        `when`(persistentStorage.loadForKey("testKeyHash", "testAttrsHash")).thenReturn(null)
+        `when`(persistentStorage.loadForKey("testKeyHash")).thenReturn(null)
 
         val result = manager.loadLocal(testEvalKey)
 
@@ -77,7 +76,7 @@ class DefaultEvaluationPersistenceManagerTest {
         val storedEval = makeStoredEvaluation()
         val persistedData = PersistentEvaluationData(changeNumber = 42L, evaluations = listOf(evalJson))
 
-        `when`(persistentStorage.loadForKey("testKeyHash", "testAttrsHash")).thenReturn(persistedData)
+        `when`(persistentStorage.loadForKey("testKeyHash")).thenReturn(persistedData)
         `when`(evalSerializer.deserialize(evalJson)).thenReturn(storedEval)
 
         val result = manager.loadLocal(testEvalKey)
@@ -92,12 +91,11 @@ class DefaultEvaluationPersistenceManagerTest {
         val storedEval = makeStoredEvaluation()
         val persistedData = PersistentEvaluationData(changeNumber = 42L, evaluations = listOf(evalJson))
 
-        `when`(persistentStorage.loadForKey("testKeyHash", "testAttrsHash")).thenReturn(persistedData)
+        `when`(persistentStorage.loadForKey("testKeyHash")).thenReturn(persistedData)
         `when`(evalSerializer.deserialize(evalJson)).thenReturn(storedEval)
 
         val result = manager.loadLocal(testEvalKey)
 
-        // The returned EvaluationKey should be exactly the caller's evalKey
         assertEquals(testEvalKey, result?.evaluationKey)
         assertEquals(testEvalKey.attributes, result?.evaluationKey?.attributes)
     }
@@ -108,7 +106,7 @@ class DefaultEvaluationPersistenceManagerTest {
         val storedEval = makeStoredEvaluation()
         val persistedData = PersistentEvaluationData(changeNumber = 42L, evaluations = listOf(evalJson))
 
-        `when`(persistentStorage.loadForKey("testKeyHash", "testAttrsHash")).thenReturn(persistedData)
+        `when`(persistentStorage.loadForKey("testKeyHash")).thenReturn(persistedData)
         `when`(evalSerializer.deserialize(evalJson)).thenReturn(storedEval)
 
         manager.loadLocal(testEvalKey)
@@ -121,7 +119,7 @@ class DefaultEvaluationPersistenceManagerTest {
 
     @Test
     fun `loadLocal calls onLoadFailed on exception and returns null`() = scope.runTest {
-        `when`(persistentStorage.loadForKey("testKeyHash", "testAttrsHash")).thenThrow(RuntimeException("db error"))
+        `when`(persistentStorage.loadForKey("testKeyHash")).thenThrow(RuntimeException("db error"))
 
         val result = manager.loadLocal(testEvalKey)
 

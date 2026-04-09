@@ -14,18 +14,15 @@ public interface EvaluationDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     void insert(List<EvaluationEntity> entities);
 
-    @Query("SELECT * FROM evaluations WHERE keyHash = :keyHash AND attrsHash = :attrsHash")
-    List<EvaluationEntity> getByKeyAndAttrs(String keyHash, String attrsHash);
-
-    @Query("DELETE FROM evaluations WHERE keyHash = :keyHash AND attrsHash = :attrsHash")
-    void deleteByKeyAndAttrs(String keyHash, String attrsHash);
+    @Query("SELECT * FROM evaluations WHERE keyHash = :keyHash")
+    List<EvaluationEntity> getByKey(String keyHash);
 
     @Query("DELETE FROM evaluations WHERE keyHash = :keyHash")
     void deleteByKeyHash(String keyHash);
 
     @Transaction
-    default void replaceForKeyAndAttrs(String keyHash, String attrsHash, List<EvaluationEntity> entities) {
-        deleteByKeyAndAttrs(keyHash, attrsHash);
+    default void replaceForKey(String keyHash, List<EvaluationEntity> entities) {
+        deleteByKeyHash(keyHash);
         insert(entities);
     }
 }
