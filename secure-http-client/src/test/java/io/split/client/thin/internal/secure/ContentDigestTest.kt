@@ -92,18 +92,22 @@ class ContentDigestTest {
 
     @Test
     fun `list with mixed primitives serializes correctly`() {
-        val json = ContentDigest.serializeAttributes(mapOf("vals" to listOf("x", 42, true, null)))
-        assertEquals("""{"vals":["x",42,true,null]}""", json)
+        val json = ContentDigest.serializeAttributes(mapOf("vals" to listOf("x", 42, true)))
+        assertEquals("""{"vals":["x",42,true]}""", json)
+    }
+
+    @Test
+    fun `null elements in list are omitted`() {
+        // Other SDK implementations (Swift/JS) have no null type in lists — omit for consistency
+        val json = ContentDigest.serializeAttributes(mapOf("vals" to listOf("a", null, "b")))
+        assertEquals("""{"vals":["a","b"]}""", json)
     }
 
     @Test
     fun `known input produces expected digest`() {
-        // "user1:{}" — pre-computed expected value for regression
+        // Pinned value for "user1:{}" with Murmur3-128x86, first half (h1+h2), Base64 no-padding.
+        // If this fails the hash algorithm or serialization has changed — update deliberately.
         val target = EvaluationTarget(matchingKey = "user1", bucketingKey = null, attributes = null)
-        val digest = ContentDigest.compute(target)
-
-        // Must be a non-empty Base64 string (no padding, 11 chars for 8 bytes)
-        assertEquals(11, digest.length)
-        assert(digest.matches(Regex("[A-Za-z0-9+/]+"))) { "Expected Base64 characters, got: $digest" }
+        assertEquals("UjEmUGAWceM", ContentDigest.compute(target))
     }
 }

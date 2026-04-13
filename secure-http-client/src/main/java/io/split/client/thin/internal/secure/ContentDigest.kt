@@ -35,7 +35,7 @@ internal object ContentDigest {
         null -> JsonNull
         is Boolean -> JsonPrimitive(value)
         is Number -> JsonPrimitive(value)
-        is List<*> -> buildJsonArray { value.forEach { add(toJsonElement(it)) } }
+        is List<*> -> buildJsonArray { value.filterNotNull().forEach { add(toJsonElement(it)) } }
         else -> JsonPrimitive(value.toString())
     }
 }
