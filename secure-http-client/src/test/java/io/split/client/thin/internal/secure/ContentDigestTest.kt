@@ -68,6 +68,18 @@ class ContentDigestTest {
     }
 
     @Test
+    fun `null attribute values are omitted from serialized JSON`() {
+        val json = ContentDigest.serializeAttributes(mapOf("a" to null, "b" to "x"))
+        assertEquals("""{"b":"x"}""", json)
+    }
+
+    @Test
+    fun `map with only null values serializes as empty object`() {
+        val json = ContentDigest.serializeAttributes(mapOf("a" to null, "b" to null))
+        assertEquals("{}", json)
+    }
+
+    @Test
     fun `attribute value with double quote produces valid JSON`() {
         // StringBuilder approach emits: {"a":"say "hi""} — invalid JSON
         // Correct output:              {"a":"say \"hi\""}
