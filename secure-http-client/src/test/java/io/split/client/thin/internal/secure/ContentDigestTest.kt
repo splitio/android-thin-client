@@ -68,6 +68,22 @@ class ContentDigestTest {
     }
 
     @Test
+    fun `attribute value with double quote produces valid JSON`() {
+        // StringBuilder approach emits: {"a":"say "hi""} — invalid JSON
+        // Correct output:              {"a":"say \"hi\""}
+        val json = ContentDigest.serializeAttributes(mapOf("a" to "say \"hi\""))
+        assertEquals("""{"a":"say \"hi\""}""", json)
+    }
+
+    @Test
+    fun `attribute value with backslash produces valid JSON`() {
+        // StringBuilder approach emits: {"a":"C:\Users\foo"} — invalid JSON
+        // Correct output:              {"a":"C:\\Users\\foo"}
+        val json = ContentDigest.serializeAttributes(mapOf("a" to "C:\\Users\\foo"))
+        assertEquals("""{"a":"C:\\Users\\foo"}""", json)
+    }
+
+    @Test
     fun `known input produces expected digest`() {
         // "user1:{}" — pre-computed expected value for regression
         val target = EvaluationTarget(matchingKey = "user1", bucketingKey = null, attributes = null)
