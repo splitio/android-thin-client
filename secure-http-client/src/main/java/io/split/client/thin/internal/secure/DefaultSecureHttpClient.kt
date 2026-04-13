@@ -24,13 +24,14 @@ internal class DefaultSecureHttpClient(
     override suspend fun fetchEvaluations(target: EvaluationTarget, filters: EvaluationFilters?, changeNumber: Long): HttpResponse {
         val uri = buildEvaluationsUri(target, filters, changeNumber)
         val body = buildEvaluationsBody(target)
+        val digest = ContentDigest.compute(target)
         val token = authProvider.credential().token
-        val request = buildEvaluationsRequest(uri, body, token)
+        val request = buildEvaluationsRequest(uri, body, token, digest)
         val response = retryableHttpClient.execute(request, RequestCategory.EVALUATIONS)
         if (response.getHttpStatus() == HTTP_UNAUTHORIZED) {
             authProvider.invalidateAll()
             val freshToken = authProvider.credential().token
-            val retryRequest = buildEvaluationsRequest(uri, body, freshToken)
+            val retryRequest = buildEvaluationsRequest(uri, body, freshToken, digest)
             return retryableHttpClient.execute(retryRequest, RequestCategory.EVALUATIONS)
         }
         return response
@@ -78,7 +79,7 @@ internal class DefaultSecureHttpClient(
         )
     }
 
-    private fun buildEvaluationsRequest(uri: URI, body: String, token: String): HttpRequestDescriptor {
+    private fun buildEvaluationsRequest(uri: URI, body: String, token: String, digest: String): HttpRequestDescriptor {
         return HttpRequestDescriptor(
             uri = uri,
             method = HttpMethod.POST,
@@ -87,6 +88,7 @@ internal class DefaultSecureHttpClient(
                 "Authorization" to "Bearer $token",
                 "X-Harness-FME-SDK-Thin-Version" to "android-thin-$sdkVersion",
                 "X-Harness-FME-SDK-Thin-Spec" to SDK_SPEC_VERSION,
+                "X-Harness-FME-Content-Digest" to digest,
             ),
         )
     }

@@ -33,6 +33,7 @@ dependencies {
     implementation(project(":retryable-http-client"))
     implementation(project(":auth"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    implementation("com.goncalossilva:murmurhash:0.4.0")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")

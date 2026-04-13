@@ -218,6 +218,40 @@ class DefaultSecureHttpClientFetchEvaluationsTest {
     }
 
     @Test
+    fun `X-Harness-FME-Content-Digest header sent on evaluations`() = runTest {
+        val (client, _, http) = makeClient()
+
+        client.fetchEvaluations(testDefaultTarget, testDefaultFilters, -1L)
+
+        val digest = http.lastRequest?.headers?.get("X-Harness-FME-Content-Digest")
+        assertFalse("X-Harness-FME-Content-Digest header must be present", digest.isNullOrEmpty())
+    }
+
+    @Test
+    fun `X-Harness-FME-Content-Digest header is deterministic for same target`() = runTest {
+        val (client, _, http) = makeClient()
+
+        client.fetchEvaluations(testDefaultTarget, testDefaultFilters, -1L)
+        val first = http.lastRequest?.headers?.get("X-Harness-FME-Content-Digest")
+
+        client.fetchEvaluations(testDefaultTarget, testDefaultFilters, -1L)
+        val second = http.lastRequest?.headers?.get("X-Harness-FME-Content-Digest")
+
+        assertEquals(first, second)
+    }
+
+    @Test
+    fun `X-Harness-FME-Content-Digest header matches ContentDigest utility`() = runTest {
+        val (client, _, http) = makeClient()
+
+        client.fetchEvaluations(testDefaultTarget, testDefaultFilters, -1L)
+
+        val headerDigest = http.lastRequest?.headers?.get("X-Harness-FME-Content-Digest")
+        val expectedDigest = ContentDigest.compute(testDefaultTarget)
+        assertEquals(expectedDigest, headerDigest)
+    }
+
+    @Test
     fun `on 401 invalidates and retries once`() = runTest {
         val firstToken = JwtCredential("first-token", 9999999L, false)
         val secondToken = JwtCredential("second-token", 9999999L, false)
