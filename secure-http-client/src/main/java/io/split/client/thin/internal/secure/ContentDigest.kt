@@ -16,8 +16,8 @@ internal object ContentDigest {
         val attrsJson = serializeAttributes(target.attributes)
         val input = "${target.matchingKey}:$attrsJson"
         val inputBytes = input.toByteArray(Charsets.UTF_8)
-        val hash = MurmurHash3().hash128x64(inputBytes)
-        val first8Bytes = ByteBuffer.allocate(8).putLong(hash[0].toLong()).array()
+        val hash = MurmurHash3().hash128x86(inputBytes)
+        val first8Bytes = ByteBuffer.allocate(8).putInt(hash[0].toInt()).putInt(hash[1].toInt()).array()
         return Base64.getEncoder().withoutPadding().encodeToString(first8Bytes)
     }
 
