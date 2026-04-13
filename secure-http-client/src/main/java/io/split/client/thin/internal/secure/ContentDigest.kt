@@ -2,8 +2,10 @@ package io.split.client.thin.internal.secure
 
 import com.goncalossilva.murmurhash.MurmurHash3
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import java.nio.ByteBuffer
 import java.util.Base64
@@ -23,16 +25,17 @@ internal object ContentDigest {
         if (attributes.isNullOrEmpty()) return "{}"
         val jsonObject = buildJsonObject {
             attributes.keys.sorted().forEach { key ->
-                put(key, toJsonPrimitive(attributes[key]))
+                put(key, toJsonElement(attributes[key]))
             }
         }
         return Json.encodeToString(kotlinx.serialization.json.JsonObject.serializer(), jsonObject)
     }
 
-    private fun toJsonPrimitive(value: Any?): JsonPrimitive = when (value) {
+    private fun toJsonElement(value: Any?): JsonElement = when (value) {
         null -> JsonNull
         is Boolean -> JsonPrimitive(value)
         is Number -> JsonPrimitive(value)
+        is List<*> -> buildJsonArray { value.forEach { add(toJsonElement(it)) } }
         else -> JsonPrimitive(value.toString())
     }
 }

@@ -84,6 +84,19 @@ class ContentDigestTest {
     }
 
     @Test
+    fun `attribute value that is a list serializes as JSON array`() {
+        // List falls into else→toString() with StringBuilder: produces "[a, b]" instead of ["a","b"]
+        val json = ContentDigest.serializeAttributes(mapOf("perms" to listOf("read", "write")))
+        assertEquals("""{"perms":["read","write"]}""", json)
+    }
+
+    @Test
+    fun `list with mixed primitives serializes correctly`() {
+        val json = ContentDigest.serializeAttributes(mapOf("vals" to listOf("x", 42, true, null)))
+        assertEquals("""{"vals":["x",42,true,null]}""", json)
+    }
+
+    @Test
     fun `known input produces expected digest`() {
         // "user1:{}" — pre-computed expected value for regression
         val target = EvaluationTarget(matchingKey = "user1", bucketingKey = null, attributes = null)
