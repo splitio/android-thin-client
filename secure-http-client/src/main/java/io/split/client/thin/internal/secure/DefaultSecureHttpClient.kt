@@ -73,8 +73,8 @@ internal class DefaultSecureHttpClient(
                 "Authorization" to "Bearer $token",
                 "Content-Type" to "application/json",
                 "Accept" to "application/json",
-                "SplitSDKVersion" to "android-thin-$sdkVersion",
-                "X-Harness-FME-SDK-Thin-Version" to "android-thin-$sdkVersion",
+                "SplitSDKVersion" to "android_thin-$sdkVersion",
+                "X-Harness-FME-SDK-Thin-Version" to "android_thin-$sdkVersion",
             ),
         )
     }
@@ -86,7 +86,7 @@ internal class DefaultSecureHttpClient(
             body = body,
             headers = mapOf(
                 "Authorization" to "Bearer $token",
-                "X-Harness-FME-SDK-Thin-Version" to "android-thin-$sdkVersion",
+                "X-Harness-FME-SDK-Thin-Version" to "android_thin-$sdkVersion",
                 "X-Harness-FME-SDK-Thin-Spec" to SDK_SPEC_VERSION,
                 "X-Harness-FME-Content-Digest" to digest,
             ),
