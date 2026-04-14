@@ -27,6 +27,7 @@ subprojects {
 
     plugins.withId("com.android.library") {
         extensions.configure<LibraryExtension>("android") {
+            compileSdk = 34
             buildTypes.named("debug") {
                 enableUnitTestCoverage = true
             }

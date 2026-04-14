@@ -8,9 +8,6 @@ plugins {
 
 android {
     namespace = "io.split.client.thin.evaluation"
-    compileSdk {
-        version = release(36)
-    }
 
     defaultConfig {
         minSdk = 21

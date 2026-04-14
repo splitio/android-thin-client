@@ -4,9 +4,6 @@ plugins {
 
 android {
     namespace = "io.split.client.thin.http"
-    compileSdk {
-        version = release(36)
-    }
 
     defaultConfig {
         minSdk = 21

@@ -8,9 +8,6 @@ plugins {
 
 android {
     namespace = "io.split.client.thin"
-    compileSdk {
-        version = release(36)
-    }
 
     buildFeatures {
         buildConfig = true
