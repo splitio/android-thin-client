@@ -6,8 +6,8 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import android.util.Base64
 import java.nio.ByteBuffer
-import java.util.Base64
 
 internal object ContentDigest {
 
@@ -17,7 +17,7 @@ internal object ContentDigest {
         val inputBytes = input.toByteArray(Charsets.UTF_8)
         val hash = MurmurHash3().hash128x86(inputBytes)
         val first8Bytes = ByteBuffer.allocate(8).putInt(hash[0].toInt()).putInt(hash[1].toInt()).array()
-        return Base64.getEncoder().withoutPadding().encodeToString(first8Bytes)
+        return Base64.encodeToString(first8Bytes, Base64.NO_PADDING or Base64.NO_WRAP)
     }
 
     internal fun serializeAttributes(attributes: Map<String, Any?>?): String {
