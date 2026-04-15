@@ -7,6 +7,12 @@ import io.split.client.thin.http.RequestCategory
 import io.split.client.thin.http.RetryableHttpClient
 import io.split.client.thin.internal.auth.AuthProvider
 import io.split.client.thin.internal.auth.JwtCredential
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import java.net.URI
 import java.net.URLEncoder
 
@@ -108,13 +114,26 @@ internal class DefaultSecureHttpClient(
     private fun buildEvaluationsBody(target: EvaluationTarget): String {
         val attrs = target.attributes
         if (attrs.isNullOrEmpty()) return "{}"
-        val sb = StringBuilder("{\"attributes\":{")
-        attrs.entries.forEachIndexed { i, (k, v) ->
-            if (i > 0) sb.append(",")
-            sb.append("\"$k\":\"$v\"")
+        val attributeElements = attrs.mapValues { (_, value) ->
+            valueToJsonElement(value)
         }
-        sb.append("}}")
-        return sb.toString()
+        val attributesObject = JsonObject(attributeElements)
+        val bodyObject = JsonObject(mapOf("attributes" to attributesObject))
+        return Json.encodeToString(bodyObject)
+    }
+
+    private fun valueToJsonElement(value: Any?): JsonElement {
+        return when (value) {
+            null -> JsonPrimitive(null as String?)
+            is String -> JsonPrimitive(value)
+            is Boolean -> JsonPrimitive(value)
+            is Number -> JsonPrimitive(value)
+            is List<*> -> {
+                val elements = value.map { valueToJsonElement(it) }
+                JsonArray(elements)
+            }
+            else -> JsonPrimitive(value.toString())
+        }
     }
 
     private fun encode(value: String): String = URLEncoder.encode(value, "UTF-8")

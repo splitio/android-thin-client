@@ -328,4 +328,72 @@ class DefaultSecureHttpClientFetchEvaluationsTest {
         assertTrue("Expected RuntimeException", thrown is RuntimeException)
         assertEquals("network failed", thrown?.message)
     }
+
+    @Test
+    fun `numeric attributes preserved as numbers in body`() = runTest {
+        val target = EvaluationTarget(
+            matchingKey = "user-1",
+            bucketingKey = null,
+            attributes = mapOf("count" to 42, "price" to 99.99, "active" to true)
+        )
+        val (client, _, http) = makeClient()
+
+        client.fetchEvaluations(target, null, -1L)
+
+        val body = http.lastRequest?.body ?: ""
+        assertTrue("Body should contain numeric count", body.contains("\"count\":42"))
+        assertTrue("Body should contain numeric price", body.contains("\"price\":99.99"))
+        assertTrue("Body should contain boolean active", body.contains("\"active\":true"))
+    }
+
+    @Test
+    fun `string attributes preserved as strings in body`() = runTest {
+        val target = EvaluationTarget(
+            matchingKey = "user-1",
+            bucketingKey = null,
+            attributes = mapOf("name" to "John", "email" to "john@example.com")
+        )
+        val (client, _, http) = makeClient()
+
+        client.fetchEvaluations(target, null, -1L)
+
+        val body = http.lastRequest?.body ?: ""
+        assertTrue("Body should contain quoted name", body.contains("\"name\":\"John\""))
+        assertTrue("Body should contain quoted email", body.contains("\"email\":\"john@example.com\""))
+    }
+
+    @Test
+    fun `mixed attribute types preserved correctly in body`() = runTest {
+        val target = EvaluationTarget(
+            matchingKey = "user-1",
+            bucketingKey = null,
+            attributes = mapOf("plan" to "premium", "tier" to 3, "premium" to true)
+        )
+        val (client, _, http) = makeClient()
+
+        client.fetchEvaluations(target, null, -1L)
+
+        val body = http.lastRequest?.body ?: ""
+        assertTrue("Body should contain quoted plan", body.contains("\"plan\":\"premium\""))
+        assertTrue("Body should contain numeric tier", body.contains("\"tier\":3"))
+        assertTrue("Body should contain boolean premium", body.contains("\"premium\":true"))
+    }
+
+    @Test
+    fun `list attribute preserved as JSON array in body`() = runTest {
+        val target = EvaluationTarget(
+            matchingKey = "user-1",
+            bucketingKey = null,
+            attributes = mapOf("tags" to listOf("vip", "beta", "early-access"))
+        )
+        val (client, _, http) = makeClient()
+
+        client.fetchEvaluations(target, null, -1L)
+
+        val body = http.lastRequest?.body ?: ""
+        assertTrue("Body should contain tags array", body.contains("\"tags\":["))
+        assertTrue("Body should contain first tag", body.contains("\"vip\""))
+        assertTrue("Body should contain second tag", body.contains("\"beta\""))
+        assertTrue("Body should contain third tag", body.contains("\"early-access\""))
+    }
 }
