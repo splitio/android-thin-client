@@ -35,7 +35,7 @@ internal class DefaultRetryableHttpClient(
             try {
                 onHttpRequestStarted(request, category)
                 val response = buildRequest(request).execute()
-                if (response.isSuccess) {
+                if (response.isSuccess || response.httpStatus == HTTP_NOT_MODIFIED) {
                     onHttpRequestSucceeded(response, category)
                     return response
                 }
@@ -115,6 +115,7 @@ internal class DefaultRetryableHttpClient(
 
     companion object {
         private const val SSL_ERROR_STATUS_CODE = 9009 // 9009 = NON_RETRYABLE_STATUS_CODE from HttpRequestImpl
+        private const val HTTP_NOT_MODIFIED = 304
         private const val MILLIS_PER_SECOND = 1000L
 
         private val NO_RETRY_POLICY = RetryPolicy(maxAttempts = 1, backoffBaseSeconds = 0)

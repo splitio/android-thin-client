@@ -5,7 +5,7 @@ import io.split.client.thin.internal.secure.EvaluationTarget
 import io.split.client.thin.internal.secure.SecureHttpClient
 
 interface EvaluationProvider {
-    suspend fun fetch(evalKey: EvaluationKey, filters: EvaluationFilters?, changeNumber: Long): EvaluationChange
+    suspend fun fetch(evalKey: EvaluationKey, filters: EvaluationFilters?, changeNumber: Long): EvaluationChange?
 }
 
 fun EvaluationKey.toEvaluationTarget() = EvaluationTarget(
@@ -19,19 +19,28 @@ class DefaultEvaluationProvider(
     private val deserializer: EvaluationResponseDeserializer,
     private val onEvalFetchStarted: (evalKey: EvaluationKey) -> Unit = {},
     private val onEvalDeserializeFailed: (evalKey: EvaluationKey, error: Exception) -> Unit = { _, _ -> },
+    private val onEmptyResponseBody: (evalKey: EvaluationKey) -> Unit = {},
 ) : EvaluationProvider {
 
-    override suspend fun fetch(evalKey: EvaluationKey, filters: EvaluationFilters?, changeNumber: Long): EvaluationChange {
+    override suspend fun fetch(evalKey: EvaluationKey, filters: EvaluationFilters?, changeNumber: Long): EvaluationChange? {
         onEvalFetchStarted(evalKey)
         val target = evalKey.toEvaluationTarget()
         val response = secureHttpClient.fetchEvaluations(target, filters, changeNumber)
+        if (response.getHttpStatus() == HTTP_NOT_MODIFIED) return null
         val body = response.getData()
-        check(!body.isNullOrEmpty()) { "Empty or null response body from evaluations endpoint" }
+        if (body.isNullOrEmpty()) {
+            onEmptyResponseBody(evalKey)
+            return null
+        }
         return try {
             deserializer.deserialize(body, evalKey)
         } catch (e: Exception) {
             onEvalDeserializeFailed(evalKey, e)
             throw e
         }
+    }
+
+    private companion object {
+        private const val HTTP_NOT_MODIFIED = 304
     }
 }

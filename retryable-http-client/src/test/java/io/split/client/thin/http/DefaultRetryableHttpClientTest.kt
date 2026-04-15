@@ -366,6 +366,29 @@ class DefaultRetryableHttpClientTest {
     }
 
     @Test
+    fun `304 not modified is treated as success, not retried, and fires onHttpRequestSucceeded`() = runTest {
+        val response304 = mock(HttpResponse::class.java)
+        `when`(response304.isSuccess).thenReturn(false)
+        `when`(response304.httpStatus).thenReturn(304)
+        `when`(httpRequest.execute()).thenReturn(response304)
+
+        val successCallbacks = mutableListOf<HttpResponse>()
+        val trackingClient = DefaultRetryableHttpClient(
+            httpClient = httpClient,
+            policiesByCategory = categoryPoliciesMap,
+            backoffFactory = { _ -> backoffCounter },
+            onHttpRequestSucceeded = { response, _ -> successCallbacks.add(response) },
+        )
+
+        val result = trackingClient.execute(descriptor, RequestCategory.EVALUATIONS)
+
+        assertSame(response304, result)
+        verify(httpRequest, times(1)).execute()
+        assertEquals(1, successCallbacks.size)
+        assertSame(response304, successCallbacks[0])
+    }
+
+    @Test
     fun `does not start next attempt when coroutine is cancelled after execute returns`() = runTest {
         `when`(httpRequest.execute()).thenReturn(failureResponse)
         `when`(backoffCounter.nextRetryTime).thenReturn(60L)
