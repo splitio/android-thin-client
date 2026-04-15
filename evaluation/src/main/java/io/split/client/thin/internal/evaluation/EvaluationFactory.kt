@@ -48,6 +48,14 @@ fun createEvaluationComponents(
                 )
             )
         },
+        onEmptyResponseBody = { evalKey ->
+            compositeObserver.notifyEvent(
+                ObservableEvent(
+                    type = ObservableEventType.EVAL_EMPTY_RESPONSE_BODY,
+                    properties = mapOf("matchingKey" to evalKey.key.matchingKey)
+                )
+            )
+        },
     )
     val fetchCoordinator = DefaultEvaluationFetchCoordinator(
         provider = provider,

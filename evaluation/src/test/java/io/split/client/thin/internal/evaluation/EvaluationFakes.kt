@@ -43,17 +43,24 @@ class FakeHttpResponse(
 }
 
 // FakeEvaluationProvider
+/**
+ * [changeToReturn] — when non-null, returns the given change; when null, returns a default
+ *   non-null change unless [returnNullChange] is true.
+ * [returnNullChange] — when true, fetch() returns null (simulates 304 / empty-body responses).
+ */
 class FakeEvaluationProvider(
     private val changeToReturn: EvaluationChange? = null,
     val throwOnFetch: Throwable? = null,
+    private val returnNullChange: Boolean = false,
 ) : EvaluationProvider {
 
     data class FetchCall(val evalKey: EvaluationKey, val filters: EvaluationFilters?, val changeNumber: Long)
     val fetchCalls = mutableListOf<FetchCall>()
 
-    override suspend fun fetch(evalKey: EvaluationKey, filters: EvaluationFilters?, changeNumber: Long): EvaluationChange {
+    override suspend fun fetch(evalKey: EvaluationKey, filters: EvaluationFilters?, changeNumber: Long): EvaluationChange? {
         fetchCalls.add(FetchCall(evalKey, filters, changeNumber))
         throwOnFetch?.let { throw it }
+        if (returnNullChange) return null
         return changeToReturn ?: EvaluationChange(evalKey, -1L, emptyList())
     }
 }

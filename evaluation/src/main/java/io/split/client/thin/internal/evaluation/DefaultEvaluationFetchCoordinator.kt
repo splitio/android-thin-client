@@ -1,6 +1,7 @@
 package io.split.client.thin.internal.evaluation
 
 import io.split.client.thin.internal.secure.EvaluationFilters
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
@@ -28,14 +29,20 @@ class DefaultEvaluationFetchCoordinator(
         try {
             val changeNumber = readStorage.lastChangeNumber(evalKey)
             val change = provider.fetch(evalKey, filters, changeNumber)
-            val updated = writeStorage.upsert(change)
             val isFirstFetch = fetchedKeys.add(evalKey)
+            if (change != null) {
+                val updated = writeStorage.upsert(change)
+                if (isFirstFetch || updated) onEvaluationsUpdated(evalKey, reason)
+            } else if (isFirstFetch) {
+                onEvaluationsUpdated(evalKey, reason)
+            }
             onEvalFetchSucceeded(evalKey)
-            if (isFirstFetch || updated) onEvaluationsUpdated(evalKey, reason)
             return true
+        } catch (t: CancellationException) {
+            throw t
         } catch (t: Throwable) {
             onEvalFetchFailed(evalKey, t)
-            throw t
+            return false
         } finally {
             inFlight.remove(evalKey)
         }

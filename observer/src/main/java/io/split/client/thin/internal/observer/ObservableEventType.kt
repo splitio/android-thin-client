@@ -55,6 +55,7 @@ object ObservableEventType {
     const val EVAL_FETCH_SUCCEEDED = "eval_fetch_succeeded"
     const val EVAL_FETCH_FAILED = "eval_fetch_failed"
     const val EVAL_DESERIALIZE_FAILED = "eval_deserialize_failed"
+    const val EVAL_EMPTY_RESPONSE_BODY = "eval_empty_response_body"
 
     // Track events
     const val TRACK_CALLED = "track_called"
