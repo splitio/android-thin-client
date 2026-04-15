@@ -36,7 +36,7 @@ fun createPersistenceDomainComponents(
         )
     }
 
-    val database = ThinClientDatabase.build(context, config.prefix)
+    val database = ThinClientDatabase.build(context, config.prefix, config.sdkKey)
 
     val targetHasher = TargetHasher()
     val evalSerializer = StoredEvaluationSerializer()
