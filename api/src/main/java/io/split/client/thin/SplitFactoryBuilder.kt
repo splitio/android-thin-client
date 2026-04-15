@@ -118,7 +118,7 @@ object SplitFactoryBuilder {
         // Persistence components
         val persistenceComponents = createPersistenceDomainComponents(
             context = context.applicationContext,
-            config = PersistenceConfig(prefix = config?.storage?.prefix),
+            config = PersistenceConfig(prefix = config?.storage?.prefix, sdkKey = sdkKey.sdkKey),
             evaluationCallbacks = ObserverEvaluationPersistenceCallbacks(compositeObserver),
             eventsCallbacks = ObserverEventsPersistenceCallbacks(compositeObserver),
             scope = factoryScope

@@ -18,10 +18,18 @@ public abstract class ThinClientDatabase extends RoomDatabase {
 
     private static final Map<String, ThinClientDatabase> INSTANCES = new HashMap<>();
 
-    public static ThinClientDatabase build(Context context, String prefix) {
-        String dbName = (prefix != null && !prefix.isEmpty())
-                ? prefix + "_split_thin.db"
-                : "split_thin.db";
+    static String buildDatabaseName(String prefix, String sdkKey) {
+        String prefixPart = (prefix != null && !prefix.isEmpty()) ? prefix : "";
+        if (sdkKey == null || sdkKey.length() < 4) {
+            return prefixPart + "split_thin.db";
+        }
+        String begin = sdkKey.substring(0, 4);
+        String end = sdkKey.substring(sdkKey.length() - 4);
+        return prefixPart + begin + end + ".db";
+    }
+
+    public static ThinClientDatabase build(Context context, String prefix, String sdkKey) {
+        String dbName = buildDatabaseName(prefix, sdkKey);
 
         ThinClientDatabase instance = INSTANCES.get(dbName);
         if (instance == null) {
