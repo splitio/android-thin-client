@@ -52,4 +52,11 @@ class RoomEvaluationPersistence(
             evaluationDao.deleteByKeyHash(keyHash)
         }
     }
+
+    override fun clearAll() {
+        database.runInTransaction {
+            attributesDao.deleteAll()
+            evaluationDao.deleteAll()
+        }
+    }
 }

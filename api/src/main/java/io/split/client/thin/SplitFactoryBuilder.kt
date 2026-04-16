@@ -44,6 +44,7 @@ import io.split.client.thin.internal.observer.DefaultCompositeObserver
 import io.split.client.thin.internal.observer.LoggerObserver
 import io.split.client.thin.internal.observer.ObservableEvent
 import io.split.client.thin.internal.observer.ObservableEventType
+import io.split.client.thin.internal.secure.EvaluationFilters
 import io.split.client.thin.internal.secure.EvaluationTarget
 import io.split.client.thin.internal.secure.createSecureHttpClient
 import io.split.client.thin.internal.streaming.EvaluationUpdateNotification
@@ -119,7 +120,7 @@ object SplitFactoryBuilder {
         // Persistence components
         val persistenceComponents = createPersistenceDomainComponents(
             context = context.applicationContext,
-            config = PersistenceConfig(prefix = config?.storage?.prefix, sdkKey = sdkKey.sdkKey),
+            config = PersistenceConfig(prefix = config?.storage?.prefix, sdkKey = sdkKey.sdkKey, dynamicConfig = config?.dynamicConfig ?: false),
             evaluationCallbacks = ObserverEvaluationPersistenceCallbacks(compositeObserver),
             eventsCallbacks = ObserverEventsPersistenceCallbacks(compositeObserver),
             scope = factoryScope
@@ -179,13 +180,19 @@ object SplitFactoryBuilder {
             },
         )
 
+        val evaluationFilters = EvaluationFilters(
+            flagNames = null,
+            flagSets = null,
+            withDynamicConfig = if (config?.dynamicConfig == true) true else null
+        )
+
         val clientManager = DefaultClientManager(
             scope = factoryScope,
             clientFactory = DefaultClientFactory(
                 compositeObserver = compositeObserver,
                 scope = factoryScope,
                 evaluationRepository = evaluationRepository,
-                filters = null,
+                filters = evaluationFilters,
                 fallbackCalculator = DefaultSplitFactory.buildFallbackCalculator(config),
                 onEventPush = eventsPushHandler,
                 flushFn = { eventsCoordinator.flush() },
@@ -249,7 +256,7 @@ object SplitFactoryBuilder {
             config = config,
             asyncBridge = AsyncBridge(),
             evaluationRepository = evaluationRepository,
-            filters = null,
+            filters = evaluationFilters,
             fetchCoordinator = fetchCoordinator,
             pollingScheduler = pollingScheduler,
             eventsScheduler = eventsScheduler,

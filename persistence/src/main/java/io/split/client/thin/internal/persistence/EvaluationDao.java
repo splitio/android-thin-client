@@ -20,6 +20,9 @@ public interface EvaluationDao {
     @Query("DELETE FROM evaluations WHERE keyHash = :keyHash")
     void deleteByKeyHash(String keyHash);
 
+    @Query("DELETE FROM evaluations")
+    void deleteAll();
+
     @Transaction
     default void replaceForKey(String keyHash, List<EvaluationEntity> entities) {
         deleteByKeyHash(keyHash);

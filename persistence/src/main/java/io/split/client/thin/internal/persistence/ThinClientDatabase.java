@@ -9,12 +9,13 @@ import androidx.room.RoomDatabase;
 import java.util.HashMap;
 import java.util.Map;
 
-@Database(entities = {EvaluationEntity.class, EventEntity.class, AttributesEntity.class}, version = 2, exportSchema = false)
+@Database(entities = {EvaluationEntity.class, EventEntity.class, AttributesEntity.class, GeneralPropertiesEntity.class}, version = 2, exportSchema = false)
 public abstract class ThinClientDatabase extends RoomDatabase {
 
     public abstract EvaluationDao evaluationDao();
     public abstract EventDao eventDao();
     public abstract AttributesDao attributesDao();
+    public abstract GeneralPropertiesDao generalPropertiesDao();
 
     private static final Map<String, ThinClientDatabase> INSTANCES = new HashMap<>();
 

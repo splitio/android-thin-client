@@ -16,4 +16,7 @@ interface AttributesDao {
 
     @Query("DELETE FROM attributes WHERE keyHash = :keyHash")
     void deleteByKey(String keyHash);
+
+    @Query("DELETE FROM attributes")
+    void deleteAll();
 }
