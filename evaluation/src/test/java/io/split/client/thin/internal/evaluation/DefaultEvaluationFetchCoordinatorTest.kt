@@ -344,4 +344,38 @@ class DefaultEvaluationFetchCoordinatorTest {
         assertTrue("CancellationException must not be swallowed", propagated)
     }
 
+    @Test
+    fun `onEvalFetchRequested receives delayMs from refetchAll delayProvider`() = runTest {
+        val key1 = EvaluationKey(Key("user-1"))
+        val capturedDelays = mutableListOf<Long>()
+        val coordinator = DefaultEvaluationFetchCoordinator(
+            provider = FakeEvaluationProvider(),
+            readStorage = FakeEvaluationReadStorage(),
+            writeStorage = FakeEvaluationWriteStorage(),
+            onEvalFetchRequested = { _, _, delayMs -> capturedDelays.add(delayMs) },
+        )
+
+        coordinator.fetchIfNeeded(key1, null, FetchReason.INITIALIZATION)
+        coordinator.refetchAll(null, FetchReason.PUSH, delayProvider = { 500L })
+
+        assertEquals(2, capturedDelays.size)
+        assertEquals(0L, capturedDelays[0])
+        assertEquals(500L, capturedDelays[1])
+    }
+
+    @Test
+    fun `onEvalFetchRequested receives zero delayMs when called via direct fetchIfNeeded`() = runTest {
+        val capturedDelays = mutableListOf<Long>()
+        val coordinator = DefaultEvaluationFetchCoordinator(
+            provider = FakeEvaluationProvider(),
+            readStorage = FakeEvaluationReadStorage(),
+            writeStorage = FakeEvaluationWriteStorage(),
+            onEvalFetchRequested = { _, _, delayMs -> capturedDelays.add(delayMs) },
+        )
+
+        coordinator.fetchIfNeeded(evalKey, null, FetchReason.INITIALIZATION)
+
+        assertEquals(listOf(0L), capturedDelays)
+    }
+
 }
