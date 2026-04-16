@@ -35,11 +35,12 @@ class SplitFactoryBuilderTest {
     }
 
     private fun buildFactory(config: SplitClientConfig? = null): SplitFactory =
-        SplitFactoryBuilder.build(
+        SplitFactoryBuilder.buildInternal(
             context = mockContext,
             sdkKey = sdkKey,
             defaultTarget = defaultTarget,
             config = config,
+            configChangeDetectorFactory = { false },
         ).also { createdFactories.add(it) }
 
     private fun assertIsDefaultSplitFactory(factory: SplitFactory) {
