@@ -7,12 +7,17 @@ class LoggerObserver(
     override fun notifyEvent(event: ObservableEvent) {
         val template = MESSAGES[event.type] ?: event.type
         val message = interpolateProperties(template, event.properties)
+        val finalMessage = if (LOG_LEVELS[event.type] == Level.DEBUG && event.properties.containsKey("rawData")) {
+            "$message (raw: ${event.properties["rawData"]})"
+        } else {
+            message
+        }
         when (LOG_LEVELS[event.type]) {
-            Level.DEBUG -> logger.debug(message)
+            Level.DEBUG -> logger.debug(finalMessage)
             Level.INFO -> logger.info(message)
             Level.WARN -> logger.warn(message)
             Level.ERROR -> logger.error(message)
-            null -> logger.debug(message)
+            null -> logger.debug(finalMessage)
         }
     }
 
@@ -79,6 +84,13 @@ class LoggerObserver(
             ObservableEventType.SYNC_RESUMED to Level.INFO,
             // Polling
             ObservableEventType.POLL_TRIGGER to Level.DEBUG,
+            // Streaming
+            ObservableEventType.STREAMING_CONNECT_STARTED to Level.DEBUG,
+            ObservableEventType.STREAMING_CONNECTED to Level.DEBUG,
+            ObservableEventType.STREAMING_DISCONNECTED to Level.DEBUG,
+            ObservableEventType.STREAMING_NOTIFICATION_RECEIVED to Level.DEBUG,
+            ObservableEventType.STREAMING_PAUSED to Level.DEBUG,
+            ObservableEventType.STREAMING_RESUMED to Level.DEBUG,
         )
 
         // Map event type → human-readable message (from spec)
@@ -133,6 +145,13 @@ class LoggerObserver(
             ObservableEventType.SYNC_RESUMED to "Sync resumed",
             // Polling
             ObservableEventType.POLL_TRIGGER to "Polling (rate: [rate])",
+            // Streaming
+            ObservableEventType.STREAMING_CONNECT_STARTED to "Streaming connection started",
+            ObservableEventType.STREAMING_CONNECTED to "Streaming connected",
+            ObservableEventType.STREAMING_DISCONNECTED to "Streaming disconnected",
+            ObservableEventType.STREAMING_NOTIFICATION_RECEIVED to "Streaming notification received ([notificationType])",
+            ObservableEventType.STREAMING_PAUSED to "Streaming paused",
+            ObservableEventType.STREAMING_RESUMED to "Streaming resumed",
         )
     }
 }

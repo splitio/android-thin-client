@@ -2,7 +2,6 @@ package io.split.client.thin.internal.streaming
 
 import io.split.android.client.backoff.BackoffCounter
 import io.split.android.client.service.sseclient.sseclient.EventSourceClient
-import io.split.android.client.utils.logger.Logger
 import io.split.client.thin.internal.observer.CompositeObserver
 import io.split.client.thin.internal.observer.ObservableEvent
 import io.split.client.thin.internal.observer.ObservableEventType
@@ -136,7 +135,6 @@ class StreamingConnectionManager(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                Logger.e("Streaming connection failed: ${e.message}")
                 handleConnectionError(retryable = true)
             }
         }
@@ -195,14 +193,20 @@ class StreamingConnectionManager(
                 is EvaluationUpdateNotification -> {
                     observer.notifyEvent(ObservableEvent(
                         type = ObservableEventType.STREAMING_NOTIFICATION_RECEIVED,
-                        properties = mapOf("notificationType" to "EVALUATIONS_UPDATE")
+                        properties = mapOf(
+                            "notificationType" to "EVALUATIONS_UPDATE",
+                            "rawData" to jsonData
+                        )
                     ))
                     onEvaluationFetchNotification.invoke(notification)
                 }
                 is ThinControlNotification -> {
                     observer.notifyEvent(ObservableEvent(
                         type = ObservableEventType.STREAMING_NOTIFICATION_RECEIVED,
-                        properties = mapOf("notificationType" to notification.controlType.name)
+                        properties = mapOf(
+                            "notificationType" to notification.controlType.name,
+                            "rawData" to jsonData
+                        )
                     ))
                     when (notification.controlType) {
                         ThinControlNotification.ControlType.STREAMING_RESUMED -> resume()
@@ -217,7 +221,10 @@ class StreamingConnectionManager(
                 is ThinOccupancyNotification -> {
                     observer.notifyEvent(ObservableEvent(
                         type = ObservableEventType.STREAMING_NOTIFICATION_RECEIVED,
-                        properties = mapOf("notificationType" to "OCCUPANCY")
+                        properties = mapOf(
+                            "notificationType" to "OCCUPANCY",
+                            "rawData" to jsonData
+                        )
                     ))
                     notification.channelName?.let { occupancyByChannel[it] = notification.publishers }
                     val totalPublishers = occupancyByChannel.values.sum()
@@ -229,7 +236,15 @@ class StreamingConnectionManager(
                     }
                 }
                 is ThinStreamingError -> {
-                    Logger.e("Streaming error: ${notification.message} (code: ${notification.code})")
+                    observer.notifyEvent(ObservableEvent(
+                        type = ObservableEventType.STREAMING_NOTIFICATION_RECEIVED,
+                        properties = mapOf(
+                            "notificationType" to "STREAMING_ERROR",
+                            "errorCode" to notification.code.toString(),
+                            "errorMessage" to (notification.message ?: ""),
+                            "rawData" to jsonData
+                        )
+                    ))
                 }
             }
         }
