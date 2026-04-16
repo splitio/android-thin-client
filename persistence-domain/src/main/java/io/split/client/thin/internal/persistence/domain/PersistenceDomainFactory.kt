@@ -30,7 +30,8 @@ fun createPersistenceDomainComponents(
     config: PersistenceConfig,
     evaluationCallbacks: EvaluationPersistenceCallbacks,
     eventsCallbacks: EventsPersistenceCallbacks,
-    scope: CoroutineScope
+    scope: CoroutineScope,
+    configChangeDetectorFactory: ((Boolean) -> Boolean)? = null,
 ): PersistenceDomainComponents {
     if (!config.enabled) {
         return PersistenceDomainComponents(
@@ -43,13 +44,13 @@ fun createPersistenceDomainComponents(
 
     val roomEvalPersistence = RoomEvaluationPersistence(database = database)
 
+    val detectChange = configChangeDetectorFactory
+        ?: { dynamicConfig -> ConfigChangeDetector(database.generalPropertiesDao()).detectAndUpdate(dynamicConfig) }
+
     runBlocking {
         withContext(Dispatchers.IO) {
-            runCatching {
-                val changed = ConfigChangeDetector(database.generalPropertiesDao())
-                    .detectAndUpdate(config.dynamicConfig)
-                if (changed) roomEvalPersistence.clearAll()
-            }
+            val changed = detectChange(config.dynamicConfig)
+            if (changed) roomEvalPersistence.clearAll()
         }
     }
 

@@ -81,6 +81,14 @@ object SplitFactoryBuilder {
         sdkKey: SdkKey,
         defaultTarget: Target,
         config: SplitClientConfig? = null,
+    ): SplitFactory = buildInternal(context, sdkKey, defaultTarget, config)
+
+    internal fun buildInternal(
+        context: Context,
+        sdkKey: SdkKey,
+        defaultTarget: Target,
+        config: SplitClientConfig? = null,
+        configChangeDetectorFactory: ((Boolean) -> Boolean)? = null,
     ): SplitFactory {
         val httpClient = HttpClientImpl.Builder().build()
         val compositeObserver = DefaultCompositeObserver()
@@ -121,6 +129,7 @@ object SplitFactoryBuilder {
         val persistenceComponents = createPersistenceDomainComponents(
             context = context.applicationContext,
             config = PersistenceConfig(prefix = config?.storage?.prefix, sdkKey = sdkKey.sdkKey, dynamicConfig = config?.dynamicConfig ?: false),
+            configChangeDetectorFactory = configChangeDetectorFactory,
             evaluationCallbacks = ObserverEvaluationPersistenceCallbacks(compositeObserver),
             eventsCallbacks = ObserverEventsPersistenceCallbacks(compositeObserver),
             scope = factoryScope
