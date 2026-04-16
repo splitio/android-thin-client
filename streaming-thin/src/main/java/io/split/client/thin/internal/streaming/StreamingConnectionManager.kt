@@ -3,6 +3,9 @@ package io.split.client.thin.internal.streaming
 import io.split.android.client.backoff.BackoffCounter
 import io.split.android.client.service.sseclient.sseclient.EventSourceClient
 import io.split.android.client.utils.logger.Logger
+import io.split.client.thin.internal.observer.CompositeObserver
+import io.split.client.thin.internal.observer.ObservableEvent
+import io.split.client.thin.internal.observer.ObservableEventType
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -32,12 +35,15 @@ class StreamingConnectionManager(
     private val onEvaluationFetchNotification: suspend (EvaluationUpdateNotification?) -> Unit,
     private val onPushDisabled: suspend () -> Unit = {},
     private val connectionDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val observer: CompositeObserver,
 ) {
     private val stateMutex = Mutex()
     private var state: ConnectionState = ConnectionState.Stopped
     private var connectionJob: Job? = null
     private var currentEventSourceClient: EventSourceClient? = null
     private val notificationParser = ThinNotificationParser()
+    private val occupancyByChannel = mutableMapOf<String, Int>()
+    private var hadPublishers = false
 
     private sealed class ConnectionState {
         object Stopped : ConnectionState()
@@ -61,6 +67,7 @@ class StreamingConnectionManager(
             state = ConnectionState.Stopped
             disconnectLocked()
         }
+        observer.notifyEvent(ObservableEvent(ObservableEventType.STREAMING_DISCONNECTED))
     }
 
     suspend fun pause() {
@@ -98,6 +105,7 @@ class StreamingConnectionManager(
     }
 
     private fun connect() {
+        observer.notifyEvent(ObservableEvent(ObservableEventType.STREAMING_CONNECT_STARTED))
         connectionJob = scope.launch {
             try {
                 val streamingToken = tokenProvider()
@@ -112,6 +120,10 @@ class StreamingConnectionManager(
                 val token = streamingToken.token
                 val channels = channelExtractor(token)
                 val uri = URI("$streamingUrl?v=1.1&channel=${channels.joinToString(",")}&accessToken=$token")
+
+                // Reset occupancy state for new connection
+                occupancyByChannel.clear()
+                hadPublishers = false
 
                 // Create new EventSourceClient instance
                 val client = eventSourceClientProvider()
@@ -132,6 +144,7 @@ class StreamingConnectionManager(
 
     private fun createEventHandler() = object : EventSourceClient.EventHandler {
         override fun onOpen() {
+            observer.notifyEvent(ObservableEvent(ObservableEventType.STREAMING_CONNECTED))
             backoffCounter.resetCounter()
             scope.launch { onEvaluationFetchNotification(null) }
         }
@@ -180,9 +193,17 @@ class StreamingConnectionManager(
         scope.launch {
             when (notification) {
                 is EvaluationUpdateNotification -> {
+                    observer.notifyEvent(ObservableEvent(
+                        type = ObservableEventType.STREAMING_NOTIFICATION_RECEIVED,
+                        properties = mapOf("notificationType" to "EVALUATIONS_UPDATE")
+                    ))
                     onEvaluationFetchNotification.invoke(notification)
                 }
                 is ThinControlNotification -> {
+                    observer.notifyEvent(ObservableEvent(
+                        type = ObservableEventType.STREAMING_NOTIFICATION_RECEIVED,
+                        properties = mapOf("notificationType" to notification.controlType.name)
+                    ))
                     when (notification.controlType) {
                         ThinControlNotification.ControlType.STREAMING_RESUMED -> resume()
                         ThinControlNotification.ControlType.STREAMING_PAUSED -> pause()
@@ -194,7 +215,15 @@ class StreamingConnectionManager(
                     }
                 }
                 is ThinOccupancyNotification -> {
-                    if (notification.publishers == 0) {
+                    observer.notifyEvent(ObservableEvent(
+                        type = ObservableEventType.STREAMING_NOTIFICATION_RECEIVED,
+                        properties = mapOf("notificationType" to "OCCUPANCY")
+                    ))
+                    notification.channelName?.let { occupancyByChannel[it] = notification.publishers }
+                    val totalPublishers = occupancyByChannel.values.sum()
+                    if (totalPublishers > 0) {
+                        hadPublishers = true
+                    } else if (hadPublishers) {
                         onOccupancyZero()
                         stop()
                     }

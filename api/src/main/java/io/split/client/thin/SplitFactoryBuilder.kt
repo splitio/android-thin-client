@@ -39,6 +39,7 @@ import io.split.client.thin.internal.evaluation.toEvaluationTarget
 import io.split.client.thin.internal.lifecycle.DefaultLifecycleManager
 import io.split.client.thin.internal.lifecycle.LifecycleComponent
 import io.split.client.thin.internal.observer.AndroidLoggerAdapter
+import io.split.client.thin.internal.observer.CompositeObserver
 import io.split.client.thin.internal.observer.DefaultCompositeObserver
 import io.split.client.thin.internal.observer.LoggerObserver
 import io.split.client.thin.internal.observer.ObservableEvent
@@ -238,6 +239,7 @@ object SplitFactoryBuilder {
             },
             lifecycleManager = lifecycleManager,
             onPollingMode = { getOrCreateScheduler().start() },
+            observer = compositeObserver,
         )?.also { components ->
             streamingComponents = components
         }
@@ -268,6 +270,7 @@ object SplitFactoryBuilder {
         onPushDisabled: suspend () -> Unit,
         lifecycleManager: DefaultLifecycleManager,
         onPollingMode: () -> Unit,
+        observer: CompositeObserver,
     ): StreamingComponents? {
         return if (syncMode == SplitClientConfig.SyncMode.STREAMING) {
             createStreamingComponents(
@@ -276,6 +279,7 @@ object SplitFactoryBuilder {
                 tokenProvider = tokenProvider,
                 onEvaluationFetchNotification = onEvaluationFetchNotification,
                 onPushDisabled = onPushDisabled,
+                observer = observer,
             ).also { components ->
                 lifecycleManager.register(object : LifecycleComponent {
                     override fun pause() = components.manager.pause()
