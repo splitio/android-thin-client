@@ -11,6 +11,9 @@ import io.split.android.client.service.sseclient.sseclient.EventSourceClient
 import io.split.client.thin.http.HttpRequestDescriptor
 import io.split.client.thin.http.RequestCategory
 import io.split.client.thin.http.RetryableHttpClient
+import io.split.client.thin.internal.observer.CompositeObserver
+import io.split.client.thin.internal.observer.ObservableEvent
+import io.split.client.thin.internal.observer.Observer
 import java.io.BufferedReader
 import java.net.URI
 
@@ -53,6 +56,14 @@ class FakeEventSourceClient : EventSourceClient {
     fun simulateError(retryable: Boolean = true) {
         lastHandler?.onError(retryable)
     }
+}
+
+// Fake CompositeObserver for testing
+class FakeCompositeObserver : CompositeObserver {
+    val events = mutableListOf<ObservableEvent>()
+    override fun notifyEvent(event: ObservableEvent) { events.add(event) }
+    override fun register(observer: Observer) {}
+    override fun unregisterAll() {}
 }
 
 // Fake BackoffCounter for predictable delays
