@@ -72,13 +72,14 @@ fun createEvaluationComponents(
                 ObservableEvent(eventType, mapOf("matchingKey" to evalKey.key.matchingKey))
             )
         },
-        onEvalFetchRequested = { evalKey, reason ->
+        onEvalFetchRequested = { evalKey, reason, delayMs ->
             compositeObserver.notifyEvent(
                 ObservableEvent(
                     type = ObservableEventType.EVAL_FETCH_REQUESTED,
                     properties = mapOf(
                         "matchingKey" to evalKey.key.matchingKey,
-                        "reason" to reason.name
+                        "reason" to reason.name,
+                        "delayMs" to if (delayMs > 0L) " (delayed: ${delayMs}ms)" else "",
                     )
                 )
             )
