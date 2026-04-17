@@ -106,7 +106,7 @@ internal class DefaultSecureHttpClient(
         params.add("since=$changeNumber")
         filters?.flagNames?.forEach { params.add("flags=${encode(it)}") }
         filters?.flagSets?.forEach { params.add("sets=${encode(it)}") }
-        filters?.withDynamicConfig?.let { params.add("withDynamicConfig=$it") }
+        filters?.withDynamicConfig?.let { params.add("configs=$it") }
         impressionsMode?.let { params.add("impressionsMode=$it") }
         return URI("$evaluationsUrl?${params.joinToString("&")}")
     }
