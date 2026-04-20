@@ -22,7 +22,8 @@ import io.split.client.thin.internal.persistence.ObserverEventsPersistenceCallba
 import io.split.client.thin.internal.persistence.domain.PersistenceConfig
 import io.split.client.thin.internal.persistence.domain.createPersistenceDomainComponents
 import io.split.client.thin.http.RetryableHttpClient
-import io.split.client.thin.http.createRetryableHttpClient
+import io.split.client.thin.internal.createRetryableHttpClient
+import io.split.client.thin.internal.http.HttpClientAdapter
 import io.split.client.thin.internal.AsyncBridge
 import io.split.client.thin.internal.DefaultClientFactory
 import io.split.client.thin.internal.DefaultClientManager
@@ -90,7 +91,8 @@ object SplitFactoryBuilder {
         config: SplitClientConfig? = null,
         configChangeDetectorFactory: ((Boolean) -> Boolean)? = null,
     ): SplitFactory {
-        val httpClient = HttpClientImpl.Builder().build()
+        val androidHttpClient = HttpClientImpl.Builder().build()
+        val httpClient = HttpClientAdapter(androidHttpClient)
         val compositeObserver = DefaultCompositeObserver()
         compositeObserver.register(LoggerObserver(AndroidLoggerAdapter()))
         val retryableHttpClient = createRetryableHttpClient(httpClient, compositeObserver)
@@ -241,7 +243,7 @@ object SplitFactoryBuilder {
         createAndRegisterStreaming(
             syncMode = syncMode,
             streamingUrl = endpoints?.streamingUrl ?: DEFAULT_STREAMING_URL,
-            httpClient = httpClient,
+            httpClient = androidHttpClient,
             tokenProvider = {
                 val cred = authProvider.credential()
                 StreamingToken(cred.token, cred.connDelaySeconds, cred.pushEnabled)

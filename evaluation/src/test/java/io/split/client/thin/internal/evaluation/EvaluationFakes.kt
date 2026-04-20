@@ -1,6 +1,6 @@
 package io.split.client.thin.internal.evaluation
 
-import io.split.android.client.network.HttpResponse
+import io.split.client.thin.http.contracts.HttpResponse
 import io.split.client.thin.internal.observer.CompositeObserver
 import io.split.client.thin.internal.observer.ObservableEvent
 import io.split.client.thin.internal.observer.Observer
@@ -33,13 +33,9 @@ class FakeHttpResponse(
     private val status: Int,
     private val body: String?,
 ) : HttpResponse {
-    override fun getHttpStatus(): Int = status
-    override fun isSuccess(): Boolean = status in 200..299
-    override fun isCredentialsError(): Boolean = status == 401
-    override fun isBadRequestError(): Boolean = status == 400
-    override fun isClientRelatedError(): Boolean = status in 400..499
+    override val isSuccess: Boolean = status in 200..299
+    override val httpStatus: Int = status
     override fun getData(): String? = body
-    override fun getServerCertificates(): Array<java.security.cert.Certificate>? = null
 }
 
 // FakeEvaluationProvider

@@ -1,10 +1,10 @@
 package io.split.client.thin.internal.secure
 
-import io.split.android.client.network.HttpMethod
-import io.split.android.client.network.HttpResponse
 import io.split.client.thin.http.HttpRequestDescriptor
 import io.split.client.thin.http.RequestCategory
 import io.split.client.thin.http.RetryableHttpClient
+import io.split.client.thin.http.contracts.HttpMethod
+import io.split.client.thin.http.contracts.HttpResponse
 import io.split.client.thin.internal.auth.AuthProvider
 import io.split.client.thin.internal.auth.JwtCredential
 import kotlinx.serialization.encodeToString
@@ -34,7 +34,7 @@ internal class DefaultSecureHttpClient(
         val token = authProvider.credential().token
         val request = buildEvaluationsRequest(uri, body, token, digest)
         val response = retryableHttpClient.execute(request, RequestCategory.EVALUATIONS)
-        if (response.getHttpStatus() == HTTP_UNAUTHORIZED) {
+        if (response.httpStatus == HTTP_UNAUTHORIZED) {
             authProvider.invalidateAll()
             val freshToken = authProvider.credential().token
             val retryRequest = buildEvaluationsRequest(uri, body, freshToken, digest)
@@ -61,7 +61,7 @@ internal class DefaultSecureHttpClient(
         val token = authProvider.credential().token
         val request = buildRequest(uri, method, body, token)
         val response = retryableHttpClient.execute(request, category)
-        if (response.getHttpStatus() == HTTP_UNAUTHORIZED) {
+        if (response.httpStatus == HTTP_UNAUTHORIZED) {
             authProvider.invalidateAll()
             val freshToken = authProvider.credential().token
             val retryRequest = buildRequest(uri, method, body, freshToken)
