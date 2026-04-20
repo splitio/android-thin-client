@@ -6,6 +6,7 @@ interface EvaluationReadStorage {
     fun getByFlagSets(flagSets: Set<String>, evalKey: EvaluationKey): Map<String, StoredEvaluation>
     fun getFlagNames(evalKey: EvaluationKey): Set<String>
     fun lastChangeNumber(evalKey: EvaluationKey): Long
+    fun lastUpdateTimestamp(evalKey: EvaluationKey): Long?
 }
 
 interface PersistenceBackedStorage {
