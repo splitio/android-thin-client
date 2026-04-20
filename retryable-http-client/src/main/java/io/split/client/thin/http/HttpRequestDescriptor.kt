@@ -1,6 +1,6 @@
 package io.split.client.thin.http
 
-import io.split.android.client.network.HttpMethod
+import io.split.client.thin.http.contracts.HttpMethod
 import java.net.URI
 
 data class HttpRequestDescriptor(
