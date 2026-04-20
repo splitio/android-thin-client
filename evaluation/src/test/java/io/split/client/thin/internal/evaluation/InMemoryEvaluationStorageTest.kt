@@ -316,6 +316,68 @@ class InMemoryEvaluationStorageTest {
         assertTrue(callbackCalls.isEmpty())
     }
 
+    // --- UpsertResult / changedFlagNames ---
+
+    private fun storedEvalWithChangeNumber(flag: String, treatment: String, flagChangeNumber: Long): StoredEvaluation {
+        val result = EvaluationResult(flag = flag, treatment = treatment, changeNumber = flagChangeNumber)
+        return StoredEvaluation(result)
+    }
+
+    @Test
+    fun `upsert against empty state returns all incoming flags as changedFlagNames`() {
+        val result = storage.upsert(change(key1, 1L, storedEval("flag-a", "on"), storedEval("flag-b", "off")))
+        assertEquals(true, result.updated)
+        assertEquals(listOf("flag-a", "flag-b"), result.changedFlagNames)
+    }
+
+    @Test
+    fun `upsert with identical state returns updated false and empty changedFlagNames`() {
+        val eval = storedEvalWithChangeNumber("flag-a", "on", 100L)
+        storage.upsert(change(key1, 1L, eval))
+        val result = storage.upsert(change(key1, 1L, eval))
+        assertEquals(false, result.updated)
+        assertEquals(emptyList<String>(), result.changedFlagNames)
+    }
+
+    @Test
+    fun `upsert adding a flag includes new flag in changedFlagNames`() {
+        val evalA = storedEvalWithChangeNumber("flag-a", "on", 100L)
+        val evalB = storedEvalWithChangeNumber("flag-b", "off", 100L)
+        storage.upsert(change(key1, 1L, evalA))
+        val result = storage.upsert(change(key1, 2L, evalA, evalB))
+        assertEquals(true, result.updated)
+        assertEquals(listOf("flag-b"), result.changedFlagNames)
+    }
+
+    @Test
+    fun `upsert removing a flag includes removed flag in changedFlagNames`() {
+        val evalA = storedEvalWithChangeNumber("flag-a", "on", 100L)
+        val evalB = storedEvalWithChangeNumber("flag-b", "off", 100L)
+        storage.upsert(change(key1, 1L, evalA, evalB))
+        val result = storage.upsert(change(key1, 2L, evalA))
+        assertEquals(true, result.updated)
+        assertEquals(listOf("flag-b"), result.changedFlagNames)
+    }
+
+    @Test
+    fun `upsert changing per-flag changeNumber includes that flag in changedFlagNames`() {
+        val evalOld = storedEvalWithChangeNumber("flag-a", "on", 100L)
+        val evalNew = storedEvalWithChangeNumber("flag-a", "on", 200L)
+        storage.upsert(change(key1, 1L, evalOld))
+        val result = storage.upsert(change(key1, 2L, evalNew))
+        assertEquals(true, result.updated)
+        assertEquals(listOf("flag-a"), result.changedFlagNames)
+    }
+
+    @Test
+    fun `upsert bumping only top-level changeNumber with identical per-flag changeNumbers returns updated true and empty changedFlagNames`() {
+        val eval = storedEvalWithChangeNumber("flag-a", "on", 100L)
+        storage.upsert(change(key1, 1L, eval))
+        val result = storage.upsert(change(key1, 2L, eval))
+        assertEquals(true, result.updated)
+        assertEquals(emptyList<String>(), result.changedFlagNames)
+    }
+
     @Test
     fun `ensureCacheLoaded does not call onCacheLoaded when key already loaded`() = runTest {
         val cached = change(key1, 10L, storedEval("flag-cached", "on"))

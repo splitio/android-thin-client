@@ -31,8 +31,8 @@ class DefaultEvaluationFetchCoordinator(
             val change = provider.fetch(evalKey, filters, changeNumber)
             val isFirstFetch = fetchedKeys.add(evalKey)
             if (change != null) {
-                val updated = writeStorage.upsert(change)
-                if (isFirstFetch || updated) onEvaluationsUpdated(evalKey, reason)
+                val upsertResult = writeStorage.upsert(change)
+                if (isFirstFetch || upsertResult.updated) onEvaluationsUpdated(evalKey, reason)
             } else if (isFirstFetch) {
                 onEvaluationsUpdated(evalKey, reason)
             }
