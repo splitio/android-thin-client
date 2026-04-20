@@ -1,7 +1,7 @@
 package io.split.client.thin.http
 
 import io.split.android.client.backoff.ExponentialBackoffCounter
-import io.split.android.client.network.HttpClient
+import io.split.client.thin.http.contracts.HttpClient
 import io.split.client.thin.internal.observer.CompositeObserver
 import io.split.client.thin.internal.observer.ObservableEvent
 import io.split.client.thin.internal.observer.ObservableEventType

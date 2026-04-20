@@ -1,9 +1,9 @@
 package io.split.client.thin.http
 
 import io.split.android.client.backoff.BackoffCounter
-import io.split.android.client.network.HttpClient
-import io.split.android.client.network.HttpException
-import io.split.android.client.network.HttpResponse
+import io.split.client.thin.http.contracts.HttpClient
+import io.split.client.thin.http.contracts.HttpException
+import io.split.client.thin.http.contracts.HttpResponse
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
