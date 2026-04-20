@@ -145,9 +145,9 @@ class EvaluationFactoryTest {
         val cachedChange = EvaluationChange(evalKey, 5L, listOf(StoredEvaluation(EvaluationResult(flag = "cached-flag", treatment = "off"))))
         val loadCalls = mutableListOf<EvaluationKey>()
         val loader = object : EvaluationCacheLoader {
-            override suspend fun loadLocal(evalKey: EvaluationKey): EvaluationChange? {
+            override suspend fun loadLocal(evalKey: EvaluationKey): CacheLoadResult? {
                 loadCalls.add(evalKey)
-                return cachedChange
+                return CacheLoadResult(cachedChange, null)
             }
             override fun persistAsync(evalKey: EvaluationKey, changeNumber: Long, evaluations: List<StoredEvaluation>) = Unit
         }
@@ -164,7 +164,7 @@ class EvaluationFactoryTest {
     fun `cacheLoader persistAsync is called after successful fetch via createEvaluationComponents`() = runTest {
         val persistCalls = mutableListOf<EvaluationKey>()
         val loader = object : EvaluationCacheLoader {
-            override suspend fun loadLocal(evalKey: EvaluationKey): EvaluationChange? = null
+            override suspend fun loadLocal(evalKey: EvaluationKey): CacheLoadResult? = null
             override fun persistAsync(evalKey: EvaluationKey, changeNumber: Long, evaluations: List<StoredEvaluation>) {
                 persistCalls.add(evalKey)
             }
@@ -189,7 +189,7 @@ class EvaluationFactoryTest {
             listOf(StoredEvaluation(EvaluationResult(flag = "cached-flag", treatment = "off")))
         )
         val loader = object : EvaluationCacheLoader {
-            override suspend fun loadLocal(evalKey: EvaluationKey): EvaluationChange? = cachedChange
+            override suspend fun loadLocal(evalKey: EvaluationKey): CacheLoadResult? = CacheLoadResult(cachedChange, null)
             override fun persistAsync(evalKey: EvaluationKey, changeNumber: Long, evaluations: List<StoredEvaluation>) = Unit
         }
 
@@ -205,7 +205,7 @@ class EvaluationFactoryTest {
     @Test
     fun `EVAL_LOADED_FROM_STORAGE does not fire when loadLocal returns null`() = runTest {
         val loader = object : EvaluationCacheLoader {
-            override suspend fun loadLocal(evalKey: EvaluationKey): EvaluationChange? = null
+            override suspend fun loadLocal(evalKey: EvaluationKey): CacheLoadResult? = null
             override fun persistAsync(evalKey: EvaluationKey, changeNumber: Long, evaluations: List<StoredEvaluation>) = Unit
         }
 
