@@ -51,17 +51,34 @@ class InMemoryEvaluationStorage(
         return store[evalKey]?.changeNumber ?: -1L
     }
 
-    override fun upsert(change: EvaluationChange): Boolean {
+    override fun upsert(change: EvaluationChange): UpsertResult {
         val keyEvals = store.getOrPut(change.evaluationKey) { KeyEvaluations() }
         synchronized(keyEvals) {
-            val incomingFlagNames = change.evaluations.map { it.result.flag }.toSet()
+            val incomingByFlag = change.evaluations.associateBy { it.result.flag }
+            val incomingFlagNames = incomingByFlag.keys
             val shouldUpdate = change.changeNumber > keyEvals.changeNumber ||
                     incomingFlagNames != keyEvals.evaluations.keys
-            if (!shouldUpdate) return false
-            keyEvals.evaluations = change.evaluations.associateBy { it.result.flag }
+            if (!shouldUpdate) return UpsertResult(updated = false, emptyList())
+
+            val changedFlagNames = LinkedHashSet<String>()
+            for (flag in incomingFlagNames) {
+                if (!keyEvals.evaluations.containsKey(flag)) changedFlagNames.add(flag)
+            }
+            for (flag in keyEvals.evaluations.keys) {
+                if (!incomingFlagNames.contains(flag)) changedFlagNames.add(flag)
+            }
+            for (flag in incomingFlagNames) {
+                val current = keyEvals.evaluations[flag] ?: continue
+                val incoming = incomingByFlag[flag] ?: continue
+                if (incoming.result.changeNumber != current.result.changeNumber) {
+                    changedFlagNames.add(flag)
+                }
+            }
+
+            keyEvals.evaluations = incomingByFlag
             keyEvals.changeNumber = change.changeNumber
             cacheLoader?.persistAsync(change.evaluationKey, change.changeNumber, change.evaluations)
-            return true
+            return UpsertResult(updated = true, changedFlagNames.toList())
         }
     }
 

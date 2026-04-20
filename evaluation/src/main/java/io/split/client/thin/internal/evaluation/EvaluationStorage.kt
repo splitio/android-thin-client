@@ -12,7 +12,9 @@ interface PersistenceBackedStorage {
     suspend fun ensureCacheLoaded(evalKey: EvaluationKey)
 }
 
+data class UpsertResult(val updated: Boolean, val changedFlagNames: List<String>)
+
 interface EvaluationWriteStorage {
-    fun upsert(change: EvaluationChange): Boolean
+    fun upsert(change: EvaluationChange): UpsertResult
     fun clear(evalKey: EvaluationKey)
 }

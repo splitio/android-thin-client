@@ -15,6 +15,7 @@ import io.split.client.thin.internal.evaluation.EvaluationChange
 import io.split.client.thin.internal.evaluation.EvaluationKey
 import io.split.client.thin.internal.evaluation.EvaluationProvider
 import io.split.client.thin.internal.evaluation.EvaluationWriteStorage
+import io.split.client.thin.internal.evaluation.UpsertResult
 import io.split.client.thin.internal.evaluation.FetchReason
 import io.split.client.thin.internal.evaluation.StoredEvaluation
 import io.split.client.thin.internal.evaluation.toEvaluationKey
@@ -249,7 +250,7 @@ class FetchReasonObserverMappingTest {
             },
             readStorage = FakeEvaluationReadStorage(),
             writeStorage = object : EvaluationWriteStorage {
-                override fun upsert(change: EvaluationChange): Boolean = true
+                override fun upsert(change: EvaluationChange): UpsertResult = UpsertResult(updated = true, emptyList())
                 override fun clear(evalKey: EvaluationKey) {}
             },
             onEvaluationsUpdated = { evalKey, reason ->
