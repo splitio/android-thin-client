@@ -293,7 +293,7 @@ class InMemoryEvaluationStorageTest {
         val callbackCalls = mutableListOf<EvaluationKey>()
         val storageWithLoader = InMemoryEvaluationStorage(
             cacheLoader = cacheLoader,
-            onCacheLoaded = { evalKey -> callbackCalls.add(evalKey) }
+            onCacheLoaded = { evalKey, _ -> callbackCalls.add(evalKey) }
         )
 
         storageWithLoader.ensureCacheLoaded(key1)
@@ -308,7 +308,7 @@ class InMemoryEvaluationStorageTest {
         val callbackCalls = mutableListOf<EvaluationKey>()
         val storageWithLoader = InMemoryEvaluationStorage(
             cacheLoader = cacheLoader,
-            onCacheLoaded = { evalKey -> callbackCalls.add(evalKey) }
+            onCacheLoaded = { evalKey, _ -> callbackCalls.add(evalKey) }
         )
 
         storageWithLoader.ensureCacheLoaded(key1)
@@ -385,7 +385,7 @@ class InMemoryEvaluationStorageTest {
         val callbackCalls = mutableListOf<EvaluationKey>()
         val storageWithLoader = InMemoryEvaluationStorage(
             cacheLoader = cacheLoader,
-            onCacheLoaded = { evalKey -> callbackCalls.add(evalKey) }
+            onCacheLoaded = { evalKey, _ -> callbackCalls.add(evalKey) }
         )
 
         storageWithLoader.ensureCacheLoaded(key1)

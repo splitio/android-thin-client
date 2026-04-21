@@ -141,6 +141,12 @@ object SplitFactoryBuilder {
             secureHttpClient = secureHttpClient,
             compositeObserver = compositeObserver,
             cacheLoader = persistenceComponents.evaluationPersistenceManager,
+            cacheLoadedPayloadBuilder = { _, lastUpdateTimestamp ->
+                buildCacheLoadedPayload(lastUpdateTimestamp)
+            },
+            evaluationsUpdatedPayloadBuilder = { _, reason, changedFlagNames, isCacheLoaded ->
+                buildEvaluationsUpdatedPayload(reason, changedFlagNames, isCacheLoaded)
+            },
         )
 
         // Event tracking components
@@ -313,6 +319,19 @@ object SplitFactoryBuilder {
         }
     }
 
+}
+
+internal fun buildCacheLoadedPayload(lastUpdateTimestamp: Long?): SdkReadyMetadata =
+    SdkReadyMetadata(isInitialCacheLoad = false, lastUpdateTimestamp = lastUpdateTimestamp)
+
+internal fun buildEvaluationsUpdatedPayload(
+    reason: FetchReason,
+    changedFlagNames: List<String>,
+    isCacheLoaded: Boolean,
+): Any? = when (reason) {
+    FetchReason.INITIALIZATION -> SdkReadyMetadata(isInitialCacheLoad = !isCacheLoaded, lastUpdateTimestamp = null)
+    else -> if (changedFlagNames.isEmpty()) null
+    else SdkUpdateMetadata(type = SdkUpdateMetadata.Type.FLAGS_UPDATE, names = changedFlagNames)
 }
 
 internal fun buildDelayProvider(

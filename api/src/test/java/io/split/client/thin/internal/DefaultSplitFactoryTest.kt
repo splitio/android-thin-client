@@ -253,7 +253,7 @@ class FetchReasonObserverMappingTest {
                 override fun upsert(change: EvaluationChange): UpsertResult = UpsertResult(updated = true, emptyList())
                 override fun clear(evalKey: EvaluationKey) {}
             },
-            onEvaluationsUpdated = { evalKey, reason ->
+            onEvaluationsUpdated = { evalKey, reason, _ ->
                 val eventType = when (reason) {
                     FetchReason.INITIALIZATION, FetchReason.TARGET_SWITCH ->
                         ObservableEventType.EVAL_STORAGE_UPDATED
