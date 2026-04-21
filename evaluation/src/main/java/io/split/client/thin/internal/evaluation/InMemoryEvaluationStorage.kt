@@ -5,7 +5,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 class InMemoryEvaluationStorage(
     private val cacheLoader: EvaluationCacheLoader? = null,
-    private val onCacheLoaded: (evalKey: EvaluationKey) -> Unit = {},
+    private val onCacheLoaded: (evalKey: EvaluationKey, lastUpdateTimestamp: Long?) -> Unit = { _, _ -> },
 ) : EvaluationReadStorage, EvaluationWriteStorage, PersistenceBackedStorage {
 
     private class KeyEvaluations {
@@ -25,7 +25,7 @@ class InMemoryEvaluationStorage(
                 result.lastUpdateTimestamp?.let { ts ->
                     store[evalKey]?.lastUpdateTimestamp = ts
                 }
-                onCacheLoaded(evalKey)
+                onCacheLoaded(evalKey, result.lastUpdateTimestamp)
             }
         } catch (e: Throwable) {
             loadedKeys.remove(evalKey)
