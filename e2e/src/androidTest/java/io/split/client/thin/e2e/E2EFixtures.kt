@@ -128,6 +128,6 @@ object E2EFixtures {
     const val SSE_EVALUATION_UPDATE_WITH_DELAY: String =
         """{"channel":"$STREAMING_CHANNEL",""" +
         """"data":"{\"type\":\"EVALUATION_UPDATE\",\"changeNumber\":2000,""" +
-        """"\"i\":$DELAYED_FETCH_INTERVAL_MS,\"s\":$DELAYED_FETCH_SEED,\"h\":1}",""" +
+        """\"i\":$DELAYED_FETCH_INTERVAL_MS,\"s\":$DELAYED_FETCH_SEED,\"h\":1}",""" +
         """"timestamp":1000000}"""
 }
