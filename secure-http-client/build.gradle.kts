@@ -5,9 +5,6 @@ plugins {
 
 android {
     namespace = "io.split.client.thin.secure"
-    compileSdk {
-        version = release(36)
-    }
 
     defaultConfig {
         minSdk = 21
@@ -41,4 +38,5 @@ dependencies {
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
     testImplementation("org.mockito:mockito-core:4.8.0")
     testImplementation("org.mockito:mockito-inline:4.8.0")
+    testImplementation("org.robolectric:robolectric:4.10.3")
 }

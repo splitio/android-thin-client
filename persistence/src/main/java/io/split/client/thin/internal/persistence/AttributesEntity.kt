@@ -7,5 +7,6 @@ import androidx.room.PrimaryKey
 internal data class AttributesEntity(
     @PrimaryKey val keyHash: String,
     val attrHash: String,
-    val changeNumber: Long
+    val changeNumber: Long,
+    val lastUpdateTimestamp: Long? = null
 )

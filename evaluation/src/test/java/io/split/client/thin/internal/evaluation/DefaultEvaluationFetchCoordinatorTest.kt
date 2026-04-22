@@ -3,6 +3,9 @@ package io.split.client.thin.internal.evaluation
 import io.split.client.thin.EvaluationResult
 import io.split.client.thin.Key
 import io.split.client.thin.internal.secure.EvaluationFilters
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -67,18 +70,61 @@ class DefaultEvaluationFetchCoordinatorTest {
     }
 
     @Test
-    fun `error propagates from fetchIfNeeded`() = runTest {
+    fun `fetchIfNeeded returns false on provider error without propagating`() = runTest {
         val error = RuntimeException("fetch failed")
         val (coordinator, _, _) = makeCoordinator(throwOnFetch = error)
 
-        var caughtError: Throwable? = null
-        try {
-            coordinator.fetchIfNeeded(evalKey, null, FetchReason.INITIALIZATION)
-        } catch (e: RuntimeException) {
-            caughtError = e
-        }
+        val result = coordinator.fetchIfNeeded(evalKey, null, FetchReason.INITIALIZATION)
 
-        assertEquals(error, caughtError)
+        assertFalse(result)
+    }
+
+    @Test
+    fun `fetchIfNeeded invokes onEvalFetchFailed on provider error`() = runTest {
+        val error = RuntimeException("fetch failed")
+        val capturedErrors = mutableListOf<Throwable>()
+        val coordinator = DefaultEvaluationFetchCoordinator(
+            provider = FakeEvaluationProvider(throwOnFetch = error),
+            readStorage = FakeEvaluationReadStorage(),
+            writeStorage = FakeEvaluationWriteStorage(),
+            onEvalFetchFailed = { _, t -> capturedErrors.add(t) },
+        )
+
+        coordinator.fetchIfNeeded(evalKey, null, FetchReason.INITIALIZATION)
+
+        assertEquals(listOf(error), capturedErrors)
+    }
+
+    @Test
+    fun `null change on first fetch still triggers onEvaluationsUpdated`() = runTest {
+        val capturedReasons = mutableListOf<FetchReason>()
+        val coordinator = DefaultEvaluationFetchCoordinator(
+            provider = FakeEvaluationProvider(returnNullChange = true),
+            readStorage = FakeEvaluationReadStorage(),
+            writeStorage = FakeEvaluationWriteStorage(),
+            onEvaluationsUpdated = { _, reason, _ -> capturedReasons.add(reason) },
+        )
+
+        coordinator.fetchIfNeeded(evalKey, null, FetchReason.INITIALIZATION)
+
+        assertEquals(listOf(FetchReason.INITIALIZATION), capturedReasons)
+    }
+
+    @Test
+    fun `null change on subsequent fetch does not trigger onEvaluationsUpdated`() = runTest {
+        val capturedReasons = mutableListOf<FetchReason>()
+        val coordinator = DefaultEvaluationFetchCoordinator(
+            provider = FakeEvaluationProvider(returnNullChange = true),
+            readStorage = FakeEvaluationReadStorage(),
+            writeStorage = FakeEvaluationWriteStorage(),
+            onEvaluationsUpdated = { _, reason, _ -> capturedReasons.add(reason) },
+        )
+
+        coordinator.fetchIfNeeded(evalKey, null, FetchReason.INITIALIZATION)
+        coordinator.fetchIfNeeded(evalKey, null, FetchReason.PERIODIC)
+
+        assertEquals(1, capturedReasons.size)
+        assertEquals(FetchReason.INITIALIZATION, capturedReasons[0])
     }
 
     @Test
@@ -104,7 +150,7 @@ class DefaultEvaluationFetchCoordinatorTest {
             provider = FakeEvaluationProvider(),
             readStorage = FakeEvaluationReadStorage(),
             writeStorage = FakeEvaluationWriteStorage(),
-            onEvaluationsUpdated = { _, reason -> capturedReason.add(reason) },
+            onEvaluationsUpdated = { _, reason, _ -> capturedReason.add(reason) },
         )
 
         coordinator.fetchIfNeeded(evalKey, null, FetchReason.INITIALIZATION)
@@ -118,8 +164,8 @@ class DefaultEvaluationFetchCoordinatorTest {
         val coordinator = DefaultEvaluationFetchCoordinator(
             provider = FakeEvaluationProvider(),
             readStorage = FakeEvaluationReadStorage(),
-            writeStorage = FakeEvaluationWriteStorage(upsertResult = false),
-            onEvaluationsUpdated = { _, _ -> callbackInvoked = true },
+            writeStorage = FakeEvaluationWriteStorage(upsertUpdated = false),
+            onEvaluationsUpdated = { _, _, _ -> callbackInvoked = true },
         )
 
         coordinator.fetchIfNeeded(evalKey, null, FetchReason.INITIALIZATION)
@@ -133,8 +179,8 @@ class DefaultEvaluationFetchCoordinatorTest {
         val coordinator = DefaultEvaluationFetchCoordinator(
             provider = FakeEvaluationProvider(),
             readStorage = FakeEvaluationReadStorage(),
-            writeStorage = FakeEvaluationWriteStorage(upsertResult = false),
-            onEvaluationsUpdated = { _, reason -> capturedReasons.add(reason) },
+            writeStorage = FakeEvaluationWriteStorage(upsertUpdated = false),
+            onEvaluationsUpdated = { _, reason, _ -> capturedReasons.add(reason) },
         )
 
         coordinator.fetchIfNeeded(evalKey, null, FetchReason.INITIALIZATION)
@@ -151,17 +197,11 @@ class DefaultEvaluationFetchCoordinatorTest {
             provider = FakeEvaluationProvider(throwOnFetch = RuntimeException("fetch failed")),
             readStorage = FakeEvaluationReadStorage(),
             writeStorage = FakeEvaluationWriteStorage(),
-            onEvaluationsUpdated = { _, _ -> callbackInvoked = true },
+            onEvaluationsUpdated = { _, _, _ -> callbackInvoked = true },
         )
 
-        var caughtError: Throwable? = null
-        try {
-            coordinator.fetchIfNeeded(evalKey, null, FetchReason.INITIALIZATION)
-        } catch (e: RuntimeException) {
-            caughtError = e
-        }
+        coordinator.fetchIfNeeded(evalKey, null, FetchReason.INITIALIZATION)
 
-        assertNotNull(caughtError)
         assertFalse(callbackInvoked)
     }
 
@@ -219,7 +259,7 @@ class DefaultEvaluationFetchCoordinatorTest {
         // Create a provider that throws on the second refetch call
         var fetchCount = 0
         val provider = object : EvaluationProvider {
-            override suspend fun fetch(evalKey: EvaluationKey, filters: EvaluationFilters?, changeNumber: Long): EvaluationChange {
+            override suspend fun fetch(evalKey: EvaluationKey, filters: EvaluationFilters?, changeNumber: Long): EvaluationChange? {
                 fetchCount++
                 // Throw on the 5th call overall (2nd refetch)
                 if (fetchCount == 5) throw RuntimeException("fetch failed")
@@ -283,6 +323,59 @@ class DefaultEvaluationFetchCoordinatorTest {
         coordinator.refetchAll(null, FetchReason.PERIODIC, delayProvider = null)
 
         assertEquals(2, provider.fetchCalls.size)
+    }
+
+    @Test
+    fun `CancellationException from provider propagates out of fetchIfNeeded`() = runTest {
+        val provider = FakeEvaluationProvider(throwOnFetch = CancellationException("cancelled"))
+        val coordinator = DefaultEvaluationFetchCoordinator(
+            provider = provider,
+            readStorage = FakeEvaluationReadStorage(),
+            writeStorage = FakeEvaluationWriteStorage(),
+        )
+
+        var propagated = false
+        try {
+            coordinator.fetchIfNeeded(evalKey, null, FetchReason.INITIALIZATION)
+        } catch (e: CancellationException) {
+            propagated = true
+        }
+
+        assertTrue("CancellationException must not be swallowed", propagated)
+    }
+
+    @Test
+    fun `onEvalFetchRequested receives delayMs from refetchAll delayProvider`() = runTest {
+        val key1 = EvaluationKey(Key("user-1"))
+        val capturedDelays = mutableListOf<Long>()
+        val coordinator = DefaultEvaluationFetchCoordinator(
+            provider = FakeEvaluationProvider(),
+            readStorage = FakeEvaluationReadStorage(),
+            writeStorage = FakeEvaluationWriteStorage(),
+            onEvalFetchRequested = { _, _, delayMs -> capturedDelays.add(delayMs) },
+        )
+
+        coordinator.fetchIfNeeded(key1, null, FetchReason.INITIALIZATION)
+        coordinator.refetchAll(null, FetchReason.PUSH, delayProvider = { 500L })
+
+        assertEquals(2, capturedDelays.size)
+        assertEquals(0L, capturedDelays[0])
+        assertEquals(500L, capturedDelays[1])
+    }
+
+    @Test
+    fun `onEvalFetchRequested receives zero delayMs when called via direct fetchIfNeeded`() = runTest {
+        val capturedDelays = mutableListOf<Long>()
+        val coordinator = DefaultEvaluationFetchCoordinator(
+            provider = FakeEvaluationProvider(),
+            readStorage = FakeEvaluationReadStorage(),
+            writeStorage = FakeEvaluationWriteStorage(),
+            onEvalFetchRequested = { _, _, delayMs -> capturedDelays.add(delayMs) },
+        )
+
+        coordinator.fetchIfNeeded(evalKey, null, FetchReason.INITIALIZATION)
+
+        assertEquals(listOf(0L), capturedDelays)
     }
 
 }

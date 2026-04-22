@@ -4,13 +4,16 @@ import io.split.android.client.backoff.BackoffCounter
 import io.split.android.client.network.HttpClient
 import io.split.android.client.network.HttpMethod
 import io.split.android.client.network.HttpRequest
-import io.split.android.client.network.HttpResponse
 import io.split.android.client.network.HttpStreamRequest
 import io.split.android.client.network.HttpStreamResponse
 import io.split.android.client.service.sseclient.sseclient.EventSourceClient
 import io.split.client.thin.http.HttpRequestDescriptor
 import io.split.client.thin.http.RequestCategory
 import io.split.client.thin.http.RetryableHttpClient
+import io.split.client.thin.http.contracts.HttpResponse
+import io.split.client.thin.internal.observer.CompositeObserver
+import io.split.client.thin.internal.observer.ObservableEvent
+import io.split.client.thin.internal.observer.Observer
 import java.io.BufferedReader
 import java.net.URI
 
@@ -55,6 +58,14 @@ class FakeEventSourceClient : EventSourceClient {
     }
 }
 
+// Fake CompositeObserver for testing
+class FakeCompositeObserver : CompositeObserver {
+    val events = mutableListOf<ObservableEvent>()
+    override fun notifyEvent(event: ObservableEvent) { events.add(event) }
+    override fun register(observer: Observer) {}
+    override fun unregisterAll() {}
+}
+
 // Fake BackoffCounter for predictable delays
 class FakeBackoffCounter(private val delays: List<Long> = listOf(100, 200, 400)) : BackoffCounter {
     private var index = 0
@@ -87,15 +98,10 @@ class FakeRetryableHttpClient(
 class FakeHttpResponse(
     private val statusCode: Int,
     private val data: String?,
-    private val isClientError: Boolean = false
 ) : HttpResponse {
+    override val isSuccess: Boolean = statusCode in 200..299
+    override val httpStatus: Int = statusCode
     override fun getData(): String? = data
-    override fun getServerCertificates(): Array<java.security.cert.Certificate> = emptyArray()
-    override fun isSuccess(): Boolean = statusCode in 200..299
-    override fun isCredentialsError(): Boolean = statusCode == 401
-    override fun isBadRequestError(): Boolean = statusCode == 400
-    override fun isClientRelatedError(): Boolean = isClientError || statusCode in 400..499
-    override fun getHttpStatus(): Int = statusCode
 }
 
 // Fake HttpStreamResponse for testing streaming transport
