@@ -126,6 +126,8 @@ val extractAarForRepackaging by tasks.registering {
  * - `io.split.android.client.*` → `io.split.client.thin.repackaged.io.split.android.client.*`
  * - `io.split.android.engine.*` → `io.split.client.thin.repackaged.io.split.android.engine.*`
  * - `io.harness.events.*` → `io.split.client.thin.repackaged.io.harness.events.*`
+ *
+ * Note: androidx.room is NOT repackaged; consumers must provide Room 2.4.3+ as a runtime dependency.
  */
 val shadowClassesJar by tasks.registering(ShadowJar::class) {
     group = "shadow"

@@ -7,6 +7,17 @@ object ObservableEventType {
     const val SDK_READY_TIMEOUT_REACHED = "sdk_ready_timeout_reached"
     const val EVALUATIONS_UPDATED = "evaluations_updated"
 
+    // Persistence events
+    const val EVAL_STORAGE_LOAD_STARTED = "eval_storage_load_started"
+    const val EVAL_STORAGE_LOAD_SUCCEEDED = "eval_storage_load_succeeded"
+    const val EVAL_STORAGE_LOAD_FAILED = "eval_storage_load_failed"
+    const val EVAL_STORAGE_WRITE_SCHEDULED = "eval_storage_write_scheduled"
+    const val EVAL_STORAGE_WRITE_SUCCEEDED = "eval_storage_write_succeeded"
+    const val EVAL_STORAGE_WRITE_FAILED = "eval_storage_write_failed"
+    const val EVENT_PUSHED = "event_pushed"
+    const val EVENT_POPPED = "event_popped"
+    const val PERSISTENCE_FAILED = "persistence_failed"
+
     // Lifecycle events
     const val FACTORY_INIT_STARTED = "factory_init_started"
     const val FACTORY_INIT_COMPLETED = "factory_init_completed"
@@ -44,6 +55,7 @@ object ObservableEventType {
     const val EVAL_FETCH_SUCCEEDED = "eval_fetch_succeeded"
     const val EVAL_FETCH_FAILED = "eval_fetch_failed"
     const val EVAL_DESERIALIZE_FAILED = "eval_deserialize_failed"
+    const val EVAL_EMPTY_RESPONSE_BODY = "eval_empty_response_body"
 
     // Track events
     const val TRACK_CALLED = "track_called"
@@ -55,7 +67,15 @@ object ObservableEventType {
     // App lifecycle
     const val SYNC_PAUSED = "sync_paused"
     const val SYNC_RESUMED = "sync_resumed"
+    const val STREAMING_PAUSED = "streaming_paused"
+    const val STREAMING_RESUMED = "streaming_resumed"
 
     // Polling
     const val POLL_TRIGGER = "poll_trigger"
+
+    // Streaming
+    const val STREAMING_CONNECT_STARTED = "streaming_connect_started"
+    const val STREAMING_CONNECTED = "streaming_connected"
+    const val STREAMING_DISCONNECTED = "streaming_disconnected"
+    const val STREAMING_NOTIFICATION_RECEIVED = "streaming_notification_received"
 }

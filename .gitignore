@@ -4,4 +4,7 @@ local.properties
 *.iml
 .idea/
 .DS_Store
+*/.settings/
+*/.project
+*/.classpath
 

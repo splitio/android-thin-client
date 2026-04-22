@@ -5,9 +5,6 @@ plugins {
 
 android {
     namespace = "io.split.client.thin.streaming"
-    compileSdk {
-        version = release(36)
-    }
 
     defaultConfig {
         minSdk = 21
@@ -34,6 +31,8 @@ dependencies {
     // Thin client modules
     implementation(project(":models"))
     implementation(project(":auth"))
+    implementation(project(":http"))
+    implementation(project(":observer"))
     implementation(project(":retryable-http-client"))
 
     // android-client submodule dependencies
