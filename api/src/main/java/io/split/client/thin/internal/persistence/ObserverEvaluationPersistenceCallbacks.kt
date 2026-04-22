@@ -12,7 +12,7 @@ internal class ObserverEvaluationPersistenceCallbacks(
 ) : EvaluationPersistenceCallbacks {
 
     override fun onEvalStorageUpdated(evalKey: EvaluationKey, changeNumber: Long, evaluations: List<StoredEvaluation>) {
-        compositeObserver.notifyEvent(ObservableEvent(ObservableEventType.EVAL_STORAGE_UPDATED))
+        compositeObserver.notifyEvent(ObservableEvent(ObservableEventType.EVAL_STORAGE_UPDATED, properties = mapOf("matchingKey" to evalKey.key.matchingKey)))
     }
 
     override fun onLoadStarted() {
