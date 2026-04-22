@@ -1,13 +1,11 @@
 package io.split.client.thin.internal.secure
 
-import io.split.android.client.network.HttpResponse
 import io.split.client.thin.http.HttpRequestDescriptor
 import io.split.client.thin.http.RequestCategory
 import io.split.client.thin.http.RetryableHttpClient
+import io.split.client.thin.http.contracts.HttpResponse
 import io.split.client.thin.internal.auth.AuthProvider
 import io.split.client.thin.internal.auth.JwtCredential
-import org.mockito.Mockito.mock
-import org.mockito.Mockito.`when`
 
 internal val testEvaluationsUrl = "https://api.split.io/v1/evaluations"
 internal val testEventsUrl = "https://events.split.io/v1/events"
@@ -91,11 +89,10 @@ internal class FakeRetryableHttpClient(
         lastCategory = category
         throwOnExecute?.let { throw it }
         val code = statusCodeSequence?.getOrElse(executeIndex++) { statusCode } ?: statusCode
-        val response = mock(HttpResponse::class.java)
-        `when`(response.getHttpStatus()).thenReturn(code)
-        `when`(response.isCredentialsError()).thenReturn(code == 401)
-        return response
+        return object : HttpResponse {
+            override val isSuccess: Boolean = code in 200..299
+            override val httpStatus: Int = code
+            override fun getData(): String? = null
+        }
     }
 }
-
-internal val HttpResponse.httpStatus: Int get() = getHttpStatus()

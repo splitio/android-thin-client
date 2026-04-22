@@ -1,5 +1,6 @@
 package io.split.client.thin.internal.persistence
 
+import io.split.client.thin.Key
 import io.split.client.thin.internal.evaluation.EvaluationKey
 import io.split.client.thin.internal.evaluation.StoredEvaluation
 import io.split.client.thin.internal.observer.CompositeObserver
@@ -32,7 +33,7 @@ class ObserverEvaluationPersistenceCallbacksTest {
 
     @Test
     fun `onEvalStorageUpdated dispatches EVAL_STORAGE_UPDATED event`() {
-        val evalKey = mock(EvaluationKey::class.java)
+        val evalKey = EvaluationKey(Key("user-1", "user-1"))
         val evaluations = emptyList<StoredEvaluation>()
 
         callbacks.onEvalStorageUpdated(evalKey, 123L, evaluations)

@@ -24,6 +24,7 @@ class StreamingFactoryTest {
             onEvaluationFetchNotification = { _ ->
                 fetchNotificationCalled = true
             },
+            observer = FakeCompositeObserver(),
         )
 
         assertNotNull("StreamingComponents should not be null", components)
@@ -44,6 +45,7 @@ class StreamingFactoryTest {
                 StreamingToken("jwt-token-$tokenProviderCallCount")
             },
             onEvaluationFetchNotification = { _ -> },
+            observer = FakeCompositeObserver(),
         )
 
         // Verify token provider is not eagerly evaluated during factory construction
@@ -63,6 +65,7 @@ class StreamingFactoryTest {
             httpClient = FakeHttpClient(),
             tokenProvider = { StreamingToken("jwt-token") },
             onEvaluationFetchNotification = { _ -> },
+            observer = FakeCompositeObserver(),
         )
 
         // Verify start wasn't called during construction
@@ -88,6 +91,7 @@ class StreamingFactoryTest {
             onEvaluationFetchNotification = { _ ->
                 fetchNotificationCallCount++
             },
+            observer = FakeCompositeObserver(),
         )
 
         // Verify callback hasn't been invoked yet
