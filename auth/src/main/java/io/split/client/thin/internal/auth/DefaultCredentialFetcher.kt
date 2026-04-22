@@ -1,9 +1,9 @@
 package io.split.client.thin.internal.auth
 
-import io.split.android.client.network.HttpMethod
 import io.split.client.thin.http.HttpRequestDescriptor
 import io.split.client.thin.http.RequestCategory
 import io.split.client.thin.http.RetryableHttpClient
+import io.split.client.thin.http.contracts.HttpMethod
 import java.net.URI
 
 internal class DefaultCredentialFetcher(
@@ -25,7 +25,7 @@ internal class DefaultCredentialFetcher(
         onJwtFetchStarted(target)
         try {
             val response = retryableHttpClient.execute(request, RequestCategory.AUTH)
-            val data = response.data ?: throw IllegalStateException("Auth response body is null")
+            val data = response.getData() ?: throw IllegalStateException("Auth response body is null")
             val credential = tokenDeserializer.deserialize(data)
             onJwtFetchSucceeded(credential, target)
             return credential

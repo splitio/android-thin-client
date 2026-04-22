@@ -4,13 +4,11 @@ plugins {
 
 android {
     namespace = "io.split.client.thin.consumer"
-    compileSdk {
-        version = release(36)
-    }
 
     defaultConfig {
         minSdk = 21
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunnerArguments["clearPackageData"] = "true"
     }
 
     compileOptions {
@@ -32,10 +30,15 @@ dependencies {
     // "Regular" SDK to verify side-by-side build
     androidTestImplementation("io.split.client:android-client:5.5.0")
 
+    // Room (required by thin client persistence at runtime)
+    androidTestImplementation("androidx.room:room-runtime:2.4.3")
+
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
 
     androidTestImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
     androidTestImplementation("com.squareup.okhttp3:mockwebserver:4.10.0")
+    androidTestImplementation("androidx.test:core:1.6.1")
+    androidTestImplementation("androidx.test.uiautomator:uiautomator:2.2.0")
 }

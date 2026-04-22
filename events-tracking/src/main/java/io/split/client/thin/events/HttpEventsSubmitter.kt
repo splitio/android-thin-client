@@ -1,8 +1,8 @@
 package io.split.client.thin.events
 
-import io.split.android.client.network.HttpResponse
 import io.split.android.client.submitter.RecorderException
 import io.split.android.client.submitter.RecorderSubmitter
+import io.split.client.thin.http.contracts.HttpResponse
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 
