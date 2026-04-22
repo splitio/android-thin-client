@@ -1,12 +1,12 @@
 package io.split.client.thin.internal.streaming
 
-internal sealed class ThinNotification(
+sealed class ThinNotification(
     val type: ThinNotificationType,
     val channel: String?,
     val timestamp: Long
 )
 
-internal data class EvaluationUpdateNotification(
+data class EvaluationUpdateNotification(
     val changeNumber: Long,
     val channelName: String?,
     val eventTimestamp: Long,

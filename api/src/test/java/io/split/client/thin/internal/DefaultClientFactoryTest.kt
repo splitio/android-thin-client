@@ -23,7 +23,7 @@ class DefaultClientFactoryTest {
             fallbackCalculator = null,
         )
 
-        val client = factory(Target(Key("user-1")))
+        val client = factory(Target(Key("user-1"), trafficType = "user"))
 
         assertTrue(client is DefaultSplitClient)
     }
@@ -39,7 +39,7 @@ class DefaultClientFactoryTest {
             fallbackCalculator = null,
         )
 
-        factory(Target(Key("user-1")))
+        factory(Target(Key("user-1"), trafficType = "user"))
 
         assertEquals(1, compositeObserver.registeredObservers.size)
     }
@@ -47,7 +47,7 @@ class DefaultClientFactoryTest {
     @Test
     fun `invoke triggers setTarget on evaluationRepository`() = kotlinx.coroutines.test.runTest {
         val repository = FakeEvaluationRepository()
-        val target = Target(Key("user-1"))
+        val target = Target(Key("user-1"), trafficType = "user")
         val factory = DefaultClientFactory(
             FakeCompositeObserver(),
             this,

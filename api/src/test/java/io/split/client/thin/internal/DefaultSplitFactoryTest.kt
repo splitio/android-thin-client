@@ -15,6 +15,7 @@ import io.split.client.thin.internal.evaluation.EvaluationChange
 import io.split.client.thin.internal.evaluation.EvaluationKey
 import io.split.client.thin.internal.evaluation.EvaluationProvider
 import io.split.client.thin.internal.evaluation.EvaluationWriteStorage
+import io.split.client.thin.internal.evaluation.UpsertResult
 import io.split.client.thin.internal.evaluation.FetchReason
 import io.split.client.thin.internal.evaluation.StoredEvaluation
 import io.split.client.thin.internal.evaluation.toEvaluationKey
@@ -41,8 +42,8 @@ import org.junit.Test
 class DefaultSplitFactoryTest {
 
     private val sdkKey = SdkKey("sdk-key")
-    private val defaultTarget = Target(Key("default-user"))
-    private val otherTarget = Target(Key("other-user"))
+    private val defaultTarget = Target(Key("default-user"), trafficType = "user")
+    private val otherTarget = Target(Key("other-user"), trafficType = "user")
 
     private lateinit var fakeClientManager: FakeClientManager
     private lateinit var fakeAsyncBridge: FakeAsyncBridge
@@ -244,22 +245,24 @@ class FetchReasonObserverMappingTest {
     private fun makeCoordinator(compositeObserver: DefaultCompositeObserver): DefaultEvaluationFetchCoordinator {
         return DefaultEvaluationFetchCoordinator(
             provider = object : EvaluationProvider {
-                override suspend fun fetch(evalKey: EvaluationKey, filters: EvaluationFilters?): EvaluationChange =
+                override suspend fun fetch(evalKey: EvaluationKey, filters: EvaluationFilters?, changeNumber: Long): EvaluationChange =
                     EvaluationChange(evalKey, -1L, emptyList())
             },
             readStorage = FakeEvaluationReadStorage(),
             writeStorage = object : EvaluationWriteStorage {
-                override fun upsert(change: EvaluationChange): Boolean = true
+                override fun upsert(change: EvaluationChange): UpsertResult = UpsertResult(updated = true, emptyList())
                 override fun clear(evalKey: EvaluationKey) {}
             },
-            onEvaluationsUpdated = { reason ->
+            onEvaluationsUpdated = { evalKey, reason, _ ->
                 val eventType = when (reason) {
                     FetchReason.INITIALIZATION, FetchReason.TARGET_SWITCH ->
                         ObservableEventType.EVAL_STORAGE_UPDATED
                     FetchReason.PERIODIC, FetchReason.PUSH ->
                         ObservableEventType.EVALUATIONS_UPDATED
                 }
-                compositeObserver.notifyEvent(ObservableEvent(eventType))
+                compositeObserver.notifyEvent(
+                    ObservableEvent(eventType, mapOf("matchingKey" to evalKey.key.matchingKey))
+                )
             },
         )
     }
@@ -312,7 +315,7 @@ class FetchReasonObserverMappingTest {
 @OptIn(ExperimentalCoroutinesApi::class)
 class SdkReadyTimeoutTest {
 
-    private val defaultTarget = Target(Key("user-1"))
+    private val defaultTarget = Target(Key("user-1"), trafficType = "user")
 
     @Test
     fun `emits SDK_READY_TIMEOUT_REACHED after configured timeout seconds`() = runTest {
@@ -321,7 +324,7 @@ class SdkReadyTimeoutTest {
         compositeObserver.register(fakeObserver)
 
         val config = SplitClientConfig.Builder()
-            .storage(SplitClientConfig.StorageConfig.Builder().timeout(1).build())
+            .sync(SplitClientConfig.SyncConfig.Builder().timeout(1).build())
             .build()
 
         DefaultSplitFactory(
@@ -391,7 +394,7 @@ private class StubSplitClient : SplitClient {
     override fun addEventListener(listener: SplitEventListener): Unit =
         throw UnsupportedOperationException()
 
-    override fun track(trafficType: String, eventType: String, value: Double?, properties: Map<String, Any?>?) =
+    override fun track(eventType: String, value: Double?, properties: Map<String, Any?>?) =
         throw UnsupportedOperationException()
 
     override suspend fun destroy() = Unit

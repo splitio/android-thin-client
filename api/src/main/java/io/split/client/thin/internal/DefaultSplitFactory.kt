@@ -56,7 +56,7 @@ internal class DefaultSplitFactory(
     init {
         clientManager.getOrCreate(defaultTarget)
 
-        val timeoutSecs = config?.storage?.timeout ?: -1
+        val timeoutSecs = config?.sync?.timeout ?: -1
         if (timeoutSecs > 0) {
             scope.launch {
                 delay(timeoutSecs * 1_000L)

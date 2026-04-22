@@ -3,7 +3,8 @@ package io.split.client.thin.internal.streaming
 import io.split.android.client.backoff.ExponentialBackoffCounter
 import io.split.android.client.service.sseclient.EventStreamParser
 import io.split.android.client.service.sseclient.sseclient.EventSourceClientImpl
-import io.split.client.thin.http.RetryableHttpClient
+import io.split.android.client.network.HttpClient
+import io.split.client.thin.internal.observer.CompositeObserver
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
@@ -34,10 +35,11 @@ data class StreamingComponents(
  */
 fun createStreamingComponents(
     streamingUrl: String,
-    retryableHttpClient: RetryableHttpClient,
+    httpClient: HttpClient,
     tokenProvider: suspend () -> StreamingToken,
-    onEvaluationFetchNotification: suspend () -> Unit,
+    onEvaluationFetchNotification: suspend (EvaluationUpdateNotification?) -> Unit,
     onPushDisabled: suspend () -> Unit = {},
+    observer: CompositeObserver,
 ): StreamingComponents {
     val streamingScope = CoroutineScope(SupervisorJob())
 
@@ -46,7 +48,7 @@ fun createStreamingComponents(
         tokenProvider = tokenProvider,
         eventSourceClientProvider = {
             EventSourceClientImpl(
-                StreamingTransportImpl(retryableHttpClient),
+                StreamingTransportImpl(httpClient),
                 EventStreamParser(),
             )
         },
@@ -55,6 +57,7 @@ fun createStreamingComponents(
         onOccupancyZero = { /* TODO: handle occupancy zero */ },
         onEvaluationFetchNotification = onEvaluationFetchNotification,
         onPushDisabled = onPushDisabled,
+        observer = observer,
     )
 
     return StreamingComponents(
