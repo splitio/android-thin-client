@@ -96,6 +96,7 @@ class SplitClientConfig private constructor(
         private const val DEFAULT_TIMEOUT = -1
         private const val DEFAULT_EVALUATION_REFRESH_RATE = 3600
         private const val DEFAULT_PUSH_RATE = 1800
+        private val MIN_EVALUATION_REFRESH_RATE = BuildConfig.MIN_EVALUATION_REFRESH_RATE
 
         internal fun applyLogLevel(logLevel: LogLevel) {
             val loggerLevel = when (logLevel) {
@@ -132,10 +133,11 @@ class SplitClientConfig private constructor(
         internal fun normalizeSync(sync: SyncConfig): SyncConfig {
             var evaluationRefreshRate = sync.evaluationRefreshRate
             var pushRate = sync.pushRate
+            var timeout = sync.timeout
 
-            if (evaluationRefreshRate < 60) {
+            if (evaluationRefreshRate < MIN_EVALUATION_REFRESH_RATE) {
                 Logger.w(
-                    "SplitClientConfig validation failed: sync.evaluationRefreshRate must be >= 60. " +
+                    "SplitClientConfig validation failed: sync.evaluationRefreshRate must be >= $MIN_EVALUATION_REFRESH_RATE. " +
                         "Received: ${sync.evaluationRefreshRate}. Falling back to default: $DEFAULT_EVALUATION_REFRESH_RATE"
                 )
                 evaluationRefreshRate = DEFAULT_EVALUATION_REFRESH_RATE
@@ -149,7 +151,15 @@ class SplitClientConfig private constructor(
                 pushRate = DEFAULT_PUSH_RATE
             }
 
-            return if (evaluationRefreshRate == sync.evaluationRefreshRate && pushRate == sync.pushRate) {
+            if (timeout < -1) {
+                Logger.w(
+                    "SplitClientConfig validation failed: sync.timeout must be >= -1. " +
+                        "Received: $timeout. Falling back to default: $DEFAULT_TIMEOUT"
+                )
+                timeout = DEFAULT_TIMEOUT
+            }
+
+            return if (evaluationRefreshRate == sync.evaluationRefreshRate && pushRate == sync.pushRate && timeout == sync.timeout) {
                 sync
             } else {
                 SyncConfig(
@@ -157,13 +167,13 @@ class SplitClientConfig private constructor(
                     evaluationRefreshRate = evaluationRefreshRate,
                     pushRate = pushRate,
                     serviceEndpoints = sync.serviceEndpoints,
+                    timeout = timeout,
                 )
             }
         }
 
         internal fun normalizeStorage(storage: StorageConfig): StorageConfig {
             var prefix = storage.prefix
-            var timeout = storage.timeout
 
             if (prefix != null && !PREFIX_REGEX.matches(prefix)) {
                 Logger.w(
@@ -173,18 +183,10 @@ class SplitClientConfig private constructor(
                 prefix = null
             }
 
-            if (timeout < -1) {
-                Logger.w(
-                    "SplitClientConfig validation failed: storage.timeout must be >= -1. " +
-                        "Received: $timeout. Falling back to default: $DEFAULT_TIMEOUT"
-                )
-                timeout = DEFAULT_TIMEOUT
-            }
-
-            return if (prefix == storage.prefix && timeout == storage.timeout) {
+            return if (prefix == storage.prefix) {
                 storage
             } else {
-                StorageConfig(prefix = prefix, timeout = timeout)
+                StorageConfig(prefix = prefix)
             }
         }
     }
@@ -221,23 +223,27 @@ class SplitClientConfig private constructor(
         val evaluationRefreshRate: Int,
         val pushRate: Int,
         val serviceEndpoints: ServiceEndpoints?,
+        val timeout: Int,
     ) {
         class Builder {
             private var mode: SyncMode = SyncMode.STREAMING
             private var evaluationRefreshRate: Int = 3600
             private var pushRate: Int = 1800
             private var serviceEndpoints: ServiceEndpoints? = null
+            private var timeout: Int = -1
 
             fun mode(value: SyncMode) = apply { mode = value }
             fun evaluationRefreshRate(value: Int) = apply { evaluationRefreshRate = value }
             fun pushRate(value: Int) = apply { pushRate = value }
             fun serviceEndpoints(value: ServiceEndpoints) = apply { serviceEndpoints = value }
+            fun timeout(value: Int) = apply { timeout = value }
 
             fun build() = SyncConfig(
                 mode = mode,
                 evaluationRefreshRate = evaluationRefreshRate,
                 pushRate = pushRate,
                 serviceEndpoints = serviceEndpoints,
+                timeout = timeout,
             )
         }
     }
@@ -247,21 +253,16 @@ class SplitClientConfig private constructor(
      *
      * @property prefix   Prefix appended to the persistent storage identifier (DB name, key prefix).
      *   Must conform to `^[a-zA-Z0-9_]{1,80}$`. Default: `null` (no prefix).
-     * @property timeout  Seconds before [SplitEvent.sdkTimeout] is emitted.
-     *   `-1` means no timeout. Default: `-1`. Min value: `-1`.
      */
     data class StorageConfig internal constructor(
         val prefix: String?,
-        val timeout: Int,
     ) {
         class Builder {
             private var prefix: String? = null
-            private var timeout: Int = -1
 
             fun prefix(value: String) = apply { prefix = value }
-            fun timeout(value: Int) = apply { timeout = value }
 
-            fun build() = StorageConfig(prefix = prefix, timeout = timeout)
+            fun build() = StorageConfig(prefix = prefix)
         }
     }
 
@@ -314,6 +315,7 @@ class SyncConfigDsl {
     var mode: SplitClientConfig.SyncMode = SplitClientConfig.SyncMode.STREAMING
     var evaluationRefreshRate: Int = 3600
     var pushRate: Int = 1800
+    var timeout: Int = -1
     private var _serviceEndpoints: SplitClientConfig.ServiceEndpoints? = null
 
     fun serviceEndpoints(block: ServiceEndpointsDsl.() -> Unit) {
@@ -325,15 +327,15 @@ class SyncConfigDsl {
         evaluationRefreshRate = evaluationRefreshRate,
         pushRate = pushRate,
         serviceEndpoints = _serviceEndpoints,
+        timeout = timeout,
     )
 }
 
 /** DSL scope for [SplitClientConfig.StorageConfig]. */
 class StorageConfigDsl {
     var prefix: String? = null
-    var timeout: Int = -1
 
-    internal fun build() = SplitClientConfig.StorageConfig(prefix = prefix, timeout = timeout)
+    internal fun build() = SplitClientConfig.StorageConfig(prefix = prefix)
 }
 
 /** DSL scope for [SplitClientConfig]. */

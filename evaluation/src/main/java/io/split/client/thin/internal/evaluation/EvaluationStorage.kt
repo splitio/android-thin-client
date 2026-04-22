@@ -6,9 +6,16 @@ interface EvaluationReadStorage {
     fun getByFlagSets(flagSets: Set<String>, evalKey: EvaluationKey): Map<String, StoredEvaluation>
     fun getFlagNames(evalKey: EvaluationKey): Set<String>
     fun lastChangeNumber(evalKey: EvaluationKey): Long
+    fun lastUpdateTimestamp(evalKey: EvaluationKey): Long?
 }
 
+interface PersistenceBackedStorage {
+    suspend fun ensureCacheLoaded(evalKey: EvaluationKey)
+}
+
+data class UpsertResult(val updated: Boolean, val changedFlagNames: List<String>)
+
 interface EvaluationWriteStorage {
-    fun upsert(change: EvaluationChange): Boolean
+    fun upsert(change: EvaluationChange): UpsertResult
     fun clear(evalKey: EvaluationKey)
 }

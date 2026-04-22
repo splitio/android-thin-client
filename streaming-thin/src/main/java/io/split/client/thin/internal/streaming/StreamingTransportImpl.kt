@@ -1,18 +1,14 @@
 package io.split.client.thin.internal.streaming
 
-import io.split.android.client.network.HttpMethod
-import io.split.android.client.network.HttpResponse
+import io.split.android.client.network.HttpClient
+import io.split.android.client.network.HttpStreamRequest
+import io.split.android.client.network.HttpStreamResponse
 import io.split.android.client.service.sseclient.spi.StreamingTransport
-import io.split.client.thin.http.HttpRequestDescriptor
-import io.split.client.thin.http.RequestCategory
-import io.split.client.thin.http.RetryableHttpClient
-import kotlinx.coroutines.runBlocking
 import java.io.BufferedReader
-import java.io.InputStreamReader
 import java.net.URI
 
 class StreamingTransportImpl(
-    private val httpClient: RetryableHttpClient
+    private val httpClient: HttpClient
 ) : StreamingTransport {
 
     override fun connect(uri: URI): StreamingTransport.StreamingConnection {
@@ -23,44 +19,35 @@ class StreamingTransportImpl(
         private val uri: URI
     ) : StreamingTransport.StreamingConnection {
 
-        private var response: HttpResponse? = null
+        private var streamRequest: HttpStreamRequest? = null
 
         override fun execute(): StreamingTransport.StreamingResponse {
-            val request = HttpRequestDescriptor(
-                uri = uri,
-                method = HttpMethod.GET,
-                body = null,
-                headers = mapOf("Accept" to "text/event-stream")
-            )
-
-            response = runBlocking {
-                httpClient.execute(request, RequestCategory.SSE)
-            }
-            return StreamingResponseImpl(response!!)
+            val request = httpClient.streamRequest(uri)
+            request.addHeader("Accept", "text/event-stream")
+            streamRequest = request
+            val response = request.execute()
+            return StreamingResponseImpl(response)
         }
 
         override fun close() {
-            // HttpResponse doesn't have close method, cleanup handled by response itself
+            streamRequest?.close()
         }
     }
 
     private class StreamingResponseImpl(
-        private val httpResponse: HttpResponse
+        private val httpStreamResponse: HttpStreamResponse
     ) : StreamingTransport.StreamingResponse {
 
-        override fun isSuccess(): Boolean = httpResponse.isSuccess()
+        override fun isSuccess(): Boolean = httpStreamResponse.isSuccess()
 
-        override fun getHttpStatus(): Int = httpResponse.getHttpStatus()
+        override fun getHttpStatus(): Int = httpStreamResponse.getHttpStatus()
 
-        override fun isClientRelatedError(): Boolean = httpResponse.isClientRelatedError()
+        override fun isClientRelatedError(): Boolean = httpStreamResponse.isClientRelatedError()
 
-        override fun getBufferedReader(): BufferedReader? {
-            val data = httpResponse.getData() ?: return null
-            return BufferedReader(InputStreamReader(data.byteInputStream()))
-        }
+        override fun getBufferedReader(): BufferedReader? = httpStreamResponse.getBufferedReader()
 
         override fun close() {
-            // HttpResponse doesn't have close method, cleanup handled internally
+            httpStreamResponse.close()
         }
     }
 }
