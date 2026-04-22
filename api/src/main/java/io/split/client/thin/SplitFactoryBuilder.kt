@@ -54,6 +54,7 @@ import io.split.client.thin.internal.streaming.StreamingToken
 import io.split.client.thin.internal.streaming.createStreamingComponents
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 
 // TODO: move these constants
@@ -157,8 +158,8 @@ object SplitFactoryBuilder {
             submitter = httpEventsSubmitter,
             batchSize = EVENTS_BATCH_SIZE
         )
-        val eventsContext = factoryScope.coroutineContext + Dispatchers.IO.limitedParallelism(1)
-        val eventsScope = CoroutineScope(eventsContext)
+        val eventsJob = SupervisorJob(parent = factoryScope.coroutineContext[Job])
+        val eventsScope = CoroutineScope(eventsJob + Dispatchers.IO.limitedParallelism(1))
         val taskExecutor = CoroutineSplitTaskExecutor(eventsScope)
         // Safe: both EventsStorage and PersistentEventsStorage implement StoragePusher<TrackerEvent>;
         // the declared type is RecorderStorage<TrackerEvent> but the runtime type always implements both.
