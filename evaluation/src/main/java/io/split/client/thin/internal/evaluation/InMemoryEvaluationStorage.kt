@@ -5,12 +5,13 @@ import java.util.concurrent.ConcurrentHashMap
 
 class InMemoryEvaluationStorage(
     private val cacheLoader: EvaluationCacheLoader? = null,
-    private val onCacheLoaded: (evalKey: EvaluationKey) -> Unit = {},
+    private val onCacheLoaded: (evalKey: EvaluationKey, lastUpdateTimestamp: Long?) -> Unit = { _, _ -> },
 ) : EvaluationReadStorage, EvaluationWriteStorage, PersistenceBackedStorage {
 
     private class KeyEvaluations {
         @Volatile var evaluations: Map<String, StoredEvaluation> = emptyMap()
         @Volatile var changeNumber: Long = -1L
+        @Volatile var lastUpdateTimestamp: Long? = null
     }
 
     private val store = ConcurrentHashMap<EvaluationKey, KeyEvaluations>()
@@ -19,9 +20,12 @@ class InMemoryEvaluationStorage(
     override suspend fun ensureCacheLoaded(evalKey: EvaluationKey) {
         if (!loadedKeys.add(evalKey)) return
         try {
-            cacheLoader?.loadLocal(evalKey)?.let { cached ->
-                upsert(cached)
-                onCacheLoaded(evalKey)
+            cacheLoader?.loadLocal(evalKey)?.let { result ->
+                upsert(result.change)
+                result.lastUpdateTimestamp?.let { ts ->
+                    store[evalKey]?.lastUpdateTimestamp = ts
+                }
+                onCacheLoaded(evalKey, result.lastUpdateTimestamp)
             }
         } catch (e: Throwable) {
             loadedKeys.remove(evalKey)
@@ -49,6 +53,10 @@ class InMemoryEvaluationStorage(
 
     override fun lastChangeNumber(evalKey: EvaluationKey): Long {
         return store[evalKey]?.changeNumber ?: -1L
+    }
+
+    override fun lastUpdateTimestamp(evalKey: EvaluationKey): Long? {
+        return store[evalKey]?.lastUpdateTimestamp
     }
 
     override fun upsert(change: EvaluationChange): UpsertResult {

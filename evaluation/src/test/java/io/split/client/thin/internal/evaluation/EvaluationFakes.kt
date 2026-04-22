@@ -83,6 +83,8 @@ class FakeEvaluationReadStorage(
     override fun lastChangeNumber(evalKey: EvaluationKey): Long =
         changeNumbers[evalKey] ?: -1L
 
+    override fun lastUpdateTimestamp(evalKey: EvaluationKey): Long? = null
+
     fun store(flag: String, evalKey: EvaluationKey, stored: StoredEvaluation) {
         storedEvaluations[flag to evalKey] = stored
     }

@@ -262,10 +262,10 @@ class InMemoryEvaluationStorageTest {
     fun `ensureCacheLoaded retries after loadLocal failure`() = runTest {
         var callCount = 0
         val cacheLoader = object : EvaluationCacheLoader {
-            override suspend fun loadLocal(evalKey: EvaluationKey): EvaluationChange? {
+            override suspend fun loadLocal(evalKey: EvaluationKey): CacheLoadResult? {
                 callCount++
                 if (callCount == 1) throw RuntimeException("Load failed")
-                return change(key1, 10L, storedEval("flag-loaded", "on"))
+                return CacheLoadResult(change(key1, 10L, storedEval("flag-loaded", "on")), null)
             }
 
             override fun persistAsync(evalKey: EvaluationKey, changeNumber: Long, evaluations: List<StoredEvaluation>) {}
@@ -293,7 +293,7 @@ class InMemoryEvaluationStorageTest {
         val callbackCalls = mutableListOf<EvaluationKey>()
         val storageWithLoader = InMemoryEvaluationStorage(
             cacheLoader = cacheLoader,
-            onCacheLoaded = { evalKey -> callbackCalls.add(evalKey) }
+            onCacheLoaded = { evalKey, _ -> callbackCalls.add(evalKey) }
         )
 
         storageWithLoader.ensureCacheLoaded(key1)
@@ -308,7 +308,7 @@ class InMemoryEvaluationStorageTest {
         val callbackCalls = mutableListOf<EvaluationKey>()
         val storageWithLoader = InMemoryEvaluationStorage(
             cacheLoader = cacheLoader,
-            onCacheLoaded = { evalKey -> callbackCalls.add(evalKey) }
+            onCacheLoaded = { evalKey, _ -> callbackCalls.add(evalKey) }
         )
 
         storageWithLoader.ensureCacheLoaded(key1)
@@ -385,7 +385,7 @@ class InMemoryEvaluationStorageTest {
         val callbackCalls = mutableListOf<EvaluationKey>()
         val storageWithLoader = InMemoryEvaluationStorage(
             cacheLoader = cacheLoader,
-            onCacheLoaded = { evalKey -> callbackCalls.add(evalKey) }
+            onCacheLoaded = { evalKey, _ -> callbackCalls.add(evalKey) }
         )
 
         storageWithLoader.ensureCacheLoaded(key1)
@@ -393,13 +393,42 @@ class InMemoryEvaluationStorageTest {
 
         assertEquals(1, callbackCalls.size) // Should only fire once
     }
+
+    // --- lastUpdateTimestamp ---
+
+    @Test
+    fun `lastUpdateTimestamp returns null before any load`() {
+        assertNull(storage.lastUpdateTimestamp(key1))
+    }
+
+    @Test
+    fun `lastUpdateTimestamp returns stored timestamp after cache load`() = runTest {
+        val storedTs = 12345678L
+        val cached = change(key1, 10L, storedEval("flag-cached", "on"))
+        val cacheLoader = FakeCacheLoaderWithTimestamp(onLoad = { CacheLoadResult(cached, storedTs) })
+        val storageWithLoader = InMemoryEvaluationStorage(cacheLoader)
+
+        storageWithLoader.ensureCacheLoaded(key1)
+
+        assertEquals(storedTs, storageWithLoader.lastUpdateTimestamp(key1))
+    }
 }
 
 private class FakeCacheLoader(
     private val onLoad: suspend (EvaluationKey) -> EvaluationChange? = { null },
     private val onPersist: (EvaluationKey, Long, List<StoredEvaluation>) -> Unit = { _, _, _ -> },
 ) : EvaluationCacheLoader {
-    override suspend fun loadLocal(evalKey: EvaluationKey): EvaluationChange? = onLoad(evalKey)
+    override suspend fun loadLocal(evalKey: EvaluationKey): CacheLoadResult? =
+        onLoad(evalKey)?.let { CacheLoadResult(it, null) }
+    override fun persistAsync(evalKey: EvaluationKey, changeNumber: Long, evaluations: List<StoredEvaluation>) =
+        onPersist(evalKey, changeNumber, evaluations)
+}
+
+private class FakeCacheLoaderWithTimestamp(
+    private val onLoad: suspend (EvaluationKey) -> CacheLoadResult? = { null },
+    private val onPersist: (EvaluationKey, Long, List<StoredEvaluation>) -> Unit = { _, _, _ -> },
+) : EvaluationCacheLoader {
+    override suspend fun loadLocal(evalKey: EvaluationKey): CacheLoadResult? = onLoad(evalKey)
     override fun persistAsync(evalKey: EvaluationKey, changeNumber: Long, evaluations: List<StoredEvaluation>) =
         onPersist(evalKey, changeNumber, evaluations)
 }

@@ -7,7 +7,8 @@ data class SerializedEvaluation(
 
 data class PersistentEvaluationData(
     val changeNumber: Long,
-    val evaluations: List<String>
+    val evaluations: List<String>,
+    val lastUpdateTimestamp: Long? = null
 )
 
 interface PersistentEvaluationStorage {

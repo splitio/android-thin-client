@@ -6,10 +6,10 @@ import androidx.room.Database;
 import androidx.room.Room;
 import androidx.room.RoomDatabase;
 
-import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
 
-@Database(entities = {EvaluationEntity.class, EventEntity.class, AttributesEntity.class, GeneralPropertiesEntity.class}, version = 2, exportSchema = false)
+@Database(entities = {EvaluationEntity.class, EventEntity.class, AttributesEntity.class, GeneralPropertiesEntity.class}, version = 3, exportSchema = false)
 public abstract class ThinClientDatabase extends RoomDatabase {
 
     public abstract EvaluationDao evaluationDao();
@@ -17,7 +17,7 @@ public abstract class ThinClientDatabase extends RoomDatabase {
     public abstract AttributesDao attributesDao();
     public abstract GeneralPropertiesDao generalPropertiesDao();
 
-    private static final Map<String, ThinClientDatabase> INSTANCES = new HashMap<>();
+    private static final Map<String, ThinClientDatabase> INSTANCES = new ConcurrentHashMap<>();
 
     static String buildDatabaseName(String prefix, String sdkKey) {
         String prefixPart = (prefix != null && !prefix.isEmpty()) ? prefix : "";
