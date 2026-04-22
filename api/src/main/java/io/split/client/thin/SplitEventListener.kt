@@ -31,27 +31,35 @@ package io.split.client.thin
  */
 open class SplitEventListener {
 
-    open fun onReady(client: SplitClient, metadata: SdkReadyMetadata) {
+    open fun onReady(client: SplitClient, metadata: SdkReadyMetadata?) {
         // not implemented by default
     }
 
-    open fun onReadyView(client: SplitClient, metadata: SdkReadyMetadata) {
+    open fun onReadyView(client: SplitClient, metadata: SdkReadyMetadata?) {
         // not implemented by default
     }
 
-    open fun onUpdate(client: SplitClient, metadata: SdkUpdateMetadata) {
+    open fun onUpdate(client: SplitClient, metadata: SdkUpdateMetadata?) {
         // not implemented by default
     }
 
-    open fun onReadyFromCache(client: SplitClient, metadata: SdkReadyMetadata) {
+    open fun onReadyFromCache(client: SplitClient, metadata: SdkReadyMetadata?) {
         // not implemented by default
     }
 
-    open fun onUpdateView(client: SplitClient, metadata: SdkUpdateMetadata) {
+    open fun onUpdateView(client: SplitClient, metadata: SdkUpdateMetadata?) {
         // not implemented by default
     }
 
-    open fun onReadyFromCacheView(client: SplitClient, metadata: SdkReadyMetadata) {
+    open fun onReadyFromCacheView(client: SplitClient, metadata: SdkReadyMetadata?) {
+        // not implemented by default
+    }
+
+    open fun onTimeout(client: SplitClient) {
+        // not implemented by default
+    }
+
+    open fun onTimeoutView(client: SplitClient) {
         // not implemented by default
     }
 }

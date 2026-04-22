@@ -1,14 +1,14 @@
 package io.split.client.thin.http
 
 import io.split.android.client.backoff.BackoffCounter
-import io.split.android.client.network.HttpClient
-import io.split.android.client.network.HttpException
-import io.split.android.client.network.HttpResponse
+import io.split.client.thin.http.contracts.HttpClient
+import io.split.client.thin.http.contracts.HttpException
+import io.split.client.thin.http.contracts.HttpResponse
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 
-internal class DefaultRetryableHttpClient(
+class DefaultRetryableHttpClient(
     private val httpClient: HttpClient,
     private val policiesByCategory: Map<RequestCategory, CategoryRetryPolicies>,
     private val backoffFactory: (backoffBaseSeconds: Int) -> BackoffCounter,
@@ -35,7 +35,7 @@ internal class DefaultRetryableHttpClient(
             try {
                 onHttpRequestStarted(request, category)
                 val response = buildRequest(request).execute()
-                if (response.isSuccess) {
+                if (response.isSuccess || response.httpStatus == HTTP_NOT_MODIFIED) {
                     onHttpRequestSucceeded(response, category)
                     return response
                 }
@@ -115,6 +115,7 @@ internal class DefaultRetryableHttpClient(
 
     companion object {
         private const val SSL_ERROR_STATUS_CODE = 9009 // 9009 = NON_RETRYABLE_STATUS_CODE from HttpRequestImpl
+        private const val HTTP_NOT_MODIFIED = 304
         private const val MILLIS_PER_SECOND = 1000L
 
         private val NO_RETRY_POLICY = RetryPolicy(maxAttempts = 1, backoffBaseSeconds = 0)

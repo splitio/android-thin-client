@@ -7,13 +7,14 @@ interface EvaluationRepository {
     fun getTreatment(evalKey: EvaluationKey, flag: String): StoredEvaluation?
     fun getTreatments(evalKey: EvaluationKey, flags: Set<String>): Map<String, StoredEvaluation>
     fun getTreatmentsByFlagSets(evalKey: EvaluationKey, flagSets: Set<String>): Map<String, StoredEvaluation>
-    suspend fun setTarget(target: Target, filters: EvaluationFilters?)
+    suspend fun setTarget(target: Target, filters: EvaluationFilters?, isInitialization: Boolean = false)
     fun getFlagNames(evalKey: EvaluationKey): Set<String>
 }
 
 class DefaultEvaluationRepository(
     private val readStorage: EvaluationReadStorage,
     private val fetchCoordinator: EvaluationFetchCoordinator,
+    private val persistenceBackedStorage: PersistenceBackedStorage? = null,
 ) : EvaluationRepository {
 
     override fun getTreatment(evalKey: EvaluationKey, flag: String): StoredEvaluation? {
@@ -28,9 +29,11 @@ class DefaultEvaluationRepository(
         return readStorage.getByFlagSets(flagSets, evalKey)
     }
 
-    override suspend fun setTarget(target: Target, filters: EvaluationFilters?) {
+    override suspend fun setTarget(target: Target, filters: EvaluationFilters?, isInitialization: Boolean) {
         val evalKey = target.toEvaluationKey()
-        fetchCoordinator.fetchIfNeeded(evalKey, filters, FetchReason.TARGET_SWITCH)
+        persistenceBackedStorage?.ensureCacheLoaded(evalKey)
+        val reason = if (isInitialization) FetchReason.INITIALIZATION else FetchReason.TARGET_SWITCH
+        fetchCoordinator.fetchIfNeeded(evalKey, filters, reason)
     }
 
     override fun getFlagNames(evalKey: EvaluationKey): Set<String> {

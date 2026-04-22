@@ -122,14 +122,14 @@ class DefaultStreamingManagerTest {
         var notificationCount = 0
         val manager = createManager(
             eventSourceClientProvider = { eventSourceClient },
-            onEvaluationFetchNotification = { notificationCount++ }
+            onEvaluationFetchNotification = { _ -> notificationCount++ }
         )
 
         manager.start()
         advanceUntilIdle()
 
         eventSourceClient.simulateMessage(
-            mapOf("data" to """{"channel":"evaluations","data":"{\"type\":\"EVALUATION_UPDATE\",\"changeNumber\":123}","timestamp":1000}""")
+            mapOf("data" to """{"channel":"evaluations","data":"{\"type\":\"EVALUATIONS_UPDATE\",\"changeNumber\":123}","timestamp":1000}""")
         )
         advanceUntilIdle()
 
@@ -141,7 +141,7 @@ class DefaultStreamingManagerTest {
         tokenProvider: suspend () -> StreamingToken = { StreamingToken("test-token") },
         eventSourceClientProvider: () -> FakeEventSourceClient = { FakeEventSourceClient() },
         onOccupancyZero: suspend () -> Unit = {},
-        onEvaluationFetchNotification: suspend () -> Unit = {},
+        onEvaluationFetchNotification: suspend (EvaluationUpdateNotification?) -> Unit = {},
     ): DefaultStreamingManager = DefaultStreamingManager(
         streamingUrl = "https://streaming.test.io/sse",
         tokenProvider = tokenProvider,
@@ -151,5 +151,6 @@ class DefaultStreamingManagerTest {
         connectionDispatcher = UnconfinedTestDispatcher(testScheduler),
         onOccupancyZero = onOccupancyZero,
         onEvaluationFetchNotification = onEvaluationFetchNotification,
+        observer = FakeCompositeObserver(),
     )
 }
