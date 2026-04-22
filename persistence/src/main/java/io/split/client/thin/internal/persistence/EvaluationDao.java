@@ -9,7 +9,7 @@ import androidx.room.Transaction;
 import java.util.List;
 
 @Dao
-public interface EvaluationDao {
+interface EvaluationDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     void insert(List<EvaluationEntity> entities);
@@ -23,9 +23,4 @@ public interface EvaluationDao {
     @Query("DELETE FROM evaluations")
     void deleteAll();
 
-    @Transaction
-    default void replaceForKey(String keyHash, List<EvaluationEntity> entities) {
-        deleteByKeyHash(keyHash);
-        insert(entities);
-    }
 }

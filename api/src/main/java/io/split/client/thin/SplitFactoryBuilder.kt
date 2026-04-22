@@ -22,7 +22,8 @@ import io.split.client.thin.internal.persistence.ObserverEventsPersistenceCallba
 import io.split.client.thin.internal.persistence.domain.PersistenceConfig
 import io.split.client.thin.internal.persistence.domain.createPersistenceDomainComponents
 import io.split.client.thin.http.RetryableHttpClient
-import io.split.client.thin.http.createRetryableHttpClient
+import io.split.client.thin.internal.createRetryableHttpClient
+import io.split.client.thin.internal.http.HttpClientAdapter
 import io.split.client.thin.internal.AsyncBridge
 import io.split.client.thin.internal.DefaultClientFactory
 import io.split.client.thin.internal.DefaultClientManager
@@ -53,6 +54,7 @@ import io.split.client.thin.internal.streaming.StreamingToken
 import io.split.client.thin.internal.streaming.createStreamingComponents
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 
 // TODO: move these constants
@@ -90,7 +92,8 @@ object SplitFactoryBuilder {
         config: SplitClientConfig? = null,
         configChangeDetectorFactory: ((Boolean) -> Boolean)? = null,
     ): SplitFactory {
-        val httpClient = HttpClientImpl.Builder().build()
+        val androidHttpClient = HttpClientImpl.Builder().build()
+        val httpClient = HttpClientAdapter(androidHttpClient)
         val compositeObserver = DefaultCompositeObserver()
         compositeObserver.register(LoggerObserver(AndroidLoggerAdapter()))
         val retryableHttpClient = createRetryableHttpClient(httpClient, compositeObserver)
@@ -139,6 +142,12 @@ object SplitFactoryBuilder {
             secureHttpClient = secureHttpClient,
             compositeObserver = compositeObserver,
             cacheLoader = persistenceComponents.evaluationPersistenceManager,
+            cacheLoadedPayloadBuilder = { _, lastUpdateTimestamp ->
+                buildCacheLoadedPayload(lastUpdateTimestamp)
+            },
+            evaluationsUpdatedPayloadBuilder = { _, reason, changedFlagNames, isCacheLoaded ->
+                buildEvaluationsUpdatedPayload(reason, changedFlagNames, isCacheLoaded)
+            },
         )
 
         // Event tracking components
@@ -149,8 +158,8 @@ object SplitFactoryBuilder {
             submitter = httpEventsSubmitter,
             batchSize = EVENTS_BATCH_SIZE
         )
-        val eventsContext = factoryScope.coroutineContext + Dispatchers.IO.limitedParallelism(1)
-        val eventsScope = CoroutineScope(eventsContext)
+        val eventsJob = SupervisorJob(parent = factoryScope.coroutineContext[Job])
+        val eventsScope = CoroutineScope(eventsJob + Dispatchers.IO.limitedParallelism(1))
         val taskExecutor = CoroutineSplitTaskExecutor(eventsScope)
         // Safe: both EventsStorage and PersistentEventsStorage implement StoragePusher<TrackerEvent>;
         // the declared type is RecorderStorage<TrackerEvent> but the runtime type always implements both.
@@ -241,7 +250,7 @@ object SplitFactoryBuilder {
         createAndRegisterStreaming(
             syncMode = syncMode,
             streamingUrl = endpoints?.streamingUrl ?: DEFAULT_STREAMING_URL,
-            httpClient = httpClient,
+            httpClient = androidHttpClient,
             tokenProvider = {
                 val cred = authProvider.credential()
                 StreamingToken(cred.token, cred.connDelaySeconds, cred.pushEnabled)
@@ -311,6 +320,19 @@ object SplitFactoryBuilder {
         }
     }
 
+}
+
+internal fun buildCacheLoadedPayload(lastUpdateTimestamp: Long?): SdkReadyMetadata =
+    SdkReadyMetadata(isInitialCacheLoad = false, lastUpdateTimestamp = lastUpdateTimestamp)
+
+internal fun buildEvaluationsUpdatedPayload(
+    reason: FetchReason,
+    changedFlagNames: List<String>,
+    isCacheLoaded: Boolean,
+): Any? = when (reason) {
+    FetchReason.INITIALIZATION -> SdkReadyMetadata(isInitialCacheLoad = !isCacheLoaded, lastUpdateTimestamp = null)
+    else -> if (changedFlagNames.isEmpty()) null
+    else SdkUpdateMetadata(type = SdkUpdateMetadata.Type.FLAGS_UPDATE, names = changedFlagNames)
 }
 
 internal fun buildDelayProvider(

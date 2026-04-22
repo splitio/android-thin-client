@@ -17,13 +17,14 @@ internal class EventManagerObserver(
             val eventKey = event.properties["matchingKey"] ?: return
             if (eventKey != matchingKey) return
         }
-        eventsManager.notifyInternalEvent(internalEvent, null)
+        eventsManager.notifyInternalEvent(internalEvent, event.payload)
     }
 
     companion object {
         private val KEY_SCOPED_EVENTS = setOf(
             ObservableEventType.EVAL_STORAGE_UPDATED,
             ObservableEventType.EVALUATIONS_UPDATED,
+            ObservableEventType.EVAL_LOADED_FROM_STORAGE,
         )
         private val EVENT_TYPE_MAP = mapOf(
             ObservableEventType.EVAL_STORAGE_UPDATED to SdkInternalEvent.EVALUATIONS_SYNC_COMPLETE,
