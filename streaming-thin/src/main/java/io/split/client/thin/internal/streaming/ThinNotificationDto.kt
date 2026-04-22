@@ -15,7 +15,10 @@ internal data class RawThinNotificationDto(
 @Serializable
 internal data class EvaluationUpdateDataDto(
     @SerialName("type") val type: String,
-    @SerialName("changeNumber") val changeNumber: Long
+    @SerialName("changeNumber") val changeNumber: Long,
+    @SerialName("i") val updateIntervalMs: Long? = null,
+    @SerialName("s") val algorithmSeed: Int? = null,
+    @SerialName("h") val hashingAlgorithm: Int? = null
 )
 
 @Serializable

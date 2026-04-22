@@ -1,15 +1,37 @@
 package io.split.client.thin.internal.evaluation
 
+import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 
-class InMemoryEvaluationStorage : EvaluationReadStorage, EvaluationWriteStorage {
+class InMemoryEvaluationStorage(
+    private val cacheLoader: EvaluationCacheLoader? = null,
+    private val onCacheLoaded: (evalKey: EvaluationKey, lastUpdateTimestamp: Long?) -> Unit = { _, _ -> },
+) : EvaluationReadStorage, EvaluationWriteStorage, PersistenceBackedStorage {
 
     private class KeyEvaluations {
         @Volatile var evaluations: Map<String, StoredEvaluation> = emptyMap()
         @Volatile var changeNumber: Long = -1L
+        @Volatile var lastUpdateTimestamp: Long? = null
     }
 
     private val store = ConcurrentHashMap<EvaluationKey, KeyEvaluations>()
+    private val loadedKeys: MutableSet<EvaluationKey> = Collections.newSetFromMap(ConcurrentHashMap())
+
+    override suspend fun ensureCacheLoaded(evalKey: EvaluationKey) {
+        if (!loadedKeys.add(evalKey)) return
+        try {
+            cacheLoader?.loadLocal(evalKey)?.let { result ->
+                upsert(result.change)
+                result.lastUpdateTimestamp?.let { ts ->
+                    store[evalKey]?.lastUpdateTimestamp = ts
+                }
+                onCacheLoaded(evalKey, result.lastUpdateTimestamp)
+            }
+        } catch (e: Throwable) {
+            loadedKeys.remove(evalKey)
+            throw e
+        }
+    }
 
     override fun get(flag: String, evalKey: EvaluationKey): StoredEvaluation? {
         return store[evalKey]?.evaluations?.get(flag)
@@ -33,16 +55,38 @@ class InMemoryEvaluationStorage : EvaluationReadStorage, EvaluationWriteStorage 
         return store[evalKey]?.changeNumber ?: -1L
     }
 
-    override fun upsert(change: EvaluationChange): Boolean {
+    override fun lastUpdateTimestamp(evalKey: EvaluationKey): Long? {
+        return store[evalKey]?.lastUpdateTimestamp
+    }
+
+    override fun upsert(change: EvaluationChange): UpsertResult {
         val keyEvals = store.getOrPut(change.evaluationKey) { KeyEvaluations() }
         synchronized(keyEvals) {
-            val incomingFlagNames = change.evaluations.map { it.result.flag }.toSet()
+            val incomingByFlag = change.evaluations.associateBy { it.result.flag }
+            val incomingFlagNames = incomingByFlag.keys
             val shouldUpdate = change.changeNumber > keyEvals.changeNumber ||
                     incomingFlagNames != keyEvals.evaluations.keys
-            if (!shouldUpdate) return false
-            keyEvals.evaluations = change.evaluations.associateBy { it.result.flag }
+            if (!shouldUpdate) return UpsertResult(updated = false, emptyList())
+
+            val changedFlagNames = LinkedHashSet<String>()
+            for (flag in incomingFlagNames) {
+                if (!keyEvals.evaluations.containsKey(flag)) changedFlagNames.add(flag)
+            }
+            for (flag in keyEvals.evaluations.keys) {
+                if (!incomingFlagNames.contains(flag)) changedFlagNames.add(flag)
+            }
+            for (flag in incomingFlagNames) {
+                val current = keyEvals.evaluations[flag] ?: continue
+                val incoming = incomingByFlag[flag] ?: continue
+                if (incoming.result.changeNumber != current.result.changeNumber) {
+                    changedFlagNames.add(flag)
+                }
+            }
+
+            keyEvals.evaluations = incomingByFlag
             keyEvals.changeNumber = change.changeNumber
-            return true
+            cacheLoader?.persistAsync(change.evaluationKey, change.changeNumber, change.evaluations)
+            return UpsertResult(updated = true, changedFlagNames.toList())
         }
     }
 

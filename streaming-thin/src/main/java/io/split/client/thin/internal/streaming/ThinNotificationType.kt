@@ -1,6 +1,6 @@
 package io.split.client.thin.internal.streaming
 
-internal enum class ThinNotificationType {
+enum class ThinNotificationType {
     EVALUATION_UPDATE,
     CONTROL,
     OCCUPANCY,
