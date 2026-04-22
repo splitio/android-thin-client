@@ -1,0 +1,85 @@
+/**
+ * Apply to any pure-JVM module ({@code java-library} + {@code kotlin("jvm")}) that is included
+ * in an AGP fused-library via {@code include(project(":my-module"))}.
+ *
+ * <h2>Problem</h2>
+ *
+ * The AGP fused-library plugin's internal {@code mergingArtifactSOURCES_JAR} task resolves
+ * sources from every included project by requesting a variant with Android-specific Gradle
+ * attributes:
+ * <ul>
+ *   <li>{@code com.android.build.api.attributes.BuildTypeAttr}  = {@code debug} | {@code release}
+ *   <li>{@code org.gradle.category}                             = {@code documentation}
+ *   <li>{@code org.gradle.docstype}                             = {@code sources}
+ *   <li>{@code org.gradle.jvm.environment}                      = {@code android}
+ *   <li>{@code org.jetbrains.kotlin.platform.type}              = {@code androidJvm}
+ * </ul>
+ *
+ * Pure JVM modules expose only {@code standard-jvm} variants, so resolution fails with
+ * "No matching variant found" — even though the classes merge fine.
+ *
+ * <h2>Solution</h2>
+ *
+ * Registers two synthetic outgoing configurations ({@code debugSourcesElements} and
+ * {@code releaseSourcesElements}) carrying the expected Android attributes, backed by the regular
+ * {@code sourcesJar} task. No Android toolchain is involved in compilation; only variant metadata
+ * is affected.
+ *
+ * <h2>Usage</h2>
+ *
+ * The calling module must produce a {@code sourcesJar} task via {@code java { withSourcesJar() }}
+ * before applying this script.
+ *
+ * <pre>
+ * // my-module/build.gradle.kts
+ * java {
+ *     withSourcesJar()
+ * }
+ * apply(from = rootProject.file("gradle/jvm-android-sources-compat.gradle"))
+ * </pre>
+ */
+
+import org.gradle.api.attributes.Attribute
+import org.gradle.api.attributes.Category
+import org.gradle.api.attributes.DocsType
+import org.gradle.api.attributes.java.TargetJvmEnvironment
+
+afterEvaluate {
+    // Guard against applying to Android library modules
+    if (plugins.hasPlugin("com.android.library")) {
+        throw new GradleException(
+            "jvm-android-sources-compat.gradle must only be applied to pure JVM modules, " +
+            "not Android library modules (which already expose Android source variants)"
+        )
+    }
+
+    // AGP and Kotlin Gradle plugin types are not on the script compilation classpath, but are
+    // reachable through the project's buildscript classloader (inherited from the root project)
+    // at runtime. We reconstruct their Attribute keys via Attribute.of() using the same name
+    // and type they use internally, which is sufficient for Gradle's variant matching.
+    def cl = project.buildscript.classLoader
+
+    def buildTypeAttrClass = cl.loadClass("com.android.build.api.attributes.BuildTypeAttr")
+    def buildTypeAttrKey = Attribute.of("com.android.build.api.attributes.BuildTypeAttr", buildTypeAttrClass)
+
+    def kotlinPlatformTypeClass = cl.loadClass("org.jetbrains.kotlin.gradle.plugin.KotlinPlatformType")
+    def kotlinPlatformTypeKey = Attribute.of("org.jetbrains.kotlin.platform.type", kotlinPlatformTypeClass)
+    def androidJvm = kotlinPlatformTypeClass.enumConstants.find { it.name() == "androidJvm" }
+
+    def sourcesJarTask = tasks.named("sourcesJar")
+
+    ["debug", "release"].each { buildType ->
+        configurations.create("${buildType}SourcesElements") {
+            canBeConsumed = true
+            canBeResolved = false
+            attributes {
+                attribute(buildTypeAttrKey, objects.named(buildTypeAttrClass, buildType))
+                attribute(Category.CATEGORY_ATTRIBUTE, objects.named(Category, Category.DOCUMENTATION))
+                attribute(DocsType.DOCS_TYPE_ATTRIBUTE, objects.named(DocsType, DocsType.SOURCES))
+                attribute(TargetJvmEnvironment.TARGET_JVM_ENVIRONMENT_ATTRIBUTE, objects.named(TargetJvmEnvironment, "android"))
+                attribute(kotlinPlatformTypeKey, androidJvm)
+            }
+            outgoing.artifact(sourcesJarTask)
+        }
+    }
+}

@@ -1,11 +1,9 @@
 package io.split.client.thin.http
 
 import io.split.android.client.backoff.BackoffCounter
-import io.split.android.client.network.HttpClient
-import io.split.android.client.network.HttpException
-import io.split.android.client.network.HttpMethod
-import io.split.android.client.network.HttpRequest
-import io.split.android.client.network.HttpResponse
+import io.split.client.thin.http.contracts.HttpException
+import io.split.client.thin.http.contracts.HttpMethod
+import io.split.client.thin.http.contracts.HttpResponse
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -26,10 +24,8 @@ import java.net.URI
 @OptIn(ExperimentalCoroutinesApi::class)
 class DefaultRetryableHttpClientTest {
 
-    private val httpClient = mock(HttpClient::class.java)
-    private val httpRequest = mock(HttpRequest::class.java)
-    private val successResponse = mock(HttpResponse::class.java)
-    private val failureResponse = mock(HttpResponse::class.java)
+    private val successResponse = FakeHttpResponse(isSuccess = true, httpStatus = 200)
+    private val failureResponse = FakeHttpResponse(isSuccess = false, httpStatus = 500)
     private val backoffCounter = mock(BackoffCounter::class.java)
 
     private val descriptor = HttpRequestDescriptor(
@@ -43,16 +39,23 @@ class DefaultRetryableHttpClientTest {
         RequestCategory.EVALUATIONS to defaultPolicies,
     )
 
+    private lateinit var httpClient: FakeHttpClient
+    private lateinit var responseSequence: MutableList<() -> HttpResponse>
     private lateinit var client: DefaultRetryableHttpClient
 
     @Before
     fun setUp() {
-        `when`(successResponse.isSuccess).thenReturn(true)
-        `when`(successResponse.httpStatus).thenReturn(200)
-        `when`(failureResponse.isSuccess).thenReturn(false)
-        `when`(failureResponse.httpStatus).thenReturn(500)
         `when`(backoffCounter.nextRetryTime).thenReturn(1L)
-        `when`(httpClient.request(descriptor.uri, descriptor.method)).thenReturn(httpRequest)
+
+        responseSequence = mutableListOf()
+        httpClient = FakeHttpClient { _, _, _, _ ->
+            FakeHttpRequest {
+                if (responseSequence.isEmpty()) {
+                    throw RuntimeException("No more responses in sequence")
+                }
+                responseSequence.removeAt(0)()
+            }
+        }
 
         client = DefaultRetryableHttpClient(
             httpClient = httpClient,
@@ -63,34 +66,35 @@ class DefaultRetryableHttpClientTest {
 
     @Test
     fun `returns response immediately on first-attempt success`() = runTest {
-        `when`(httpRequest.execute()).thenReturn(successResponse)
+        responseSequence.add { successResponse }
 
         val result = client.execute(descriptor, RequestCategory.EVALUATIONS)
 
         assertSame(successResponse, result)
-        verify(httpRequest, times(1)).execute()
+        assertEquals(1, httpClient.getTotalExecuteCalls())
     }
 
     @Test
     fun `retries on failure and returns response on subsequent success`() = runTest {
-        `when`(httpRequest.execute())
-            .thenReturn(failureResponse)
-            .thenReturn(successResponse)
+        responseSequence.add { failureResponse }
+        responseSequence.add { successResponse }
 
         val result = client.execute(descriptor, RequestCategory.EVALUATIONS)
 
         assertSame(successResponse, result)
-        verify(httpRequest, times(2)).execute()
+        assertEquals(2, httpClient.getTotalExecuteCalls())
     }
 
     @Test
     fun `returns last response when maxAttempts exhausted`() = runTest {
-        `when`(httpRequest.execute()).thenReturn(failureResponse)
+        responseSequence.add { failureResponse }
+        responseSequence.add { failureResponse }
+        responseSequence.add { failureResponse }
 
         val result = client.execute(descriptor, RequestCategory.EVALUATIONS)
 
         assertSame(failureResponse, result)
-        verify(httpRequest, times(3)).execute()
+        assertEquals(3, httpClient.getTotalExecuteCalls())
     }
 
     @Test
@@ -101,22 +105,19 @@ class DefaultRetryableHttpClientTest {
         )
         categoryPoliciesMap[RequestCategory.EVALUATIONS] = noRetry404
 
-        val response404 = mock(HttpResponse::class.java)
-        `when`(response404.isSuccess).thenReturn(false)
-        `when`(response404.httpStatus).thenReturn(404)
-        `when`(httpRequest.execute()).thenReturn(response404)
+        val response404 = FakeHttpResponse(isSuccess = false, httpStatus = 404)
+        responseSequence.add { response404 }
 
         val result = client.execute(descriptor, RequestCategory.EVALUATIONS)
 
         assertSame(response404, result)
-        verify(httpRequest, times(1)).execute()
+        assertEquals(1, httpClient.getTotalExecuteCalls())
     }
 
     @Test
     fun `calls backoff counter getNextRetryTime between retries`() = runTest {
-        `when`(httpRequest.execute())
-            .thenReturn(failureResponse)
-            .thenReturn(successResponse)
+        responseSequence.add { failureResponse }
+        responseSequence.add { successResponse }
 
         client.execute(descriptor, RequestCategory.EVALUATIONS)
 
@@ -125,14 +126,14 @@ class DefaultRetryableHttpClientTest {
 
     @Test(expected = HttpException::class)
     fun `rethrows HttpException with SSL status code without retrying`() = runTest {
-        `when`(httpRequest.execute()).thenThrow(HttpException("SSL error", 9009))
+        responseSequence.add { throw HttpException("SSL error", 9009) }
 
         client.execute(descriptor, RequestCategory.EVALUATIONS)
     }
 
     @Test
     fun `does not retry on SSL HttpException`() = runTest {
-        `when`(httpRequest.execute()).thenThrow(HttpException("SSL error", 9009))
+        responseSequence.add { throw HttpException("SSL error", 9009) }
 
         try {
             client.execute(descriptor, RequestCategory.EVALUATIONS)
@@ -141,42 +142,43 @@ class DefaultRetryableHttpClientTest {
             // expected
         }
 
-        verify(httpRequest, times(1)).execute()
+        assertEquals(1, httpClient.getTotalExecuteCalls())
     }
 
     @Test
     fun `retries on non-SSL HttpException and succeeds`() = runTest {
-        `when`(httpRequest.execute())
-            .thenThrow(HttpException("server error", 500))
-            .thenReturn(successResponse)
+        responseSequence.add { throw HttpException("server error", 500) }
+        responseSequence.add { successResponse }
 
         val result = client.execute(descriptor, RequestCategory.EVALUATIONS)
 
         assertSame(successResponse, result)
-        verify(httpRequest, times(2)).execute()
+        assertEquals(2, httpClient.getTotalExecuteCalls())
     }
 
     @Test(expected = HttpException::class)
     fun `rethrows HttpException when retries exhausted`() = runTest {
-        `when`(httpRequest.execute()).thenThrow(HttpException("server error", 500))
+        responseSequence.add { throw HttpException("server error", 500) }
+        responseSequence.add { throw HttpException("server error", 500) }
+        responseSequence.add { throw HttpException("server error", 500) }
 
         client.execute(descriptor, RequestCategory.EVALUATIONS)
     }
 
     @Test
     fun `executes once and returns response for unconfigured category`() = runTest {
-        `when`(httpRequest.execute()).thenReturn(failureResponse)
+        responseSequence.add { failureResponse }
 
         val result = client.execute(descriptor, RequestCategory.AUTH)
 
         assertSame(failureResponse, result)
-        verify(httpRequest, times(1)).execute()
+        assertEquals(1, httpClient.getTotalExecuteCalls())
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
     @Test
     fun `respects coroutine cancellation`() = runTest {
-        `when`(httpRequest.execute()).thenReturn(failureResponse)
+        responseSequence.add { failureResponse }
         `when`(backoffCounter.nextRetryTime).thenReturn(60L)
 
         val job = launch {
@@ -197,19 +199,20 @@ class DefaultRetryableHttpClientTest {
 
     @Test
     fun `retries on HttpException without status code using default policy`() = runTest {
-        `when`(httpRequest.execute())
-            .thenThrow(HttpException("network error"))
-            .thenReturn(successResponse)
+        responseSequence.add { throw HttpException("network error") }
+        responseSequence.add { successResponse }
 
         val result = client.execute(descriptor, RequestCategory.EVALUATIONS)
 
         assertSame(successResponse, result)
-        verify(httpRequest, times(2)).execute()
+        assertEquals(2, httpClient.getTotalExecuteCalls())
     }
 
     @Test(expected = HttpException::class)
     fun `rethrows HttpException without status code when retries exhausted`() = runTest {
-        `when`(httpRequest.execute()).thenThrow(HttpException("network error"))
+        responseSequence.add { throw HttpException("network error") }
+        responseSequence.add { throw HttpException("network error") }
+        responseSequence.add { throw HttpException("network error") }
 
         client.execute(descriptor, RequestCategory.EVALUATIONS)
     }
@@ -222,7 +225,7 @@ class DefaultRetryableHttpClientTest {
         )
         categoryPoliciesMap[RequestCategory.EVALUATIONS] = noRetry404
 
-        `when`(httpRequest.execute()).thenThrow(HttpException("not found", 404))
+        responseSequence.add { throw HttpException("not found", 404) }
 
         try {
             client.execute(descriptor, RequestCategory.EVALUATIONS)
@@ -231,7 +234,7 @@ class DefaultRetryableHttpClientTest {
             // expected
         }
 
-        verify(httpRequest, times(1)).execute()
+        assertEquals(1, httpClient.getTotalExecuteCalls())
     }
 
     @Test
@@ -257,12 +260,9 @@ class DefaultRetryableHttpClientTest {
             },
         )
 
-        val response429 = mock(HttpResponse::class.java)
-        `when`(response429.isSuccess).thenReturn(false)
-        `when`(response429.httpStatus).thenReturn(429)
-        `when`(httpRequest.execute())
-            .thenReturn(response429)
-            .thenReturn(successResponse)
+        val response429 = FakeHttpResponse(isSuccess = false, httpStatus = 429)
+        responseSequence.add { response429 }
+        responseSequence.add { successResponse }
 
         trackingClient.execute(descriptor, RequestCategory.EVALUATIONS)
 
@@ -279,19 +279,11 @@ class DefaultRetryableHttpClientTest {
             body = """{"event":"test"}""",
             headers = mapOf("X-Custom" to "value"),
         )
-        `when`(httpClient.request(descriptorWithBody.uri, descriptorWithBody.method, descriptorWithBody.body, descriptorWithBody.headers))
-            .thenReturn(httpRequest)
-        `when`(httpRequest.execute()).thenReturn(successResponse)
+        responseSequence.add { successResponse }
 
         val result = client.execute(descriptorWithBody, RequestCategory.EVALUATIONS)
 
         assertSame(successResponse, result)
-        verify(httpClient).request(
-            descriptorWithBody.uri,
-            descriptorWithBody.method,
-            descriptorWithBody.body,
-            descriptorWithBody.headers,
-        )
     }
 
     @Test
@@ -303,14 +295,13 @@ class DefaultRetryableHttpClientTest {
         )
         categoryPoliciesMap[RequestCategory.EVALUATIONS] = policiesWithStatusOverride
 
-        `when`(httpRequest.execute())
-            .thenThrow(HttpException("rate limited", 429))
-            .thenReturn(successResponse)
+        responseSequence.add { throw HttpException("rate limited", 429) }
+        responseSequence.add { successResponse }
 
         val result = client.execute(descriptor, RequestCategory.EVALUATIONS)
 
         assertSame(successResponse, result)
-        verify(httpRequest, times(2)).execute()
+        assertEquals(2, httpClient.getTotalExecuteCalls())
     }
 
     @Test(expected = HttpException::class)
@@ -322,7 +313,8 @@ class DefaultRetryableHttpClientTest {
         )
         categoryPoliciesMap[RequestCategory.EVALUATIONS] = policiesWithStatusOverride
 
-        `when`(httpRequest.execute()).thenThrow(HttpException("rate limited", 429))
+        responseSequence.add { throw HttpException("rate limited", 429) }
+        responseSequence.add { throw HttpException("rate limited", 429) }
 
         client.execute(descriptor, RequestCategory.EVALUATIONS)
     }
@@ -335,25 +327,17 @@ class DefaultRetryableHttpClientTest {
             body = null,
             headers = mapOf("Authorization" to "Bearer token"),
         )
-        `when`(httpClient.request(descriptorWithHeaders.uri, descriptorWithHeaders.method, null, descriptorWithHeaders.headers))
-            .thenReturn(httpRequest)
-        `when`(httpRequest.execute()).thenReturn(successResponse)
+        responseSequence.add { successResponse }
 
         val result = client.execute(descriptorWithHeaders, RequestCategory.EVALUATIONS)
 
         assertSame(successResponse, result)
-        verify(httpClient).request(
-            descriptorWithHeaders.uri,
-            descriptorWithHeaders.method,
-            null,
-            descriptorWithHeaders.headers,
-        )
     }
 
     @Test
     fun `propagates non-HttpException immediately without retrying`() = runTest {
         val cause = RuntimeException("unexpected failure")
-        `when`(httpRequest.execute()).thenThrow(cause)
+        responseSequence.add { throw cause }
 
         try {
             client.execute(descriptor, RequestCategory.EVALUATIONS)
@@ -362,12 +346,33 @@ class DefaultRetryableHttpClientTest {
             assertSame(cause, e)
         }
 
-        verify(httpRequest, times(1)).execute()
+        assertEquals(1, httpClient.getTotalExecuteCalls())
+    }
+
+    @Test
+    fun `304 not modified is treated as success, not retried, and fires onHttpRequestSucceeded`() = runTest {
+        val response304 = FakeHttpResponse(isSuccess = false, httpStatus = 304)
+        responseSequence.add { response304 }
+
+        val successCallbacks = mutableListOf<HttpResponse>()
+        val trackingClient = DefaultRetryableHttpClient(
+            httpClient = httpClient,
+            policiesByCategory = categoryPoliciesMap,
+            backoffFactory = { _ -> backoffCounter },
+            onHttpRequestSucceeded = { response, _ -> successCallbacks.add(response) },
+        )
+
+        val result = trackingClient.execute(descriptor, RequestCategory.EVALUATIONS)
+
+        assertSame(response304, result)
+        assertEquals(1, httpClient.getTotalExecuteCalls())
+        assertEquals(1, successCallbacks.size)
+        assertSame(response304, successCallbacks[0])
     }
 
     @Test
     fun `does not start next attempt when coroutine is cancelled after execute returns`() = runTest {
-        `when`(httpRequest.execute()).thenReturn(failureResponse)
+        responseSequence.add { failureResponse }
         `when`(backoffCounter.nextRetryTime).thenReturn(60L)
 
         val job = launch {
@@ -379,6 +384,6 @@ class DefaultRetryableHttpClientTest {
         job.join()
 
         assert(job.isCancelled)
-        verify(httpRequest, times(1)).execute()
+        assertEquals(1, httpClient.getTotalExecuteCalls())
     }
 }

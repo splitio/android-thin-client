@@ -70,22 +70,63 @@ class DefaultEvaluationProviderTest {
 
         val result = provider.fetch(evalKey, null, -1L)
 
-        assertEquals(42L, result.changeNumber)
+        assertEquals(42L, result!!.changeNumber)
         assertEquals(1, result.evaluations.size)
         assertEquals("my-flag", result.evaluations[0].result.flag)
         assertEquals("on", result.evaluations[0].result.treatment)
     }
 
-    @Test(expected = IllegalStateException::class)
-    fun `throws on null body`() = runTest {
-        val (provider, _) = makeProvider(responseBody = null)
-        provider.fetch(EvaluationKey(Key("user-1")), null, -1L)
+    @Test
+    fun `returns null on 304 not modified`() = runTest {
+        val (provider, _) = makeProvider(statusCode = 304)
+        val result = provider.fetch(EvaluationKey(Key("user-1")), null, -1L)
+        assertEquals(null, result)
     }
 
-    @Test(expected = IllegalStateException::class)
-    fun `throws on empty body`() = runTest {
+    @Test
+    fun `returns null on null body without throwing`() = runTest {
+        val (provider, _) = makeProvider(responseBody = null)
+        val result = provider.fetch(EvaluationKey(Key("user-1")), null, -1L)
+        assertEquals(null, result)
+    }
+
+    @Test
+    fun `returns null on empty body without throwing`() = runTest {
         val (provider, _) = makeProvider(responseBody = "")
-        provider.fetch(EvaluationKey(Key("user-1")), null, -1L)
+        val result = provider.fetch(EvaluationKey(Key("user-1")), null, -1L)
+        assertEquals(null, result)
+    }
+
+    @Test
+    fun `invokes onEmptyResponseBody callback on empty body`() = runTest {
+        val httpClient = FakeSecureHttpClient(responseBody = "", statusCode = 200)
+        val callbackKeys = mutableListOf<EvaluationKey>()
+        val provider = DefaultEvaluationProvider(
+            secureHttpClient = httpClient,
+            deserializer = JsonEvaluationResponseDeserializer(),
+            onEmptyResponseBody = { callbackKeys.add(it) },
+        )
+        val evalKey = EvaluationKey(Key("user-1"))
+
+        provider.fetch(evalKey, null, -1L)
+
+        assertEquals(listOf(evalKey), callbackKeys)
+    }
+
+    @Test
+    fun `invokes onEmptyResponseBody callback on null body`() = runTest {
+        val httpClient = FakeSecureHttpClient(responseBody = null, statusCode = 200)
+        val callbackKeys = mutableListOf<EvaluationKey>()
+        val provider = DefaultEvaluationProvider(
+            secureHttpClient = httpClient,
+            deserializer = JsonEvaluationResponseDeserializer(),
+            onEmptyResponseBody = { callbackKeys.add(it) },
+        )
+        val evalKey = EvaluationKey(Key("user-1"))
+
+        provider.fetch(evalKey, null, -1L)
+
+        assertEquals(listOf(evalKey), callbackKeys)
     }
 }
 
