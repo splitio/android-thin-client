@@ -10,8 +10,12 @@ import androidx.annotation.Nullable;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+
+import io.split.client.thin.e2e.MockSplitServer;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -42,6 +46,45 @@ public class ConsumerJavaAndroidTest {
 
     private Context context() {
         return InstrumentationRegistry.getInstrumentation().getTargetContext();
+    }
+
+    private MockSplitServer server;
+
+    @Before
+    public void setUp() {
+        server = new MockSplitServer();
+    }
+
+    @After
+    public void tearDown() {
+        server.shutdown();
+    }
+
+    private SplitClientConfig mockConfig() {
+        return new SplitClientConfig.Builder()
+                .sync(new SplitClientConfig.SyncConfig.Builder()
+                        .mode(SplitClientConfig.SyncMode.POLLING)
+                        .serviceEndpoints(new SplitClientConfig.ServiceEndpoints(
+                                server.url("/api"),
+                                server.url("/api/v2/evaluations"),
+                                server.url("/api/v1/events/bulk"),
+                                server.url("/api/v1/metrics/config"),
+                                null
+                        ))
+                        .build())
+                .storage(new SplitClientConfig.StorageConfig.Builder()
+                        .prefix("consumer_java_test")
+                        .build())
+                .build();
+    }
+
+    private SplitFactory buildFactory(String sdkKey, String userKey) {
+        return SplitFactoryBuilder.build(
+                context(),
+                new SdkKey(sdkKey),
+                new Target(new Key(userKey), "user"),
+                mockConfig()
+        );
     }
 
     /**
@@ -81,7 +124,7 @@ public class ConsumerJavaAndroidTest {
         SdkKey sdkKey = new SdkKey("test-sdk-key");
         Target target = new Target(new Key("user-1"), "user");
 
-        SplitFactory factory = SplitFactoryBuilder.build(context(), sdkKey, target);
+        SplitFactory factory = SplitFactoryBuilder.build(context(), sdkKey, target, mockConfig());
         assertNotNull(factory);
 
         SplitClient client = factory.getClient(null);
@@ -101,7 +144,7 @@ public class ConsumerJavaAndroidTest {
      */
     @Test
     public void factoryBuilderWithConfig() {
-        SplitClientConfig config = new SplitClientConfig.Builder().build();
+        SplitClientConfig config = mockConfig();
         SplitFactory factory = SplitFactoryBuilder.build(
                 context(),
                 new SdkKey("key"),
@@ -118,11 +161,7 @@ public class ConsumerJavaAndroidTest {
      */
     @Test
     public void clientEvaluation() {
-        SplitFactory factory = SplitFactoryBuilder.build(
-                context(),
-                new SdkKey("key"),
-                new Target(new Key("user"), "user")
-        );
+        SplitFactory factory = buildFactory("key", "user");
         SplitClient client = factory.getClient(null);
 
         EvaluationResult result = client.getTreatment("my-flag", null);
@@ -146,11 +185,7 @@ public class ConsumerJavaAndroidTest {
      */
     @Test
     public void managerFlagNames() {
-        SplitFactory factory = SplitFactoryBuilder.build(
-                context(),
-                new SdkKey("key"),
-                new Target(new Key("user"), "user")
-        );
+        SplitFactory factory = buildFactory("key", "user");
         SplitManager manager = factory.getManager();
         List<String> names = manager.getFlagNames();
         assertNotNull(names);
@@ -252,11 +287,7 @@ public class ConsumerJavaAndroidTest {
         // TODO: fully test once MockWebServer is set up — verify that registered callbacks
         //  (onReady, onReadyFromCache, onUpdate) are actually invoked when the server delivers
         //  the corresponding events.
-        SplitFactory factory = SplitFactoryBuilder.build(
-                context(),
-                new SdkKey("key"),
-                new Target(new Key("user"), "user")
-        );
+        SplitFactory factory = buildFactory("key", "user");
         SplitClient client = factory.getClient(null);
         SplitEventListener listener = new SplitEventListener() {
             @Override
@@ -357,11 +388,7 @@ public class ConsumerJavaAndroidTest {
      */
     @Test
     public void trackMethodVariants() {
-        SplitClient client = SplitFactoryBuilder.build(
-                context(),
-                new SdkKey("key"),
-                new Target(new Key("user"), "user")
-        ).getClient(null);
+        SplitClient client = buildFactory("key", "user").getClient(null);
 
         client.track("purchase", null, null);
         client.track("purchase", 9.99, null);
@@ -379,11 +406,7 @@ public class ConsumerJavaAndroidTest {
     @SuppressWarnings("deprecation")
     @Test
     public void clientDestroy() {
-        SplitClient client = SplitFactoryBuilder.build(
-                context(),
-                new SdkKey("key"),
-                new Target(new Key("user"), "user")
-        ).getClient(null);
+        SplitClient client = buildFactory("key", "user").getClient(null);
 
         client.destroyAsync(error -> {
             // no-op
@@ -398,11 +421,7 @@ public class ConsumerJavaAndroidTest {
     @SuppressWarnings("deprecation")
     @Test
     public void clientFlush() {
-        SplitClient client = SplitFactoryBuilder.build(
-                context(),
-                new SdkKey("key"),
-                new Target(new Key("user"), "user")
-        ).getClient(null);
+        SplitClient client = buildFactory("key", "user").getClient(null);
 
         client.flushAsync(error -> {
             // no-op
@@ -417,11 +436,7 @@ public class ConsumerJavaAndroidTest {
     @SuppressWarnings("deprecation")
     @Test
     public void factoryDestroy() {
-        SplitFactory factory = SplitFactoryBuilder.build(
-                context(),
-                new SdkKey("key"),
-                new Target(new Key("user"), "user")
-        );
+        SplitFactory factory = buildFactory("key", "user");
 
         factory.destroyAsync(error -> {
             // no-op
@@ -480,7 +495,7 @@ public class ConsumerJavaAndroidTest {
     public void eventListenerViewCallbacks() {
         SplitEventListener listener = new SplitEventListener() {
             @Override
-            public void onReadyView(SplitClient client, SdkReadyMetadata metadata) {
+            public void onReadyView(SplitClient client, @Nullable SdkReadyMetadata metadata) {
                 // no-op
             }
 
@@ -490,7 +505,7 @@ public class ConsumerJavaAndroidTest {
             }
 
             @Override
-            public void onReadyFromCacheView(SplitClient client, SdkReadyMetadata metadata) {
+            public void onReadyFromCacheView(SplitClient client, @Nullable SdkReadyMetadata metadata) {
                 // no-op
             }
         };
