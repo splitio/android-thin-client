@@ -27,8 +27,6 @@ android {
 }
 
 dependencies {
-    api(project(":http"))
-    api(project(":observer"))
     implementation(project(":backoff"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 

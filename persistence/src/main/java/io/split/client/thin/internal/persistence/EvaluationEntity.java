@@ -4,7 +4,7 @@ import androidx.annotation.NonNull;
 import androidx.room.Entity;
 
 @Entity(tableName = "evaluations", primaryKeys = {"keyHash", "flagName"})
-public class EvaluationEntity {
+class EvaluationEntity {
     @NonNull
     public final String keyHash;
     @NonNull

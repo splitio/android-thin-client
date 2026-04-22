@@ -1,6 +1,11 @@
-package io.split.client.thin.http
+package io.split.client.thin.internal
 
 import io.split.android.client.backoff.ExponentialBackoffCounter
+import io.split.client.thin.http.CategoryRetryPolicies
+import io.split.client.thin.http.DefaultRetryableHttpClient
+import io.split.client.thin.http.RequestCategory
+import io.split.client.thin.http.RetryPolicy
+import io.split.client.thin.http.RetryableHttpClient
 import io.split.client.thin.http.contracts.HttpClient
 import io.split.client.thin.internal.observer.CompositeObserver
 import io.split.client.thin.internal.observer.ObservableEvent

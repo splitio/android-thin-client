@@ -8,7 +8,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 
-internal class DefaultRetryableHttpClient(
+class DefaultRetryableHttpClient(
     private val httpClient: HttpClient,
     private val policiesByCategory: Map<RequestCategory, CategoryRetryPolicies>,
     private val backoffFactory: (backoffBaseSeconds: Int) -> BackoffCounter,

@@ -19,7 +19,7 @@ class RoomEvaluationPersistence(
                 return@runInTransaction
             }
 
-            result = PersistentEvaluationData(attrs.changeNumber, entities.map { it.evalJson })
+            result = PersistentEvaluationData(attrs.changeNumber, entities.map { it.evalJson }, attrs.lastUpdateTimestamp)
         }
         return result
     }
@@ -37,12 +37,13 @@ class RoomEvaluationPersistence(
                 return@runInTransaction
             }
 
-            attributesDao.insert(AttributesEntity(keyHash, attrHash, changeNumber))
+            attributesDao.insert(AttributesEntity(keyHash, attrHash, changeNumber, System.currentTimeMillis()))
 
             val entities = evaluations.map { serialized ->
                 EvaluationEntity(keyHash, serialized.flagName, serialized.json)
             }
-            evaluationDao.replaceForKey(keyHash, entities)
+            evaluationDao.deleteByKeyHash(keyHash)
+            evaluationDao.insert(entities)
         }
     }
 
