@@ -101,6 +101,207 @@ class RetryableHttpClientFactoryTest {
         assertTrue(capturedEvents.any { it.type == ObservableEventType.HTTP_RETRY_EXHAUSTED })
     }
 
+    // -------------------------------------------------------------------------
+    // Behavioral retry tests — request count per status code and category
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `HTTP 401 results in exactly 1 request for EVALUATIONS category`() = runTest {
+        val httpClient = CountingFakeHttpClient(401)
+        val client = createRetryableHttpClient(httpClient, fakeObserver)
+
+        client.execute(
+            HttpRequestDescriptor(URI.create("https://api.split.io"), HttpMethod.GET),
+            RequestCategory.EVALUATIONS
+        )
+
+        assertEquals(1, httpClient.requestCount)
+    }
+
+    @Test
+    fun `HTTP 403 results in exactly 1 request for EVALUATIONS category`() = runTest {
+        val httpClient = CountingFakeHttpClient(403)
+        val client = createRetryableHttpClient(httpClient, fakeObserver)
+
+        client.execute(
+            HttpRequestDescriptor(URI.create("https://api.split.io"), HttpMethod.GET),
+            RequestCategory.EVALUATIONS
+        )
+
+        assertEquals(1, httpClient.requestCount)
+    }
+
+    @Test
+    fun `HTTP 404 results in exactly 1 request for EVALUATIONS category`() = runTest {
+        val httpClient = CountingFakeHttpClient(404)
+        val client = createRetryableHttpClient(httpClient, fakeObserver)
+
+        client.execute(
+            HttpRequestDescriptor(URI.create("https://api.split.io"), HttpMethod.GET),
+            RequestCategory.EVALUATIONS
+        )
+
+        assertEquals(1, httpClient.requestCount)
+    }
+
+    @Test
+    fun `HTTP 429 results in exactly 1 request for EVALUATIONS category`() = runTest {
+        val httpClient = CountingFakeHttpClient(429)
+        val client = createRetryableHttpClient(httpClient, fakeObserver)
+
+        client.execute(
+            HttpRequestDescriptor(URI.create("https://api.split.io"), HttpMethod.GET),
+            RequestCategory.EVALUATIONS
+        )
+
+        assertEquals(1, httpClient.requestCount)
+    }
+
+    @Test
+    fun `HTTP 401 results in exactly 1 request for EVENTS category`() = runTest {
+        val httpClient = CountingFakeHttpClient(401)
+        val client = createRetryableHttpClient(httpClient, fakeObserver)
+
+        client.execute(
+            HttpRequestDescriptor(URI.create("https://api.split.io"), HttpMethod.POST),
+            RequestCategory.EVENTS
+        )
+
+        assertEquals(1, httpClient.requestCount)
+    }
+
+    @Test
+    fun `HTTP 403 results in exactly 1 request for EVENTS category`() = runTest {
+        val httpClient = CountingFakeHttpClient(403)
+        val client = createRetryableHttpClient(httpClient, fakeObserver)
+
+        client.execute(
+            HttpRequestDescriptor(URI.create("https://api.split.io"), HttpMethod.POST),
+            RequestCategory.EVENTS
+        )
+
+        assertEquals(1, httpClient.requestCount)
+    }
+
+    @Test
+    fun `HTTP 404 results in exactly 1 request for EVENTS category`() = runTest {
+        val httpClient = CountingFakeHttpClient(404)
+        val client = createRetryableHttpClient(httpClient, fakeObserver)
+
+        client.execute(
+            HttpRequestDescriptor(URI.create("https://api.split.io"), HttpMethod.POST),
+            RequestCategory.EVENTS
+        )
+
+        assertEquals(1, httpClient.requestCount)
+    }
+
+    @Test
+    fun `HTTP 429 results in exactly 1 request for EVENTS category`() = runTest {
+        val httpClient = CountingFakeHttpClient(429)
+        val client = createRetryableHttpClient(httpClient, fakeObserver)
+
+        client.execute(
+            HttpRequestDescriptor(URI.create("https://api.split.io"), HttpMethod.POST),
+            RequestCategory.EVENTS
+        )
+
+        assertEquals(1, httpClient.requestCount)
+    }
+
+    @Test
+    fun `HTTP 401 results in exactly 1 request for TELEMETRY category`() = runTest {
+        val httpClient = CountingFakeHttpClient(401)
+        val client = createRetryableHttpClient(httpClient, fakeObserver)
+
+        client.execute(
+            HttpRequestDescriptor(URI.create("https://api.split.io"), HttpMethod.POST),
+            RequestCategory.TELEMETRY
+        )
+
+        assertEquals(1, httpClient.requestCount)
+    }
+
+    @Test
+    fun `HTTP 403 results in exactly 1 request for TELEMETRY category`() = runTest {
+        val httpClient = CountingFakeHttpClient(403)
+        val client = createRetryableHttpClient(httpClient, fakeObserver)
+
+        client.execute(
+            HttpRequestDescriptor(URI.create("https://api.split.io"), HttpMethod.POST),
+            RequestCategory.TELEMETRY
+        )
+
+        assertEquals(1, httpClient.requestCount)
+    }
+
+    @Test
+    fun `HTTP 404 results in exactly 1 request for TELEMETRY category`() = runTest {
+        val httpClient = CountingFakeHttpClient(404)
+        val client = createRetryableHttpClient(httpClient, fakeObserver)
+
+        client.execute(
+            HttpRequestDescriptor(URI.create("https://api.split.io"), HttpMethod.POST),
+            RequestCategory.TELEMETRY
+        )
+
+        assertEquals(1, httpClient.requestCount)
+    }
+
+    @Test
+    fun `HTTP 429 results in exactly 1 request for TELEMETRY category`() = runTest {
+        val httpClient = CountingFakeHttpClient(429)
+        val client = createRetryableHttpClient(httpClient, fakeObserver)
+
+        client.execute(
+            HttpRequestDescriptor(URI.create("https://api.split.io"), HttpMethod.POST),
+            RequestCategory.TELEMETRY
+        )
+
+        assertEquals(1, httpClient.requestCount)
+    }
+
+    @Test
+    fun `HTTP 500 retries up to defaultPolicy maxAttempts for EVALUATIONS category`() = runTest {
+        // defaultPolicy has maxAttempts = 3; shouldRetry passes for attempts 1 and 2,
+        // fails on attempt 3 → total of 3 requests made
+        val httpClient = CountingFakeHttpClient(500)
+        val client = createRetryableHttpClient(httpClient, fakeObserver)
+
+        client.execute(
+            HttpRequestDescriptor(URI.create("https://api.split.io"), HttpMethod.GET),
+            RequestCategory.EVALUATIONS
+        )
+
+        assertEquals(3, httpClient.requestCount)
+    }
+
+    @Test
+    fun `HTTP 500 retries up to defaultPolicy maxAttempts for EVENTS category`() = runTest {
+        val httpClient = CountingFakeHttpClient(500)
+        val client = createRetryableHttpClient(httpClient, fakeObserver)
+
+        client.execute(
+            HttpRequestDescriptor(URI.create("https://api.split.io"), HttpMethod.POST),
+            RequestCategory.EVENTS
+        )
+
+        assertEquals(3, httpClient.requestCount)
+    }
+
+    @Test
+    fun `HTTP 500 retries up to defaultPolicy maxAttempts for TELEMETRY category`() = runTest {
+        val httpClient = CountingFakeHttpClient(500)
+        val client = createRetryableHttpClient(httpClient, fakeObserver)
+
+        client.execute(
+            HttpRequestDescriptor(URI.create("https://api.split.io"), HttpMethod.POST),
+            RequestCategory.TELEMETRY
+        )
+
+        assertEquals(3, httpClient.requestCount)
+    }
+
     private class FakeHttpClient(private val statusCode: Int, private val thenStatusCode: Int? = null) : HttpClient {
         private var callCount = 0
         override fun request(uri: URI, method: HttpMethod): HttpRequest {
@@ -108,6 +309,21 @@ class RetryableHttpClientFactoryTest {
             return FakeHttpRequest(code)
         }
         override fun request(uri: URI, method: HttpMethod, body: String?, headers: Map<String, String>): HttpRequest = FakeHttpRequest(statusCode)
+    }
+
+    private class CountingFakeHttpClient(private val statusCode: Int) : HttpClient {
+        var requestCount = 0
+            private set
+
+        override fun request(uri: URI, method: HttpMethod): HttpRequest {
+            requestCount++
+            return FakeHttpRequest(statusCode)
+        }
+
+        override fun request(uri: URI, method: HttpMethod, body: String?, headers: Map<String, String>): HttpRequest {
+            requestCount++
+            return FakeHttpRequest(statusCode)
+        }
     }
 
     private class FakeHttpRequest(private val statusCode: Int) : HttpRequest {

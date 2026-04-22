@@ -42,7 +42,8 @@ class RoomEvaluationPersistence(
             val entities = evaluations.map { serialized ->
                 EvaluationEntity(keyHash, serialized.flagName, serialized.json)
             }
-            evaluationDao.replaceForKey(keyHash, entities)
+            evaluationDao.deleteByKeyHash(keyHash)
+            evaluationDao.insert(entities)
         }
     }
 
