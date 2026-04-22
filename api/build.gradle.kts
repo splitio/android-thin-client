@@ -8,8 +8,9 @@ plugins {
 
 android {
     namespace = "io.split.client.thin"
-    compileSdk {
-        version = release(36)
+
+    buildFeatures {
+        buildConfig = true
     }
 
     defaultConfig {
@@ -20,8 +21,10 @@ android {
     buildTypes {
         debug {
             enableUnitTestCoverage = true
+            buildConfigField("int", "MIN_EVALUATION_REFRESH_RATE", "1")
         }
         release {
+            buildConfigField("int", "MIN_EVALUATION_REFRESH_RATE", "60")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -55,9 +58,11 @@ dependencies {
     implementation(project(":streaming-thin"))
     implementation(project(":streaming"))
     implementation(project(":backoff"))
+    implementation(project(":http"))
     implementation(project(":retryable-http-client"))
     implementation(project(":auth"))
     implementation(project(":observer"))
+    implementation(project(":persistence-domain"))
     implementation(project(":events"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("androidx.lifecycle:lifecycle-process:2.5.1")

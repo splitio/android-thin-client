@@ -19,6 +19,9 @@ public interface EventDao {
     @Delete
     void delete(List<EventEntity> entities);
 
+    @Query("DELETE FROM events WHERE id IN (:ids)")
+    void deleteByIds(List<Long> ids);
+
     @Query("DELETE FROM events")
     void deleteAll();
 

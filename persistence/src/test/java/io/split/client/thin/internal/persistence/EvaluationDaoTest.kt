@@ -36,99 +36,96 @@ class EvaluationDaoTest {
     @Test
     fun `insert single entity`() {
         val entity = EvaluationEntity(
-            "user1",
+            "keyHash1",
             "feature_flag",
-            """{"treatment":"on"}""",
-            System.currentTimeMillis()
+            """{"treatment":"on"}"""
         )
 
         dao.insert(listOf(entity))
 
-        val results = dao.getByKey("user1")
+        val results = dao.getByKey("keyHash1")
         assertEquals(1, results.size)
-        assertEquals("user1", results[0].key)
+        assertEquals("keyHash1", results[0].keyHash)
         assertEquals("feature_flag", results[0].flagName)
-        assertEquals("""{"treatment":"on"}""", results[0].body)
+        assertEquals("""{"treatment":"on"}""", results[0].evalJson)
     }
 
     @Test
-    fun `insert multiple entities for same key`() {
+    fun `insert multiple entities for same keyHash`() {
         val entities = listOf(
-            EvaluationEntity("user1", "flag1", """{"treatment":"on"}""", System.currentTimeMillis()),
-            EvaluationEntity("user1", "flag2", """{"treatment":"off"}""", System.currentTimeMillis()),
-            EvaluationEntity("user1", "flag3", """{"treatment":"control"}""", System.currentTimeMillis())
+            EvaluationEntity("keyHash1", "flag1", """{"treatment":"on"}"""),
+            EvaluationEntity("keyHash1", "flag2", """{"treatment":"off"}"""),
+            EvaluationEntity("keyHash1", "flag3", """{"treatment":"control"}""")
         )
 
         dao.insert(entities)
 
-        val results = dao.getByKey("user1")
+        val results = dao.getByKey("keyHash1")
         assertEquals(3, results.size)
         assertEquals(setOf("flag1", "flag2", "flag3"), results.map { it.flagName }.toSet())
     }
 
     @Test
     fun `insert with REPLACE on conflict`() {
-        val entity1 = EvaluationEntity("user1", "flag1", """{"treatment":"on"}""", System.currentTimeMillis())
+        val entity1 = EvaluationEntity("keyHash1", "flag1", """{"treatment":"on"}""")
         dao.insert(listOf(entity1))
 
-        val entity2 = EvaluationEntity("user1", "flag1", """{"treatment":"off"}""", System.currentTimeMillis() + 1000)
+        val entity2 = EvaluationEntity("keyHash1", "flag1", """{"treatment":"off"}""")
         dao.insert(listOf(entity2))
 
-        val results = dao.getByKey("user1")
+        val results = dao.getByKey("keyHash1")
         assertEquals(1, results.size)
-        assertEquals("""{"treatment":"off"}""", results[0].body)
+        assertEquals("""{"treatment":"off"}""", results[0].evalJson)
     }
 
     @Test
-    fun `getByKey returns empty list when key does not exist`() {
+    fun `getByKey returns empty list when no match`() {
         val results = dao.getByKey("nonexistent")
         assertTrue(results.isEmpty())
     }
 
     @Test
-    fun `getByKey only returns entities for requested key`() {
+    fun `getByKey only returns entities for matching keyHash`() {
         dao.insert(listOf(
-            EvaluationEntity("user1", "flag1", """{"treatment":"on"}""", System.currentTimeMillis()),
-            EvaluationEntity("user2", "flag1", """{"treatment":"off"}""", System.currentTimeMillis())
+            EvaluationEntity("keyHash1", "flag1", """{"treatment":"on"}"""),
+            EvaluationEntity("keyHash2", "flag1", """{"treatment":"control"}""")
         ))
 
-        val results = dao.getByKey("user1")
+        val results = dao.getByKey("keyHash1")
         assertEquals(1, results.size)
-        assertEquals("user1", results[0].key)
+        assertEquals("keyHash1", results[0].keyHash)
     }
 
     @Test
-    fun `deleteByKey removes all entities for key`() {
+    fun `deleteByKeyHash removes all rows for keyHash`() {
         dao.insert(listOf(
-            EvaluationEntity("user1", "flag1", """{"treatment":"on"}""", System.currentTimeMillis()),
-            EvaluationEntity("user1", "flag2", """{"treatment":"off"}""", System.currentTimeMillis()),
-            EvaluationEntity("user2", "flag1", """{"treatment":"control"}""", System.currentTimeMillis())
+            EvaluationEntity("keyHash1", "flag1", """{"treatment":"on"}"""),
+            EvaluationEntity("keyHash1", "flag2", """{"treatment":"off"}"""),
+            EvaluationEntity("keyHash2", "flag1", """{"treatment":"control"}""")
         ))
 
-        dao.deleteByKey("user1")
+        dao.deleteByKeyHash("keyHash1")
 
-        val user1Results = dao.getByKey("user1")
-        assertTrue(user1Results.isEmpty())
-
-        val user2Results = dao.getByKey("user2")
-        assertEquals(1, user2Results.size)
+        assertTrue(dao.getByKey("keyHash1").isEmpty())
+        assertEquals(1, dao.getByKey("keyHash2").size)
     }
 
     @Test
     fun `replaceForKey is atomic transaction`() {
         dao.insert(listOf(
-            EvaluationEntity("user1", "flag1", """{"treatment":"on"}""", System.currentTimeMillis()),
-            EvaluationEntity("user1", "flag2", """{"treatment":"off"}""", System.currentTimeMillis())
+            EvaluationEntity("keyHash1", "flag1", """{"treatment":"on"}"""),
+            EvaluationEntity("keyHash1", "flag2", """{"treatment":"off"}""")
         ))
 
         val newEntities = listOf(
-            EvaluationEntity("user1", "flag3", """{"treatment":"control"}""", System.currentTimeMillis()),
-            EvaluationEntity("user1", "flag4", """{"treatment":"on"}""", System.currentTimeMillis())
+            EvaluationEntity("keyHash1", "flag3", """{"treatment":"control"}"""),
+            EvaluationEntity("keyHash1", "flag4", """{"treatment":"on"}""")
         )
 
-        dao.replaceForKey("user1", newEntities)
+        dao.deleteByKeyHash("keyHash1")
+        dao.insert(newEntities)
 
-        val results = dao.getByKey("user1")
+        val results = dao.getByKey("keyHash1")
         assertEquals(2, results.size)
         assertEquals(setOf("flag3", "flag4"), results.map { it.flagName }.toSet())
     }

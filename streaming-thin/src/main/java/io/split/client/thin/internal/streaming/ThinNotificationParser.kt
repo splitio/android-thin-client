@@ -25,7 +25,7 @@ internal class ThinNotificationParser(
     fun parse(raw: RawThinNotification): ThinNotification? {
         return try {
             when {
-                raw.data.contains("\"type\":\"EVALUATION_UPDATE\"") -> parseEvaluationUpdate(raw)
+                raw.data.contains("\"type\":\"EVALUATIONS_UPDATE\"") -> parseEvaluationUpdate(raw)
                 raw.data.contains("\"type\":\"CONTROL\"") -> parseControl(raw)
                 raw.data.contains("\"type\":\"ERROR\"") -> parseError(raw)
                 else -> parseOccupancy(raw)
@@ -39,7 +39,14 @@ internal class ThinNotificationParser(
     private fun parseEvaluationUpdate(raw: RawThinNotification): EvaluationUpdateNotification? {
         return try {
             val dto = json.decodeFromString<EvaluationUpdateDataDto>(raw.data)
-            EvaluationUpdateNotification(dto.changeNumber, raw.channel, raw.timestamp)
+            EvaluationUpdateNotification(
+                changeNumber = dto.changeNumber,
+                channelName = raw.channel,
+                eventTimestamp = raw.timestamp,
+                updateIntervalMs = dto.updateIntervalMs,
+                algorithmSeed = dto.algorithmSeed,
+                hashingAlgorithm = dto.hashingAlgorithm
+            )
         } catch (e: SerializationException) {
             Logger.e("Failed to parse EVALUATION_UPDATE: ${e.message}")
             null

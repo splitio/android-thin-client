@@ -33,6 +33,7 @@ include(":events-tracking")
 include(":evaluation")
 include(":persistence")
 include(":streaming-thin")
+include(":persistence-domain")
 include(":e2e")
 // include(":sdk")
 

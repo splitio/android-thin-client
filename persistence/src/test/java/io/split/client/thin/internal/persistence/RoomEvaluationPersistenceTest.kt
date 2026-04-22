@@ -26,10 +26,7 @@ class RoomEvaluationPersistenceTest {
         database = Room.inMemoryDatabaseBuilder(context, ThinClientDatabase::class.java)
             .allowMainThreadQueries()
             .build()
-        persistence = RoomEvaluationPersistence(
-            database.evaluationDao(),
-            database.generalInfoDao()
-        )
+        persistence = RoomEvaluationPersistence(database)
     }
 
     @After
@@ -39,7 +36,7 @@ class RoomEvaluationPersistenceTest {
 
     @Test
     fun `loadForKey returns null when no data exists`() {
-        val data = persistence.loadForKey("nonexistent")
+        val data = persistence.loadForKey("keyHash1", "attrHash1")
         assertNull(data)
     }
 
@@ -53,9 +50,9 @@ class RoomEvaluationPersistenceTest {
             SerializedEvaluation("flag2", flag2Json)
         )
 
-        persistence.persistForKey("user1", 100L, evaluations)
+        persistence.persistForKey("keyHash1", "attrHash1", 100L, evaluations)
 
-        val loaded = persistence.loadForKey("user1")
+        val loaded = persistence.loadForKey("keyHash1", "attrHash1")
         assertEquals(100L, loaded?.changeNumber)
         assertEquals(2, loaded?.evaluations?.size)
         assertTrue(loaded?.evaluations?.contains(flag1Json) == true)
@@ -65,18 +62,16 @@ class RoomEvaluationPersistenceTest {
     @Test
     fun `persistForKey replaces existing data`() {
         val flag1Json = """{"result":{"flag":"flag1","treatment":"on","config":null,"label":null,"changeNumber":100},"flagSets":[]}"""
-        val initial = listOf(SerializedEvaluation("flag1", flag1Json))
-        persistence.persistForKey("user1", 100L, initial)
+        persistence.persistForKey("keyHash1", "attrHash1", 100L, listOf(SerializedEvaluation("flag1", flag1Json)))
 
         val flag2Json = """{"result":{"flag":"flag2","treatment":"off","config":null,"label":null,"changeNumber":200},"flagSets":[]}"""
         val flag3Json = """{"result":{"flag":"flag3","treatment":"control","config":null,"label":null,"changeNumber":200},"flagSets":[]}"""
-        val updated = listOf(
+        persistence.persistForKey("keyHash1", "attrHash2", 200L, listOf(
             SerializedEvaluation("flag2", flag2Json),
             SerializedEvaluation("flag3", flag3Json)
-        )
-        persistence.persistForKey("user1", 200L, updated)
+        ))
 
-        val loaded = persistence.loadForKey("user1")
+        val loaded = persistence.loadForKey("keyHash1", "attrHash2")
         assertEquals(200L, loaded?.changeNumber)
         assertEquals(2, loaded?.evaluations?.size)
         assertTrue(loaded?.evaluations?.contains(flag2Json) == true)
@@ -84,62 +79,106 @@ class RoomEvaluationPersistenceTest {
     }
 
     @Test
-    fun `clearForKey removes all data for key`() {
+    fun `clearForKey removes all data for keyHash`() {
         val flag1Json = """{"result":{"flag":"flag1","treatment":"on","config":null,"label":null,"changeNumber":100},"flagSets":[]}"""
-        persistence.persistForKey("user1", 100L, listOf(SerializedEvaluation("flag1", flag1Json)))
+        persistence.persistForKey("keyHash1", "attrHash1", 100L, listOf(SerializedEvaluation("flag1", flag1Json)))
 
-        persistence.clearForKey("user1")
+        persistence.clearForKey("keyHash1")
 
-        val loaded = persistence.loadForKey("user1")
-        assertNull(loaded)
+        assertNull(persistence.loadForKey("keyHash1", "attrHash1"))
     }
 
     @Test
-    fun `multiple keys are isolated`() {
+    fun `multiple keyHashes are isolated`() {
         val flag1Json = """{"result":{"flag":"flag1","treatment":"on","config":null,"label":null,"changeNumber":100},"flagSets":[]}"""
         val flag2Json = """{"result":{"flag":"flag2","treatment":"off","config":null,"label":null,"changeNumber":200},"flagSets":[]}"""
 
-        val user1Evals = listOf(SerializedEvaluation("flag1", flag1Json))
-        val user2Evals = listOf(SerializedEvaluation("flag2", flag2Json))
+        persistence.persistForKey("keyHash1", "attrHash1", 100L, listOf(SerializedEvaluation("flag1", flag1Json)))
+        persistence.persistForKey("keyHash2", "attrHash1", 200L, listOf(SerializedEvaluation("flag2", flag2Json)))
 
-        persistence.persistForKey("user1", 100L, user1Evals)
-        persistence.persistForKey("user2", 200L, user2Evals)
-
-        val loaded1 = persistence.loadForKey("user1")
+        val loaded1 = persistence.loadForKey("keyHash1", "attrHash1")
         assertEquals(100L, loaded1?.changeNumber)
         assertTrue(loaded1?.evaluations?.contains(flag1Json) == true)
 
-        val loaded2 = persistence.loadForKey("user2")
+        val loaded2 = persistence.loadForKey("keyHash2", "attrHash1")
         assertEquals(200L, loaded2?.changeNumber)
         assertTrue(loaded2?.evaluations?.contains(flag2Json) == true)
     }
 
     @Test
-    fun `empty evaluation list clears both metadata and evaluations`() {
+    fun `empty evaluation list clears both attributes and evaluations`() {
         val flag1Json = """{"result":{"flag":"flag1","treatment":"on","config":null,"label":null,"changeNumber":100},"flagSets":[]}"""
-        persistence.persistForKey("user1", 100L, listOf(SerializedEvaluation("flag1", flag1Json)))
+        persistence.persistForKey("keyHash1", "attrHash1", 100L, listOf(SerializedEvaluation("flag1", flag1Json)))
 
-        persistence.persistForKey("user1", 200L, emptyList())
+        persistence.persistForKey("keyHash1", "attrHash1", 200L, emptyList())
 
-        val loaded = persistence.loadForKey("user1")
-        assertNull(loaded)
+        assertNull(persistence.loadForKey("keyHash1", "attrHash1"))
     }
 
     @Test
-    fun `changeNumber is stored once per matchingKey`() {
+    fun `loadForKey returns null when attrHash does not match stored attrHash`() {
+        val flag1Json = """{"result":{"flag":"flag1","treatment":"on","config":null,"label":null,"changeNumber":100},"flagSets":[]}"""
+        persistence.persistForKey("keyHash1", "attrHash1", 100L, listOf(SerializedEvaluation("flag1", flag1Json)))
+
+        assertNull(persistence.loadForKey("keyHash1", "attrHashDifferent"))
+    }
+
+    @Test
+    fun `loadForKey returns data when attrHash matches stored attrHash`() {
+        val flag1Json = """{"result":{"flag":"flag1","treatment":"on","config":null,"label":null,"changeNumber":100},"flagSets":[]}"""
+        persistence.persistForKey("keyHash1", "attrHash1", 100L, listOf(SerializedEvaluation("flag1", flag1Json)))
+
+        val loaded = persistence.loadForKey("keyHash1", "attrHash1")
+        assertEquals(100L, loaded?.changeNumber)
+    }
+
+    @Test
+    fun `clearAll removes all evaluations and attributes across all keyHashes`() {
+        val flag1Json = """{"result":{"flag":"flag1","treatment":"on","config":null,"label":null,"changeNumber":100},"flagSets":[]}"""
+        val flag2Json = """{"result":{"flag":"flag2","treatment":"off","config":null,"label":null,"changeNumber":200},"flagSets":[]}"""
+
+        persistence.persistForKey("keyHash1", "attrHash1", 100L, listOf(SerializedEvaluation("flag1", flag1Json)))
+        persistence.persistForKey("keyHash2", "attrHash2", 200L, listOf(SerializedEvaluation("flag2", flag2Json)))
+
+        persistence.clearAll()
+
+        assertNull(persistence.loadForKey("keyHash1", "attrHash1"))
+        assertNull(persistence.loadForKey("keyHash2", "attrHash2"))
+    }
+
+    @Test
+    fun `lastUpdateTimestamp is written on persist and read back on load`() {
+        val flagJson = """{"result":{"flag":"flag1","treatment":"on","config":null,"label":null,"changeNumber":100},"flagSets":[]}"""
+        val before = System.currentTimeMillis()
+        persistence.persistForKey("keyHash1", "attrHash1", 100L, listOf(SerializedEvaluation("flag1", flagJson)))
+        val after = System.currentTimeMillis()
+
+        val loaded = persistence.loadForKey("keyHash1", "attrHash1")
+        val ts = loaded?.lastUpdateTimestamp
+        assertTrue(ts != null && ts >= before && ts <= after)
+    }
+
+    @Test
+    fun `loadForKey returns null lastUpdateTimestamp when no row exists`() {
+        val data = persistence.loadForKey("nokey", "noattr")
+        assertNull(data?.lastUpdateTimestamp)
+    }
+
+    @Test
+    fun `changeNumber is stored once per keyHash in attributes table`() {
         val flag1Json = """{"result":{"flag":"flag1","treatment":"on","config":null,"label":null,"changeNumber":100},"flagSets":[]}"""
         val flag2Json = """{"result":{"flag":"flag2","treatment":"off","config":null,"label":null,"changeNumber":100},"flagSets":[]}"""
 
-        persistence.persistForKey("user1", 12345L, listOf(
+        persistence.persistForKey("keyHash1", "attrHash1", 12345L, listOf(
             SerializedEvaluation("flag1", flag1Json),
             SerializedEvaluation("flag2", flag2Json)
         ))
 
-        val info = database.generalInfoDao().getByKey("user1")
-        val changeNumber = org.json.JSONObject(info!!.value).getLong("changeNumber")
-        assertEquals(12345L, changeNumber)
+        val attrs = database.attributesDao().getByKey("keyHash1")
+        assertEquals(12345L, attrs!!.changeNumber)
+        assertEquals("attrHash1", attrs.attrHash)
 
-        val evaluationEntities = database.evaluationDao().getByKey("user1")
+        val evaluationEntities = database.evaluationDao().getByKey("keyHash1")
         assertEquals(2, evaluationEntities.size)
     }
 }

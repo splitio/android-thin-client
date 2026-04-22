@@ -5,39 +5,38 @@ Room-based persistent storage for the Android thin client SDK.
 ## Purpose
 
 Provides local database storage for:
-- **Evaluations**: Cached flag evaluation results per key
-- **Attributes**: Attribute sets associated with keys, enabling `EvaluationKey` reconstruction
+- **Evaluations**: Cached flag evaluation results per target
 - **Events**: Queued tracking events awaiting upload
 
 ## Design Philosophy
 
 This module is a **dumb storage layer** that accepts and returns pre-serialized strings. The consumer is responsible for:
-- Serializing `Key` objects (matchingKey + bucketingKey) to strings
-- Stringifying attributes to JSON
+- Computing a deterministic key string per target (e.g., a hash of Key + Attributes)
+- Serializing evaluations to JSON strings
 - Deserializing when loading from persistence
 
 This keeps the module focused purely on persistence without domain knowledge.
 
 ## Schema
 
-### Evaluations
-
-**`general_info` table** — General-purpose key-value store; used to store serialized metadata once per key:
-- `key` (PK) — Serialized Key (matchingKey + bucketingKey)
-- `value` — JSON-encoded payload (e.g. `{"changeNumber":12345,"updatedAt":...}`)
-
 **`evaluations` table** — Stores individual flag evaluations:
-- `key`, `flagName` (composite PK) — Unique per flag per key
-- `body` — Pre-serialized JSON string
-- `updatedAt` — Last update timestamp
+- `keyHash`, `flagName` (composite PK) — Unique per flag per target hash
+- `evalJson` — Pre-serialized JSON string
 
+**`attributes` table** — Stores per-key attribute metadata:
+- `keyHash` (PK)
+- `attrHash` — Hash of the attributes map
+- `changeNumber` — Last known change number
+- `lastUpdateTimestamp` — Timestamp of last update
 
-### Events
+**`general_properties` table** — General-purpose key-value store:
+- `key` (PK)
+- `value` — Stored value string
 
 **`events` table** — FIFO queue of tracking events:
 - `id` (PK, auto-increment)
-- `body` — Pre-serialized JSON string
-- `createdAt` — Timestamp for FIFO ordering
+- `eventJson` — Pre-serialized JSON string
+- `timestamp` — Timestamp for FIFO ordering
 
 ## Components
 
@@ -87,12 +86,11 @@ val serialized = evaluations.map { eval ->
     SerializedEvaluation(eval.result.flag, json.encodeToString(eval))
 }
 
-persistence.persistForKey(serializedKey, 12345L, serialized)
+persistence.persistForKey(targetHash, 12345L, serialized)
 
 // Consumer deserializes after loading
-val data = persistence.loadForKey(serializedKey)
+val data = persistence.loadForKey(targetHash)
 val evaluations = data?.evaluations?.map { jsonString ->
     json.decodeFromString<StoredEvaluation>(jsonString)
 }
 ```
-

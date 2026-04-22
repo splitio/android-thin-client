@@ -9,20 +9,18 @@ import androidx.room.Transaction;
 import java.util.List;
 
 @Dao
-public interface EvaluationDao {
+interface EvaluationDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     void insert(List<EvaluationEntity> entities);
 
-    @Query("SELECT * FROM evaluations WHERE key = :key")
-    List<EvaluationEntity> getByKey(String key);
+    @Query("SELECT * FROM evaluations WHERE keyHash = :keyHash")
+    List<EvaluationEntity> getByKey(String keyHash);
 
-    @Query("DELETE FROM evaluations WHERE key = :key")
-    void deleteByKey(String key);
+    @Query("DELETE FROM evaluations WHERE keyHash = :keyHash")
+    void deleteByKeyHash(String keyHash);
 
-    @Transaction
-    default void replaceForKey(String key, List<EvaluationEntity> entities) {
-        deleteByKey(key);
-        insert(entities);
-    }
+    @Query("DELETE FROM evaluations")
+    void deleteAll();
+
 }

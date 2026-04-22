@@ -7,11 +7,13 @@ data class SerializedEvaluation(
 
 data class PersistentEvaluationData(
     val changeNumber: Long,
-    val evaluations: List<String>
+    val evaluations: List<String>,
+    val lastUpdateTimestamp: Long? = null
 )
 
 interface PersistentEvaluationStorage {
-    fun loadForKey(key: String): PersistentEvaluationData?
-    fun persistForKey(key: String, changeNumber: Long, evaluations: List<SerializedEvaluation>)
-    fun clearForKey(key: String)
+    fun loadForKey(keyHash: String, attrHash: String): PersistentEvaluationData?
+    fun persistForKey(keyHash: String, attrHash: String, changeNumber: Long, evaluations: List<SerializedEvaluation>)
+    fun clearForKey(keyHash: String)
+    fun clearAll()
 }
