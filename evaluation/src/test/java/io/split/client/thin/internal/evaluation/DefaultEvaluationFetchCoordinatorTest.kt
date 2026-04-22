@@ -102,7 +102,7 @@ class DefaultEvaluationFetchCoordinatorTest {
             provider = FakeEvaluationProvider(returnNullChange = true),
             readStorage = FakeEvaluationReadStorage(),
             writeStorage = FakeEvaluationWriteStorage(),
-            onEvaluationsUpdated = { _, reason -> capturedReasons.add(reason) },
+            onEvaluationsUpdated = { _, reason, _ -> capturedReasons.add(reason) },
         )
 
         coordinator.fetchIfNeeded(evalKey, null, FetchReason.INITIALIZATION)
@@ -117,7 +117,7 @@ class DefaultEvaluationFetchCoordinatorTest {
             provider = FakeEvaluationProvider(returnNullChange = true),
             readStorage = FakeEvaluationReadStorage(),
             writeStorage = FakeEvaluationWriteStorage(),
-            onEvaluationsUpdated = { _, reason -> capturedReasons.add(reason) },
+            onEvaluationsUpdated = { _, reason, _ -> capturedReasons.add(reason) },
         )
 
         coordinator.fetchIfNeeded(evalKey, null, FetchReason.INITIALIZATION)
@@ -150,7 +150,7 @@ class DefaultEvaluationFetchCoordinatorTest {
             provider = FakeEvaluationProvider(),
             readStorage = FakeEvaluationReadStorage(),
             writeStorage = FakeEvaluationWriteStorage(),
-            onEvaluationsUpdated = { _, reason -> capturedReason.add(reason) },
+            onEvaluationsUpdated = { _, reason, _ -> capturedReason.add(reason) },
         )
 
         coordinator.fetchIfNeeded(evalKey, null, FetchReason.INITIALIZATION)
@@ -164,8 +164,8 @@ class DefaultEvaluationFetchCoordinatorTest {
         val coordinator = DefaultEvaluationFetchCoordinator(
             provider = FakeEvaluationProvider(),
             readStorage = FakeEvaluationReadStorage(),
-            writeStorage = FakeEvaluationWriteStorage(upsertResult = false),
-            onEvaluationsUpdated = { _, _ -> callbackInvoked = true },
+            writeStorage = FakeEvaluationWriteStorage(upsertUpdated = false),
+            onEvaluationsUpdated = { _, _, _ -> callbackInvoked = true },
         )
 
         coordinator.fetchIfNeeded(evalKey, null, FetchReason.INITIALIZATION)
@@ -179,8 +179,8 @@ class DefaultEvaluationFetchCoordinatorTest {
         val coordinator = DefaultEvaluationFetchCoordinator(
             provider = FakeEvaluationProvider(),
             readStorage = FakeEvaluationReadStorage(),
-            writeStorage = FakeEvaluationWriteStorage(upsertResult = false),
-            onEvaluationsUpdated = { _, reason -> capturedReasons.add(reason) },
+            writeStorage = FakeEvaluationWriteStorage(upsertUpdated = false),
+            onEvaluationsUpdated = { _, reason, _ -> capturedReasons.add(reason) },
         )
 
         coordinator.fetchIfNeeded(evalKey, null, FetchReason.INITIALIZATION)
@@ -197,7 +197,7 @@ class DefaultEvaluationFetchCoordinatorTest {
             provider = FakeEvaluationProvider(throwOnFetch = RuntimeException("fetch failed")),
             readStorage = FakeEvaluationReadStorage(),
             writeStorage = FakeEvaluationWriteStorage(),
-            onEvaluationsUpdated = { _, _ -> callbackInvoked = true },
+            onEvaluationsUpdated = { _, _, _ -> callbackInvoked = true },
         )
 
         coordinator.fetchIfNeeded(evalKey, null, FetchReason.INITIALIZATION)
