@@ -24,8 +24,10 @@ class DefaultEventSubmissionCoordinator(
     }
 
     override suspend fun flush() {
-        mutex.withLock {
-            task()
-        }
+        scope.launch {
+            mutex.withLock {
+                task()
+            }
+        }.join()
     }
 }

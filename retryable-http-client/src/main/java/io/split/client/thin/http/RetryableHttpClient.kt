@@ -1,6 +1,6 @@
 package io.split.client.thin.http
 
-import io.split.android.client.network.HttpResponse
+import io.split.client.thin.http.contracts.HttpResponse
 
 fun interface RetryableHttpClient {
 
