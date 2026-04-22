@@ -28,6 +28,7 @@ internal class DefaultSplitClient(
     private val eventsManager: EventsManager<SplitEvent, SdkInternalEvent, Any?>,
     private val flushOperation: suspend () -> Unit = {},
     private val scope: CoroutineScope,
+    private val onTargetChanged: (String) -> Unit = {},
     private val asyncBridge: AsyncBridgeLike = AsyncBridge(),
 ) : SplitClient {
 
@@ -62,9 +63,12 @@ internal class DefaultSplitClient(
     }
 
     override fun setTarget(target: Target) {
+        val oldEvalKey = this.target.toEvaluationKey()
         this.target = target
-        scope.launch {
-            evaluationRepository.setTarget(target, filters)
+        val newEvalKey = target.toEvaluationKey()
+        if (oldEvalKey != newEvalKey) {
+            onTargetChanged(target.key.matchingKey)
+            scope.launch { evaluationRepository.setTarget(target, filters) }
         }
     }
 
@@ -77,8 +81,8 @@ internal class DefaultSplitClient(
         value: Double?,
         properties: Map<String, Any?>?
     ) {
-        val javaProperties =
-            runCatching { properties as? Map<String, Any> }.getOrDefault(emptyMap())
+        @Suppress("UNCHECKED_CAST")
+        val javaProperties = properties as? Map<String, Any>
         val isSdkReady = eventsManager.eventAlreadyTriggered(SplitEvent.SDK_READY)
         tracker.track(
             target.key.matchingKey,

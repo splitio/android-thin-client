@@ -1,6 +1,6 @@
 package io.split.client.thin.internal.evaluation
 
-import io.split.android.client.network.HttpResponse
+import io.split.client.thin.http.contracts.HttpResponse
 import io.split.client.thin.internal.observer.CompositeObserver
 import io.split.client.thin.internal.observer.ObservableEvent
 import io.split.client.thin.internal.observer.Observer
@@ -19,7 +19,7 @@ class FakeSecureHttpClient(
     val lastFetchTarget: EvaluationTarget? get() = fetchCalls.lastOrNull()?.first
     val lastFetchFilters: EvaluationFilters? get() = fetchCalls.lastOrNull()?.second
 
-    override suspend fun fetchEvaluations(target: EvaluationTarget, filters: EvaluationFilters?): HttpResponse {
+    override suspend fun fetchEvaluations(target: EvaluationTarget, filters: EvaluationFilters?, changeNumber: Long): HttpResponse {
         fetchCalls.add(target to filters)
         throwOnFetch?.let { throw it }
         return FakeHttpResponse(statusCode, responseBody)
@@ -33,26 +33,30 @@ class FakeHttpResponse(
     private val status: Int,
     private val body: String?,
 ) : HttpResponse {
-    override fun getHttpStatus(): Int = status
-    override fun isSuccess(): Boolean = status in 200..299
-    override fun isCredentialsError(): Boolean = status == 401
-    override fun isBadRequestError(): Boolean = status == 400
-    override fun isClientRelatedError(): Boolean = status in 400..499
+    override val isSuccess: Boolean = status in 200..299
+    override val httpStatus: Int = status
     override fun getData(): String? = body
-    override fun getServerCertificates(): Array<java.security.cert.Certificate>? = null
 }
 
 // FakeEvaluationProvider
+/**
+ * [changeToReturn] — when non-null, returns the given change; when null, returns a default
+ *   non-null change unless [returnNullChange] is true.
+ * [returnNullChange] — when true, fetch() returns null (simulates 304 / empty-body responses).
+ */
 class FakeEvaluationProvider(
     private val changeToReturn: EvaluationChange? = null,
     val throwOnFetch: Throwable? = null,
+    private val returnNullChange: Boolean = false,
 ) : EvaluationProvider {
 
-    val fetchCalls = mutableListOf<Pair<EvaluationKey, EvaluationFilters?>>()
+    data class FetchCall(val evalKey: EvaluationKey, val filters: EvaluationFilters?, val changeNumber: Long)
+    val fetchCalls = mutableListOf<FetchCall>()
 
-    override suspend fun fetch(evalKey: EvaluationKey, filters: EvaluationFilters?): EvaluationChange {
-        fetchCalls.add(evalKey to filters)
+    override suspend fun fetch(evalKey: EvaluationKey, filters: EvaluationFilters?, changeNumber: Long): EvaluationChange? {
+        fetchCalls.add(FetchCall(evalKey, filters, changeNumber))
         throwOnFetch?.let { throw it }
+        if (returnNullChange) return null
         return changeToReturn ?: EvaluationChange(evalKey, -1L, emptyList())
     }
 }
@@ -79,6 +83,8 @@ class FakeEvaluationReadStorage(
     override fun lastChangeNumber(evalKey: EvaluationKey): Long =
         changeNumbers[evalKey] ?: -1L
 
+    override fun lastUpdateTimestamp(evalKey: EvaluationKey): Long? = null
+
     fun store(flag: String, evalKey: EvaluationKey, stored: StoredEvaluation) {
         storedEvaluations[flag to evalKey] = stored
     }
@@ -89,13 +95,13 @@ class FakeEvaluationReadStorage(
 }
 
 // FakeEvaluationWriteStorage
-class FakeEvaluationWriteStorage(private val upsertResult: Boolean = true) : EvaluationWriteStorage {
+class FakeEvaluationWriteStorage(private val upsertUpdated: Boolean = true) : EvaluationWriteStorage {
     val upsertCalls = mutableListOf<EvaluationChange>()
     val clearCalls = mutableListOf<EvaluationKey>()
 
-    override fun upsert(change: EvaluationChange): Boolean {
+    override fun upsert(change: EvaluationChange): UpsertResult {
         upsertCalls.add(change)
-        return upsertResult
+        return UpsertResult(updated = upsertUpdated, emptyList())
     }
 
     override fun clear(evalKey: EvaluationKey) {
@@ -128,7 +134,7 @@ open class FakeEvaluationFetchCoordinator(
     val fetchCalls = mutableListOf<Triple<EvaluationKey, EvaluationFilters?, FetchReason>>()
     val refetchAllCalls = mutableListOf<Pair<EvaluationFilters?, FetchReason>>()
 
-    override suspend fun fetchIfNeeded(evalKey: EvaluationKey, filters: EvaluationFilters?, reason: FetchReason): Boolean {
+    override suspend fun fetchIfNeeded(evalKey: EvaluationKey, filters: EvaluationFilters?, reason: FetchReason, delayMs: Long): Boolean {
         fetchCalls.add(Triple(evalKey, filters, reason))
         return fetchIfNeededResult
     }
