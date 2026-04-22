@@ -4,13 +4,11 @@ plugins {
 
 android {
     namespace = "io.split.client.thin.consumer"
-    compileSdk {
-        version = release(36)
-    }
 
     defaultConfig {
         minSdk = 21
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunnerArguments["clearPackageData"] = "true"
     }
 
     compileOptions {

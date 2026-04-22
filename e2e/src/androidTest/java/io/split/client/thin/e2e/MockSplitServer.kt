@@ -196,11 +196,19 @@ class MockSplitServer {
      * indefinitely with no events, simulating a quiet streaming connection.
      */
     private fun defaultSseResponse(): MockResponse {
+        val buffer = Buffer()
+        // Write enough keepalive comments to keep the connection open for a long time.
+        // The space after ':' is critical: ": keepalive" does NOT match EventStreamParser's
+        // KEEP_ALIVE_TOKEN (":keepalive"), so no onMessage events are dispatched.
+        // Each pair is ~14 bytes; 10_000 pairs ≈ 140KB, lasts minutes with throttle.
+        repeat(10_000) {
+            buffer.writeUtf8(": keepalive\n\n")
+        }
         return MockResponse()
             .setResponseCode(200)
             .addHeader("Content-Type", "text/event-stream")
             .addHeader("Cache-Control", "no-cache")
-            .setBody(Buffer())
-            .throttleBody(Long.MAX_VALUE, 1, TimeUnit.SECONDS)
+            .setBody(buffer)
+            .throttleBody(14, 1, TimeUnit.SECONDS)  // ~1 comment pair per second
     }
 }
