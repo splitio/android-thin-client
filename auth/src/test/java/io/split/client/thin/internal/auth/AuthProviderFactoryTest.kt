@@ -1,9 +1,9 @@
 package io.split.client.thin.internal.auth
 
-import io.split.android.client.network.HttpResponse
 import io.split.client.thin.http.HttpRequestDescriptor
 import io.split.client.thin.http.RequestCategory
 import io.split.client.thin.http.RetryableHttpClient
+import io.split.client.thin.http.contracts.HttpResponse
 import io.split.client.thin.internal.observer.CompositeObserver
 import io.split.client.thin.internal.observer.ObservableEvent
 import io.split.client.thin.internal.observer.ObservableEventType
@@ -89,9 +89,11 @@ class AuthProviderFactoryTest {
 
 private class FakeSuccessHttpClient : RetryableHttpClient {
     override suspend fun execute(request: HttpRequestDescriptor, category: RequestCategory): HttpResponse {
-        val response = mock(HttpResponse::class.java)
-        `when`(response.data).thenReturn("""{"token":"header.payload.sig","pushEnabled":false}""")
-        return response
+        return object : HttpResponse {
+            override val isSuccess: Boolean = true
+            override val httpStatus: Int = 200
+            override fun getData(): String? = """{"token":"header.payload.sig","pushEnabled":false}"""
+        }
     }
 }
 

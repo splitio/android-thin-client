@@ -19,25 +19,24 @@ This keeps the module focused purely on persistence without domain knowledge.
 
 ## Schema
 
-### Evaluations
-
-**`general_info` table** — General-purpose key-value store; used to store serialized metadata once per key:
-- `key` (PK) — Serialized Key (matchingKey + bucketingKey)
-- `value` — JSON-encoded payload (e.g. `{"changeNumber":12345,"updatedAt":...}`)
-
 **`evaluations` table** — Stores individual flag evaluations:
-- `key`, `flagName` (composite PK) — Unique per flag per key
-- `body` — Pre-serialized JSON string
-- `updatedAt` — Last update timestamp
+- `keyHash`, `flagName` (composite PK) — Unique per flag per target hash
+- `evalJson` — Pre-serialized JSON string
 
-Different attribute combinations for the same user produce different key values, so they are stored as separate entries.
+**`attributes` table** — Stores per-key attribute metadata:
+- `keyHash` (PK)
+- `attrHash` — Hash of the attributes map
+- `changeNumber` — Last known change number
+- `lastUpdateTimestamp` — Timestamp of last update
 
-### Events
+**`general_properties` table** — General-purpose key-value store:
+- `key` (PK)
+- `value` — Stored value string
 
 **`events` table** — FIFO queue of tracking events:
 - `id` (PK, auto-increment)
-- `body` — Pre-serialized JSON string
-- `createdAt` — Timestamp for FIFO ordering
+- `eventJson` — Pre-serialized JSON string
+- `timestamp` — Timestamp for FIFO ordering
 
 ## Components
 
