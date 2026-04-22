@@ -114,7 +114,7 @@ internal class DefaultSecureHttpClient(
     private fun buildEvaluationsBody(target: EvaluationTarget): String {
         val attrs = target.attributes
         if (attrs.isNullOrEmpty()) return "{}"
-        val attributeElements = attrs.mapValues { (_, value) ->
+        val attributeElements = attrs.filterValues { it != null }.mapValues { (_, value) ->
             valueToJsonElement(value)
         }
         val attributesObject = JsonObject(attributeElements)
@@ -129,7 +129,7 @@ internal class DefaultSecureHttpClient(
             is Boolean -> JsonPrimitive(value)
             is Number -> JsonPrimitive(value)
             is List<*> -> {
-                val elements = value.map { valueToJsonElement(it) }
+                val elements = value.filterNotNull().map { valueToJsonElement(it) }
                 JsonArray(elements)
             }
             else -> JsonPrimitive(value.toString())
