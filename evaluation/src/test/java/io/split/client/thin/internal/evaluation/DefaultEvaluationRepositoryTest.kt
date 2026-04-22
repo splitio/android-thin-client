@@ -12,7 +12,7 @@ import org.junit.Test
 class DefaultEvaluationRepositoryTest {
 
     private val evalKey = EvaluationKey(Key("user-1"))
-    private val target = Target(Key("user-1"))
+    private val target = Target(Key("user-1"), trafficType = "user")
 
     private fun storedEval(flag: String, treatment: String, sets: Set<String> = emptySet()) =
         StoredEvaluation(EvaluationResult(flag = flag, treatment = treatment), flagSets = sets)
@@ -73,14 +73,26 @@ class DefaultEvaluationRepositoryTest {
     }
 
     @Test
-    fun `setTarget triggers fetch coordinator with TARGET_SWITCH`() = runTest {
+    fun `setTarget triggers fetch coordinator with TARGET_SWITCH when isInitialization is false`() = runTest {
         val coordinator = FakeEvaluationFetchCoordinator()
         val repo = makeRepository(coordinator = coordinator)
 
-        repo.setTarget(target, null)
+        repo.setTarget(target, null, isInitialization = false)
 
         assertEquals(1, coordinator.fetchCalls.size)
         assertEquals(FetchReason.TARGET_SWITCH, coordinator.fetchCalls[0].third)
+        assertEquals(evalKey, coordinator.fetchCalls[0].first)
+    }
+
+    @Test
+    fun `setTarget triggers fetch coordinator with INITIALIZATION when isInitialization is true`() = runTest {
+        val coordinator = FakeEvaluationFetchCoordinator()
+        val repo = makeRepository(coordinator = coordinator)
+
+        repo.setTarget(target, null, isInitialization = true)
+
+        assertEquals(1, coordinator.fetchCalls.size)
+        assertEquals(FetchReason.INITIALIZATION, coordinator.fetchCalls[0].third)
         assertEquals(evalKey, coordinator.fetchCalls[0].first)
     }
 
@@ -90,7 +102,7 @@ class DefaultEvaluationRepositoryTest {
         val repo = makeRepository(coordinator = coordinator)
         val filters = EvaluationFilters(flagNames = setOf("flag-a"), flagSets = null)
 
-        repo.setTarget(target, filters)
+        repo.setTarget(target, filters, isInitialization = false)
 
         assertEquals(filters, coordinator.fetchCalls[0].second)
     }
@@ -122,14 +134,14 @@ class DefaultEvaluationRepositoryTest {
             }
         }
         val coordinator = object : FakeEvaluationFetchCoordinator() {
-            override suspend fun fetchIfNeeded(evalKey: EvaluationKey, filters: EvaluationFilters?, reason: FetchReason): Boolean {
+            override suspend fun fetchIfNeeded(evalKey: EvaluationKey, filters: EvaluationFilters?, reason: FetchReason, delayMs: Long): Boolean {
                 callOrder.add("fetchIfNeeded")
-                return super.fetchIfNeeded(evalKey, filters, reason)
+                return super.fetchIfNeeded(evalKey, filters, reason, delayMs)
             }
         }
         val repo = makeRepository(coordinator = coordinator, persistenceBackedStorage = persistenceStorage)
 
-        repo.setTarget(target, null)
+        repo.setTarget(target, null, isInitialization = false)
 
         assertEquals(listOf("ensureCacheLoaded", "fetchIfNeeded"), callOrder)
     }
@@ -139,7 +151,7 @@ class DefaultEvaluationRepositoryTest {
         val coordinator = FakeEvaluationFetchCoordinator()
         val repo = makeRepository(coordinator = coordinator, persistenceBackedStorage = null)
 
-        repo.setTarget(target, null)
+        repo.setTarget(target, null, isInitialization = false)
 
         assertEquals(1, coordinator.fetchCalls.size)
     }

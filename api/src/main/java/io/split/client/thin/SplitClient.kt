@@ -43,7 +43,6 @@ interface SplitClient {
      * Tracks an event for the current client context.
      */
     fun track(
-        trafficType: String,
         eventType: String,
         value: Double? = null,
         properties: Map<String, Any?>? = null,

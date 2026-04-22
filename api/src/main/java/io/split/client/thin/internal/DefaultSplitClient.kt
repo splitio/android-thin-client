@@ -28,6 +28,8 @@ internal class DefaultSplitClient(
     private val eventsManager: EventsManager<SplitEvent, SdkInternalEvent, Any?>,
     private val flushOperation: suspend () -> Unit = {},
     private val scope: CoroutineScope,
+    private val onTargetChanged: (String) -> Unit = {},
+    private val asyncBridge: AsyncBridgeLike = AsyncBridge(),
 ) : SplitClient {
 
     @Volatile
@@ -61,9 +63,12 @@ internal class DefaultSplitClient(
     }
 
     override fun setTarget(target: Target) {
+        val oldEvalKey = this.target.toEvaluationKey()
         this.target = target
-        scope.launch {
-            evaluationRepository.setTarget(target, filters)
+        val newEvalKey = target.toEvaluationKey()
+        if (oldEvalKey != newEvalKey) {
+            onTargetChanged(target.key.matchingKey)
+            scope.launch { evaluationRepository.setTarget(target, filters) }
         }
     }
 
@@ -72,17 +77,16 @@ internal class DefaultSplitClient(
     }
 
     override fun track(
-        trafficType: String,
         eventType: String,
         value: Double?,
         properties: Map<String, Any?>?
     ) {
-        val javaProperties =
-            runCatching { properties as? Map<String, Any> }.getOrDefault(emptyMap())
+        @Suppress("UNCHECKED_CAST")
+        val javaProperties = properties as? Map<String, Any>
         val isSdkReady = eventsManager.eventAlreadyTriggered(SplitEvent.SDK_READY)
         tracker.track(
             target.key.matchingKey,
-            trafficType,
+            target.trafficType,
             eventType,
             value ?: 0.0,
             javaProperties,
@@ -96,17 +100,15 @@ internal class DefaultSplitClient(
         eventsManager.destroy()
     }
 
-    override fun destroyAsync(callback: SplitVoidCallback) {
-        TODO("Not yet implemented")
-    }
+    override fun destroyAsync(callback: SplitVoidCallback) =
+        asyncBridge.executeAsync(callback) { destroy() }
 
     override suspend fun flush() {
         flushOperation()
     }
 
-    override fun flushAsync(callback: SplitVoidCallback) {
-        TODO("Not yet implemented")
-    }
+    override fun flushAsync(callback: SplitVoidCallback) =
+        asyncBridge.executeAsync(callback) { flush() }
 
     private fun resolveResult(flag: String, stored: StoredEvaluation?): EvaluationResult {
         if (stored != null && stored.result.treatment != CONTROL) {
