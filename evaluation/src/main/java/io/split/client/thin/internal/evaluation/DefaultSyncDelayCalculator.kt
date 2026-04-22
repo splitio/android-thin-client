@@ -18,6 +18,6 @@ class DefaultSyncDelayCalculator : SyncDelayCalculator {
         val seed = algorithmSeed ?: 0
 
         val hash = MurmurHash3(seed.toUInt()).hash32x86(key.toByteArray(Charsets.UTF_8))
-        return hash.toLong() and 0xFFFFFFFFL % intervalMs
+        return (hash.toLong() and 0xFFFFFFFFL) % intervalMs
     }
 }

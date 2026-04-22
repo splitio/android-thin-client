@@ -31,6 +31,8 @@ dependencies {
     // Thin client modules
     implementation(project(":models"))
     implementation(project(":auth"))
+    implementation(project(":http"))
+    implementation(project(":observer"))
     implementation(project(":retryable-http-client"))
 
     // android-client submodule dependencies
