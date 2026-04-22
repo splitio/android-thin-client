@@ -31,7 +31,7 @@ internal class DefaultClientFactory(
             ThinClientEventsConfig.create(),
             SplitEventDelivery(scope),
         )
-        val eventManagerObserver = EventManagerObserver(eventsManager)
+        val eventManagerObserver = EventManagerObserver(eventsManager, target.key.matchingKey)
         compositeObserver.register(eventManagerObserver)
         val client = DefaultSplitClient(
             initialTarget = target,
@@ -42,9 +42,10 @@ internal class DefaultClientFactory(
             eventsManager = eventsManager,
             flushOperation = flushFn,
             scope = scope,
+            onTargetChanged = { newKey -> eventManagerObserver.matchingKey = newKey },
         )
         scope.launch {
-            evaluationRepository.setTarget(target, filters)
+            evaluationRepository.setTarget(target, filters, isInitialization = true)
         }
         return client
     }

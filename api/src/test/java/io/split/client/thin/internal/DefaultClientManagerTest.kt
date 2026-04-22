@@ -19,9 +19,9 @@ class DefaultClientManagerTest {
     private val testScope = TestScope()
     private val key1 = Key("user-1")
     private val key2 = Key("user-2")
-    private val target1 = Target(key1)
+    private val target1 = Target(key1, trafficType = "user")
     private val target1v2 = Target(key1, trafficType = "other")
-    private val target2 = Target(key2)
+    private val target2 = Target(key2, trafficType = "user")
 
     private val createdClients = mutableListOf<FakeSplitClient>()
 
@@ -270,7 +270,6 @@ private class FakeSplitClient(
         throw UnsupportedOperationException()
 
     override fun track(
-        trafficType: String,
         eventType: String,
         value: Double?,
         properties: Map<String, Any?>?,
