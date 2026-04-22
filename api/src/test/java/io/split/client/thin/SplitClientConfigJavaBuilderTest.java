@@ -146,7 +146,7 @@ public class SplitClientConfigJavaBuilderTest {
     public void builderFallsBackInvalidValuesToDefaults() {
         SplitClientConfig config = new SplitClientConfig.Builder()
                 .sync(new SplitClientConfig.SyncConfig.Builder()
-                        .evaluationRefreshRate(1)
+                        .evaluationRefreshRate(0)
                         .pushRate(1)
                         .timeout(-2)
                         .build())
@@ -165,11 +165,11 @@ public class SplitClientConfigJavaBuilderTest {
     public void builderAcceptsEvaluationRefreshRateAtMinimumBoundary() {
         SplitClientConfig config = new SplitClientConfig.Builder()
                 .sync(new SplitClientConfig.SyncConfig.Builder()
-                        .evaluationRefreshRate(60)
+                        .evaluationRefreshRate(1)
                         .build())
                 .build();
 
-        assertEquals(60, config.getSync().getEvaluationRefreshRate());
+        assertEquals(1, config.getSync().getEvaluationRefreshRate());
     }
 
     @Test

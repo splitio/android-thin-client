@@ -5,7 +5,9 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.RecordedRequest
 import okio.Buffer
+import java.util.Collections
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Wraps [MockWebServer] and dispatches requests by path to simulate the Split backend.
@@ -43,6 +45,19 @@ class MockSplitServer {
     private val _capturedEventBodies = mutableListOf<String>()
     private val _capturedTelemetryBodies = mutableListOf<String>()
 
+    /** Number of requests received at the auth endpoint. */
+    val authRequestCount: AtomicInteger = AtomicInteger(0)
+
+    /** Number of requests received at the evaluations endpoint. */
+    val evaluationRequestCount: AtomicInteger = AtomicInteger(0)
+
+    /** Timestamps (ms) of each request received at the evaluations endpoint. */
+    val evaluationRequestTimestampsMs: MutableList<Long> =
+        Collections.synchronizedList(mutableListOf())
+
+    /** Number of SSE connections established. */
+    val sseConnectionCount: AtomicInteger = AtomicInteger(0)
+
     /** Bodies of all POST requests received at the events endpoint. */
     val capturedEventBodies: List<String> get() = _capturedEventBodies.toList()
 
@@ -63,19 +78,26 @@ class MockSplitServer {
             override fun dispatch(request: RecordedRequest): MockResponse {
                 val path = request.path.orEmpty()
                 return when {
-                    path.startsWith("/sse") ->
+                    path.startsWith("/sse") -> {
+                        sseConnectionCount.incrementAndGet()
                         sseQueue.removeFirstOrNull() ?: defaultSseResponse()
+                    }
 
-                    path.startsWith("/api/v2/evaluations") ->
+                    path.startsWith("/api/v2/evaluations") -> {
+                        evaluationRequestCount.incrementAndGet()
+                        evaluationRequestTimestampsMs.add(System.currentTimeMillis())
                         evaluationsHandler?.invoke(request)
                             ?: evaluationsQueue.removeFirstOrNull()
                             ?: MockResponse().setResponseCode(200)
                                 .setBody("""{"till":-1,"since":-1,"evaluations":[]}""")
+                    }
 
                     // Auth endpoint — must be checked after /api/v2 prefix to avoid false match
-                    path.startsWith("/api") && request.method == "GET" ->
+                    path.startsWith("/api") && request.method == "GET" -> {
+                        authRequestCount.incrementAndGet()
                         authQueue.removeFirstOrNull() ?: MockResponse().setResponseCode(200)
                             .setBody(E2EFixtures.AUTH_PUSH_DISABLED)
+                    }
 
                     path.startsWith("/api/v1/events/bulk") -> {
                         _capturedEventBodies.add(request.body.readUtf8())
@@ -124,19 +146,22 @@ class MockSplitServer {
     // -------------------------------------------------------------------------
 
     /**
-     * Builds a [MockResponse] that streams the given SSE data lines followed by
-     * a keep-alive comment, then closes the connection.
+     * Builds a [MockResponse] that streams the given SSE data lines.
      *
      * Each element of [dataLines] is written as `data: <line>\n\n`.
+     *
+     * [delaySeconds] adds a body delay so the SSE event arrives after the SDK
+     * has already reached a ready state — useful when the test needs onReady to
+     * fire before the update notification.
      *
      * Example:
      * ```kotlin
      * server.enqueueSse(
-     *     MockSplitServer.buildSseResponse(E2EFixtures.SSE_EVALUATION_UPDATE)
+     *     server.buildSseResponse(listOf(E2EFixtures.SSE_EVALUATION_UPDATE), delaySeconds = 2)
      * )
      * ```
      */
-    fun buildSseResponse(vararg dataLines: String): MockResponse {
+    fun buildSseResponse(dataLines: List<String>, delaySeconds: Long = 0): MockResponse {
         val buffer = Buffer()
         for (line in dataLines) {
             buffer.writeUtf8("data: $line\n\n")
@@ -145,6 +170,7 @@ class MockSplitServer {
             .setResponseCode(200)
             .addHeader("Content-Type", "text/event-stream")
             .addHeader("Cache-Control", "no-cache")
+            .setBodyDelay(delaySeconds, TimeUnit.SECONDS)
             .setBody(buffer)
             .throttleBody(Long.MAX_VALUE, 1, TimeUnit.SECONDS)
     }
@@ -154,7 +180,11 @@ class MockSplitServer {
     // -------------------------------------------------------------------------
 
     fun shutdown() {
-        server.shutdown()
+        try {
+            server.shutdown()
+        } catch (_: java.io.IOException) {
+            // MockWebServer may throw if connections with delayed responses are still open
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -166,11 +196,19 @@ class MockSplitServer {
      * indefinitely with no events, simulating a quiet streaming connection.
      */
     private fun defaultSseResponse(): MockResponse {
+        val buffer = Buffer()
+        // Write enough keepalive comments to keep the connection open for a long time.
+        // The space after ':' is critical: ": keepalive" does NOT match EventStreamParser's
+        // KEEP_ALIVE_TOKEN (":keepalive"), so no onMessage events are dispatched.
+        // Each pair is ~14 bytes; 10_000 pairs ≈ 140KB, lasts minutes with throttle.
+        repeat(10_000) {
+            buffer.writeUtf8(": keepalive\n\n")
+        }
         return MockResponse()
             .setResponseCode(200)
             .addHeader("Content-Type", "text/event-stream")
             .addHeader("Cache-Control", "no-cache")
-            .setBody(Buffer())
-            .throttleBody(Long.MAX_VALUE, 1, TimeUnit.SECONDS)
+            .setBody(buffer)
+            .throttleBody(14, 1, TimeUnit.SECONDS)  // ~1 comment pair per second
     }
 }

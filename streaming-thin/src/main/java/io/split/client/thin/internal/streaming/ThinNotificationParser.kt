@@ -25,7 +25,7 @@ internal class ThinNotificationParser(
     fun parse(raw: RawThinNotification): ThinNotification? {
         return try {
             when {
-                raw.data.contains("\"type\":\"EVALUATION_UPDATE\"") -> parseEvaluationUpdate(raw)
+                raw.data.contains("\"type\":\"EVALUATIONS_UPDATE\"") -> parseEvaluationUpdate(raw)
                 raw.data.contains("\"type\":\"CONTROL\"") -> parseControl(raw)
                 raw.data.contains("\"type\":\"ERROR\"") -> parseError(raw)
                 else -> parseOccupancy(raw)
