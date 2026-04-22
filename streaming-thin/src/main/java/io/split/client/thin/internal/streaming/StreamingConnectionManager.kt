@@ -2,7 +2,9 @@ package io.split.client.thin.internal.streaming
 
 import io.split.android.client.backoff.BackoffCounter
 import io.split.android.client.service.sseclient.sseclient.EventSourceClient
-import io.split.android.client.utils.logger.Logger
+import io.split.client.thin.internal.observer.CompositeObserver
+import io.split.client.thin.internal.observer.ObservableEvent
+import io.split.client.thin.internal.observer.ObservableEventType
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -13,6 +15,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.net.URI
+import kotlin.coroutines.cancellation.CancellationException
 
 data class StreamingToken(
     val token: String,
@@ -31,12 +34,15 @@ class StreamingConnectionManager(
     private val onEvaluationFetchNotification: suspend (EvaluationUpdateNotification?) -> Unit,
     private val onPushDisabled: suspend () -> Unit = {},
     private val connectionDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val observer: CompositeObserver,
 ) {
     private val stateMutex = Mutex()
     private var state: ConnectionState = ConnectionState.Stopped
     private var connectionJob: Job? = null
     private var currentEventSourceClient: EventSourceClient? = null
     private val notificationParser = ThinNotificationParser()
+    private val occupancyByChannel = mutableMapOf<String, Int>()
+    private var hadPublishers = false
 
     private sealed class ConnectionState {
         object Stopped : ConnectionState()
@@ -60,6 +66,7 @@ class StreamingConnectionManager(
             state = ConnectionState.Stopped
             disconnectLocked()
         }
+        observer.notifyEvent(ObservableEvent(ObservableEventType.STREAMING_DISCONNECTED))
     }
 
     suspend fun pause() {
@@ -75,8 +82,8 @@ class StreamingConnectionManager(
         stateMutex.withLock {
             if (state is ConnectionState.Paused) {
                 state = ConnectionState.Started
-            } else if (state is ConnectionState.Stopped) {
-                // Resume when not started is a no-op
+            } else {
+                // Already started or stopped — nothing to do
                 return
             }
         }
@@ -86,11 +93,18 @@ class StreamingConnectionManager(
     private fun disconnectLocked() {
         connectionJob?.cancel()
         connectionJob = null
-        currentEventSourceClient?.disconnect()
+        val client = currentEventSourceClient
         currentEventSourceClient = null
+        // Disconnect asynchronously: BufferedReader.close() blocks while readLine()
+        // holds its lock on the IO thread. Running disconnect in background prevents
+        // pause() from holding the mutex for seconds, allowing resume() to proceed.
+        if (client != null) {
+            scope.launch(connectionDispatcher) { client.disconnect() }
+        }
     }
 
     private fun connect() {
+        observer.notifyEvent(ObservableEvent(ObservableEventType.STREAMING_CONNECT_STARTED))
         connectionJob = scope.launch {
             try {
                 val streamingToken = tokenProvider()
@@ -106,6 +120,10 @@ class StreamingConnectionManager(
                 val channels = channelExtractor(token)
                 val uri = URI("$streamingUrl?v=1.1&channel=${channels.joinToString(",")}&accessToken=$token")
 
+                // Reset occupancy state for new connection
+                occupancyByChannel.clear()
+                hadPublishers = false
+
                 // Create new EventSourceClient instance
                 val client = eventSourceClientProvider()
                 currentEventSourceClient = client
@@ -114,8 +132,9 @@ class StreamingConnectionManager(
                 withContext(connectionDispatcher) {
                     client.connect(uri, createEventHandler())
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                Logger.e("Streaming connection failed: ${e.message}")
                 handleConnectionError(retryable = true)
             }
         }
@@ -123,6 +142,7 @@ class StreamingConnectionManager(
 
     private fun createEventHandler() = object : EventSourceClient.EventHandler {
         override fun onOpen() {
+            observer.notifyEvent(ObservableEvent(ObservableEventType.STREAMING_CONNECTED))
             backoffCounter.resetCounter()
             scope.launch { onEvaluationFetchNotification(null) }
         }
@@ -150,7 +170,7 @@ class StreamingConnectionManager(
                 return@launch
             }
 
-            val delayMs = backoffCounter.getNextRetryTime()
+            val delayMs = backoffCounter.getNextRetryTime() * 1_000L
             delay(delayMs)
 
             val stillStarted = stateMutex.withLock {
@@ -171,9 +191,23 @@ class StreamingConnectionManager(
         scope.launch {
             when (notification) {
                 is EvaluationUpdateNotification -> {
+                    observer.notifyEvent(ObservableEvent(
+                        type = ObservableEventType.STREAMING_NOTIFICATION_RECEIVED,
+                        properties = mapOf(
+                            "notificationType" to "EVALUATIONS_UPDATE",
+                            "rawData" to jsonData
+                        )
+                    ))
                     onEvaluationFetchNotification.invoke(notification)
                 }
                 is ThinControlNotification -> {
+                    observer.notifyEvent(ObservableEvent(
+                        type = ObservableEventType.STREAMING_NOTIFICATION_RECEIVED,
+                        properties = mapOf(
+                            "notificationType" to notification.controlType.name,
+                            "rawData" to jsonData
+                        )
+                    ))
                     when (notification.controlType) {
                         ThinControlNotification.ControlType.STREAMING_RESUMED -> resume()
                         ThinControlNotification.ControlType.STREAMING_PAUSED -> pause()
@@ -185,13 +219,32 @@ class StreamingConnectionManager(
                     }
                 }
                 is ThinOccupancyNotification -> {
-                    if (notification.publishers == 0) {
+                    observer.notifyEvent(ObservableEvent(
+                        type = ObservableEventType.STREAMING_NOTIFICATION_RECEIVED,
+                        properties = mapOf(
+                            "notificationType" to "OCCUPANCY",
+                            "rawData" to jsonData
+                        )
+                    ))
+                    notification.channelName?.let { occupancyByChannel[it] = notification.publishers }
+                    val totalPublishers = occupancyByChannel.values.sum()
+                    if (totalPublishers > 0) {
+                        hadPublishers = true
+                    } else if (hadPublishers) {
                         onOccupancyZero()
                         stop()
                     }
                 }
                 is ThinStreamingError -> {
-                    Logger.e("Streaming error: ${notification.message} (code: ${notification.code})")
+                    observer.notifyEvent(ObservableEvent(
+                        type = ObservableEventType.STREAMING_NOTIFICATION_RECEIVED,
+                        properties = mapOf(
+                            "notificationType" to "STREAMING_ERROR",
+                            "errorCode" to notification.code.toString(),
+                            "errorMessage" to (notification.message ?: ""),
+                            "rawData" to jsonData
+                        )
+                    ))
                 }
             }
         }

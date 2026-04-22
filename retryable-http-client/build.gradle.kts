@@ -4,9 +4,6 @@ plugins {
 
 android {
     namespace = "io.split.client.thin.http"
-    compileSdk {
-        version = release(36)
-    }
 
     defaultConfig {
         minSdk = 21
@@ -30,8 +27,6 @@ android {
 }
 
 dependencies {
-    api(project(":http"))
-    api(project(":observer"))
     implementation(project(":backoff"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
