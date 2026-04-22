@@ -1,7 +1,7 @@
 package io.split.client.thin.events
 
-import io.split.android.client.network.HttpResponse
 import io.split.android.client.submitter.RecorderException
+import io.split.client.thin.http.contracts.HttpResponse
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -91,13 +91,9 @@ class HttpEventsSubmitterTest {
 
     private fun createResponse(success: Boolean, status: Int): HttpResponse {
         return object : HttpResponse {
-            override fun isSuccess() = success
-            override fun getHttpStatus() = status
-            override fun isCredentialsError() = status == 401 || status == 403
-            override fun isBadRequestError() = status == 400
-            override fun isClientRelatedError() = status in 400..499
+            override val isSuccess = success
+            override val httpStatus = status
             override fun getData() = ""
-            override fun getServerCertificates() = emptyArray<java.security.cert.Certificate>()
         }
     }
 }

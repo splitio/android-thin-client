@@ -9,7 +9,9 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.mockito.Mockito.mock
@@ -139,6 +141,59 @@ class DefaultAuthProviderTest {
         authProvider.invalidateAll()
 
         verify(storage).removeCredential()
+    }
+
+    @Test
+    fun `addTarget with defaultTarget returns false - target already known`() {
+        val result = authProvider.addTarget(target)
+
+        assertFalse(result)
+    }
+
+    @Test
+    fun `addTarget with non-default target returns true - genuinely new target`() {
+        val result = authProvider.addTarget("user-2")
+
+        assertTrue(result)
+    }
+
+    @Test
+    fun `credential no-arg uses defaultTarget seeded in activeTargets`() = runTest {
+        `when`(storage.getCredential()).thenReturn(null)
+        `when`(fetcher.fetchCredential(target)).thenReturn(validCredential)
+
+        authProvider.credential()
+
+        verify(fetcher).fetchCredential(target)
+    }
+
+    @Test
+    fun `addTarget with defaultTarget during in-flight fetch does not cause duplicate fetch`() = runTest {
+        val fetchStarted = CompletableDeferred<Unit>()
+        val fetchUnblocked = CompletableDeferred<Unit>()
+        var fetchCount = 0
+        val blockingFetcher = CredentialFetcher {
+            fetchCount++
+            fetchStarted.complete(Unit)
+            fetchUnblocked.await()
+            validCredential
+        }
+        authProvider = DefaultAuthProvider(blockingFetcher, storage, compositeKeyBuilder, defaultTarget = target)
+        `when`(storage.getCredential()).thenReturn(null)
+
+        val coroutineA = launch { authProvider.credential() }
+        fetchStarted.await()
+
+        // Mirrors DefaultClientManager.getOrCreate: if addTarget returns true, call invalidateAll
+        val isNew = authProvider.addTarget(target)
+        if (isNew) authProvider.invalidateAll()
+
+        val coroutineB = async { authProvider.credential() }
+        fetchUnblocked.complete(Unit)
+        coroutineA.join()
+        coroutineB.await()
+
+        assertEquals(1, fetchCount)
     }
 
     @Test

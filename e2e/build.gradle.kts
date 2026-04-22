@@ -4,13 +4,11 @@ plugins {
 
 android {
     namespace = "io.split.client.thin.consumer"
-    compileSdk {
-        version = release(36)
-    }
 
     defaultConfig {
         minSdk = 21
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunnerArguments["clearPackageData"] = "true"
     }
 
     compileOptions {
@@ -41,4 +39,6 @@ dependencies {
 
     androidTestImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
     androidTestImplementation("com.squareup.okhttp3:mockwebserver:4.10.0")
+    androidTestImplementation("androidx.test:core:1.6.1")
+    androidTestImplementation("androidx.test.uiautomator:uiautomator:2.2.0")
 }
