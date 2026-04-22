@@ -147,6 +147,24 @@ class RoomEvaluationPersistenceTest {
     }
 
     @Test
+    fun `lastUpdateTimestamp is written on persist and read back on load`() {
+        val flagJson = """{"result":{"flag":"flag1","treatment":"on","config":null,"label":null,"changeNumber":100},"flagSets":[]}"""
+        val before = System.currentTimeMillis()
+        persistence.persistForKey("keyHash1", "attrHash1", 100L, listOf(SerializedEvaluation("flag1", flagJson)))
+        val after = System.currentTimeMillis()
+
+        val loaded = persistence.loadForKey("keyHash1", "attrHash1")
+        val ts = loaded?.lastUpdateTimestamp
+        assertTrue(ts != null && ts >= before && ts <= after)
+    }
+
+    @Test
+    fun `loadForKey returns null lastUpdateTimestamp when no row exists`() {
+        val data = persistence.loadForKey("nokey", "noattr")
+        assertNull(data?.lastUpdateTimestamp)
+    }
+
+    @Test
     fun `changeNumber is stored once per keyHash in attributes table`() {
         val flag1Json = """{"result":{"flag":"flag1","treatment":"on","config":null,"label":null,"changeNumber":100},"flagSets":[]}"""
         val flag2Json = """{"result":{"flag":"flag2","treatment":"off","config":null,"label":null,"changeNumber":100},"flagSets":[]}"""

@@ -122,7 +122,8 @@ class EvaluationDaoTest {
             EvaluationEntity("keyHash1", "flag4", """{"treatment":"on"}""")
         )
 
-        dao.replaceForKey("keyHash1", newEntities)
+        dao.deleteByKeyHash("keyHash1")
+        dao.insert(newEntities)
 
         val results = dao.getByKey("keyHash1")
         assertEquals(2, results.size)

@@ -54,6 +54,7 @@ import io.split.client.thin.internal.streaming.StreamingToken
 import io.split.client.thin.internal.streaming.createStreamingComponents
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 
 // TODO: move these constants
@@ -141,6 +142,12 @@ object SplitFactoryBuilder {
             secureHttpClient = secureHttpClient,
             compositeObserver = compositeObserver,
             cacheLoader = persistenceComponents.evaluationPersistenceManager,
+            cacheLoadedPayloadBuilder = { _, lastUpdateTimestamp ->
+                buildCacheLoadedPayload(lastUpdateTimestamp)
+            },
+            evaluationsUpdatedPayloadBuilder = { _, reason, changedFlagNames, isCacheLoaded ->
+                buildEvaluationsUpdatedPayload(reason, changedFlagNames, isCacheLoaded)
+            },
         )
 
         // Event tracking components
@@ -151,8 +158,8 @@ object SplitFactoryBuilder {
             submitter = httpEventsSubmitter,
             batchSize = EVENTS_BATCH_SIZE
         )
-        val eventsContext = factoryScope.coroutineContext + Dispatchers.IO.limitedParallelism(1)
-        val eventsScope = CoroutineScope(eventsContext)
+        val eventsJob = SupervisorJob(parent = factoryScope.coroutineContext[Job])
+        val eventsScope = CoroutineScope(eventsJob + Dispatchers.IO.limitedParallelism(1))
         val taskExecutor = CoroutineSplitTaskExecutor(eventsScope)
         // Safe: both EventsStorage and PersistentEventsStorage implement StoragePusher<TrackerEvent>;
         // the declared type is RecorderStorage<TrackerEvent> but the runtime type always implements both.
@@ -313,6 +320,19 @@ object SplitFactoryBuilder {
         }
     }
 
+}
+
+internal fun buildCacheLoadedPayload(lastUpdateTimestamp: Long?): SdkReadyMetadata =
+    SdkReadyMetadata(isInitialCacheLoad = false, lastUpdateTimestamp = lastUpdateTimestamp)
+
+internal fun buildEvaluationsUpdatedPayload(
+    reason: FetchReason,
+    changedFlagNames: List<String>,
+    isCacheLoaded: Boolean,
+): Any? = when (reason) {
+    FetchReason.INITIALIZATION -> SdkReadyMetadata(isInitialCacheLoad = !isCacheLoaded, lastUpdateTimestamp = null)
+    else -> if (changedFlagNames.isEmpty()) null
+    else SdkUpdateMetadata(type = SdkUpdateMetadata.Type.FLAGS_UPDATE, names = changedFlagNames)
 }
 
 internal fun buildDelayProvider(

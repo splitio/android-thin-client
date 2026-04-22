@@ -615,13 +615,15 @@ class SdkBehaviorAndroidTest {
 
         client.track("checkout")
 
-        // destroy() flushes the events coordinator before cancelling the scope
-        runBlocking { factory.destroy() }
+        try {
+            // destroy() flushes the events coordinator before cancelling the scope
+            runBlocking { factory.destroy() }
 
-        assertTrue("events not flushed before destroy completed",
-            server.capturedEventBodies.any { it.contains("\"eventTypeId\":\"checkout\"") })
-
-        server.shutdown()
+            assertTrue("events not flushed before destroy completed",
+                server.capturedEventBodies.any { it.contains("\"eventTypeId\":\"checkout\"") })
+        } finally {
+            server.shutdown()
+        }
     }
 
     // -------------------------------------------------------------------------
