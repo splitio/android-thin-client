@@ -22,23 +22,35 @@ internal class DefaultAuthProvider(
     // Completion callbacks may run on different threads, so this map must be thread-safe.
     private val inFlight = ConcurrentHashMap<String, Deferred<JwtCredential>>()
 
-    private val activeTargets = if (defaultTarget != null) mutableSetOf(defaultTarget) else mutableSetOf()
+    // Ref-counted map: matchingKey -> count of live clients using that key.
+    // Multiple clients may share a matchingKey with different bucketingKeys;
+    // removing a target drops it only when its ref-count reaches zero.
+    private val activeTargetRefs = if (defaultTarget != null) mutableMapOf(defaultTarget to 1) else mutableMapOf<String, Int>()
     private val activeTargetsLock = Any()
 
     override fun addTarget(target: String): Boolean {
-        return synchronized(activeTargetsLock) { activeTargets.add(target) }
+        return synchronized(activeTargetsLock) {
+            val prev = activeTargetRefs[target] ?: 0
+            activeTargetRefs[target] = prev + 1
+            prev == 0 // returns true only when the target is newly added
+        }
     }
 
     override fun removeTarget(target: String): Boolean {
         return synchronized(activeTargetsLock) {
-            activeTargets.remove(target)
-            activeTargets.isEmpty()
+            val prev = activeTargetRefs[target] ?: return@synchronized false
+            if (prev <= 1) {
+                activeTargetRefs.remove(target)
+            } else {
+                activeTargetRefs[target] = prev - 1
+            }
+            activeTargetRefs.isEmpty()
         }
     }
 
     override suspend fun credential(): JwtCredential {
         val effective = synchronized(activeTargetsLock) {
-            activeTargets.toSet().ifEmpty { defaultTarget?.let { setOf(it) } ?: emptySet() }
+            activeTargetRefs.keys.toSet().ifEmpty { defaultTarget?.let { setOf(it) } ?: emptySet() }
         }
         return credential(effective)
     }
@@ -59,7 +71,9 @@ internal class DefaultAuthProvider(
 
     override suspend fun invalidateAll() {
         mutex.withLock {
+            val deferreds = inFlight.values.toList()
             inFlight.clear()
+            deferreds.forEach { it.cancel() }
         }
         credentialStorage.removeCredential()
     }

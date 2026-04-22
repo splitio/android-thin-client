@@ -10,7 +10,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-class DefaultStreamingManager(
+internal class DefaultStreamingManager(
     private val streamingUrl: String,
     private val tokenProvider: suspend () -> StreamingToken,
     private val eventSourceClientProvider: () -> EventSourceClient,

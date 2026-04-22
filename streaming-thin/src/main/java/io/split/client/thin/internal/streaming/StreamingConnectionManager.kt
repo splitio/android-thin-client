@@ -23,7 +23,7 @@ data class StreamingToken(
     val pushEnabled: Boolean = true,
 )
 
-class StreamingConnectionManager(
+internal class StreamingConnectionManager(
     private val streamingUrl: String,
     private val tokenProvider: suspend () -> StreamingToken,
     private val channelExtractor: (String) -> List<String> = SseJwtParser()::parse,

@@ -251,6 +251,7 @@ object SplitFactoryBuilder {
             syncMode = syncMode,
             streamingUrl = endpoints?.streamingUrl ?: DEFAULT_STREAMING_URL,
             httpClient = androidHttpClient,
+            parentScope = factoryScope,
             tokenProvider = {
                 val cred = authProvider.credential()
                 StreamingToken(cred.token, cred.connDelaySeconds, cred.pushEnabled)
@@ -290,6 +291,7 @@ object SplitFactoryBuilder {
         syncMode: SplitClientConfig.SyncMode,
         streamingUrl: String,
         httpClient: HttpClient,
+        parentScope: CoroutineScope,
         tokenProvider: suspend () -> StreamingToken,
         onEvaluationFetchNotification: suspend (EvaluationUpdateNotification?) -> Unit,
         onPushDisabled: suspend () -> Unit,
@@ -301,6 +303,7 @@ object SplitFactoryBuilder {
             createStreamingComponents(
                 streamingUrl = streamingUrl,
                 httpClient = httpClient,
+                parentScope = parentScope,
                 tokenProvider = tokenProvider,
                 onEvaluationFetchNotification = onEvaluationFetchNotification,
                 onPushDisabled = onPushDisabled,
