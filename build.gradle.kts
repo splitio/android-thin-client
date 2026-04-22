@@ -23,10 +23,11 @@ plugins {
 
 subprojects {
     group = "io.split.client"
-    version = "0.1.0"
+    version = "0.1.0-rc3"
 
     plugins.withId("com.android.library") {
         extensions.configure<LibraryExtension>("android") {
+            compileSdk = 34
             buildTypes.named("debug") {
                 enableUnitTestCoverage = true
             }

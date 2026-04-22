@@ -1,7 +1,12 @@
-package io.split.client.thin.http
+package io.split.client.thin.internal
 
 import io.split.android.client.backoff.ExponentialBackoffCounter
-import io.split.android.client.network.HttpClient
+import io.split.client.thin.http.CategoryRetryPolicies
+import io.split.client.thin.http.DefaultRetryableHttpClient
+import io.split.client.thin.http.RequestCategory
+import io.split.client.thin.http.RetryPolicy
+import io.split.client.thin.http.RetryableHttpClient
+import io.split.client.thin.http.contracts.HttpClient
 import io.split.client.thin.internal.observer.CompositeObserver
 import io.split.client.thin.internal.observer.ObservableEvent
 import io.split.client.thin.internal.observer.ObservableEventType
@@ -11,7 +16,16 @@ fun createRetryableHttpClient(
     compositeObserver: CompositeObserver,
 ): RetryableHttpClient {
     val defaultPolicy = RetryPolicy(maxAttempts = 3, backoffBaseSeconds = 1)
-    val policies = RequestCategory.entries.associateWith { CategoryRetryPolicies(default = defaultPolicy) }
+    // 4xx client errors are deterministic — retrying the same request won't change the outcome.
+    // 401 in particular is handled at a higher level (DefaultSecureHttpClient re-auth flow),
+    // so retrying it here would bypass that mechanism entirely.
+    val noRetryStatuses = mapOf(
+        400 to null, 401 to null, 403 to null, 404 to null,
+        405 to null, 413 to null, 422 to null, 429 to null,
+    )
+    val policies = RequestCategory.entries.associateWith {
+        CategoryRetryPolicies(default = defaultPolicy, byStatus = noRetryStatuses)
+    }
     return DefaultRetryableHttpClient(
         httpClient = httpClient,
         policiesByCategory = policies,
