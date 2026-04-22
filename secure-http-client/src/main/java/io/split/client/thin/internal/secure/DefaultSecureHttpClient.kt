@@ -1,10 +1,10 @@
 package io.split.client.thin.internal.secure
 
-import io.split.android.client.network.HttpMethod
-import io.split.android.client.network.HttpResponse
 import io.split.client.thin.http.HttpRequestDescriptor
 import io.split.client.thin.http.RequestCategory
 import io.split.client.thin.http.RetryableHttpClient
+import io.split.client.thin.http.contracts.HttpMethod
+import io.split.client.thin.http.contracts.HttpResponse
 import io.split.client.thin.internal.auth.AuthProvider
 import io.split.client.thin.internal.auth.JwtCredential
 import kotlinx.serialization.encodeToString
@@ -34,7 +34,7 @@ internal class DefaultSecureHttpClient(
         val token = authProvider.credential().token
         val request = buildEvaluationsRequest(uri, body, token, digest)
         val response = retryableHttpClient.execute(request, RequestCategory.EVALUATIONS)
-        if (response.getHttpStatus() == HTTP_UNAUTHORIZED) {
+        if (response.httpStatus == HTTP_UNAUTHORIZED) {
             authProvider.invalidateAll()
             val freshToken = authProvider.credential().token
             val retryRequest = buildEvaluationsRequest(uri, body, freshToken, digest)
@@ -61,7 +61,7 @@ internal class DefaultSecureHttpClient(
         val token = authProvider.credential().token
         val request = buildRequest(uri, method, body, token)
         val response = retryableHttpClient.execute(request, category)
-        if (response.getHttpStatus() == HTTP_UNAUTHORIZED) {
+        if (response.httpStatus == HTTP_UNAUTHORIZED) {
             authProvider.invalidateAll()
             val freshToken = authProvider.credential().token
             val retryRequest = buildRequest(uri, method, body, freshToken)
@@ -106,7 +106,7 @@ internal class DefaultSecureHttpClient(
         params.add("since=$changeNumber")
         filters?.flagNames?.forEach { params.add("flags=${encode(it)}") }
         filters?.flagSets?.forEach { params.add("sets=${encode(it)}") }
-        filters?.withDynamicConfig?.let { params.add("withDynamicConfig=$it") }
+        filters?.withDynamicConfig?.let { params.add("configs=$it") }
         impressionsMode?.let { params.add("impressionsMode=$it") }
         return URI("$evaluationsUrl?${params.joinToString("&")}")
     }
@@ -114,7 +114,7 @@ internal class DefaultSecureHttpClient(
     private fun buildEvaluationsBody(target: EvaluationTarget): String {
         val attrs = target.attributes
         if (attrs.isNullOrEmpty()) return "{}"
-        val attributeElements = attrs.mapValues { (_, value) ->
+        val attributeElements = attrs.filterValues { it != null }.mapValues { (_, value) ->
             valueToJsonElement(value)
         }
         val attributesObject = JsonObject(attributeElements)
@@ -129,7 +129,7 @@ internal class DefaultSecureHttpClient(
             is Boolean -> JsonPrimitive(value)
             is Number -> JsonPrimitive(value)
             is List<*> -> {
-                val elements = value.map { valueToJsonElement(it) }
+                val elements = value.filterNotNull().map { valueToJsonElement(it) }
                 JsonArray(elements)
             }
             else -> JsonPrimitive(value.toString())

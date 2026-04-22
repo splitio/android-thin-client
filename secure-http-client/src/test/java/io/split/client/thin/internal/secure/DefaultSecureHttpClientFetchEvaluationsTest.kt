@@ -153,7 +153,7 @@ class DefaultSecureHttpClientFetchEvaluationsTest {
 
         client.fetchEvaluations(testDefaultTarget, filters, -1L)
 
-        assertTrue(http.lastRequest?.uri?.query?.contains("withDynamicConfig=true") == true)
+        assertTrue(http.lastRequest?.uri?.query?.contains("configs=true") == true)
     }
 
     @Test
@@ -163,7 +163,7 @@ class DefaultSecureHttpClientFetchEvaluationsTest {
 
         client.fetchEvaluations(testDefaultTarget, filters, -1L)
 
-        assertFalse(http.lastRequest?.uri?.query?.contains("withDynamicConfig") == true)
+        assertFalse(http.lastRequest?.uri?.query?.contains("configs") == true)
     }
 
     @Test
