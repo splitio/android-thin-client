@@ -40,16 +40,16 @@ class TestEventListener {
     val isReadyFired: Boolean get() = readyLatch.count == 0L
 
     val asSplitEventListener: SplitEventListener = object : SplitEventListener() {
-        override fun onReady(client: SplitClient, metadata: SdkReadyMetadata) {
+        override fun onReady(client: SplitClient, metadata: SdkReadyMetadata?) {
             lastReadyMetadata = metadata
             readyLatch.countDown()
         }
 
-        override fun onReadyFromCache(client: SplitClient, metadata: SdkReadyMetadata) {
+        override fun onReadyFromCache(client: SplitClient, metadata: SdkReadyMetadata?) {
             cacheReadyLatch.countDown()
         }
 
-        override fun onUpdate(client: SplitClient, metadata: SdkUpdateMetadata) {
+        override fun onUpdate(client: SplitClient, metadata: SdkUpdateMetadata?) {
             lastUpdateMetadata = metadata
             updateLatch.countDown()
         }
