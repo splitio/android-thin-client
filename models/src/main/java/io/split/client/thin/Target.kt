@@ -25,14 +25,23 @@ class Target @JvmOverloads constructor(
 
     override fun toString(): String = "Target(key=$key, attributes=$attributes, trafficType=$trafficType)"
 
+    fun copy(
+        key: Key = this.key,
+        attributes: Map<String, Any?> = this.attributes,
+        trafficType: String = this.trafficType,
+    ) = Target(key, attributes, trafficType)
+
     companion object {
-        private fun isValidAttributeValue(value: Any?): Boolean = when (value) {
-            null -> true
-            is String -> true
-            is Number -> true
-            is Boolean -> true
-            is Collection<*> -> value.all { it == null || isValidAttributeValue(it) }
-            else -> false
+        private fun isValidAttributeValue(value: Any?, depth: Int = 0): Boolean {
+            if (depth > 10) return false
+            return when (value) {
+                null -> true
+                is String -> true
+                is Number -> true
+                is Boolean -> true
+                is Collection<*> -> value.all { it == null || isValidAttributeValue(it, depth + 1) }
+                else -> false
+            }
         }
     }
 }

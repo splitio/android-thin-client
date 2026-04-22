@@ -4,6 +4,7 @@ import io.split.android.client.backoff.ExponentialBackoffCounter
 import io.split.android.client.service.sseclient.EventStreamParser
 import io.split.android.client.service.sseclient.sseclient.EventSourceClientImpl
 import io.split.android.client.network.HttpClient
+import io.split.client.thin.internal.observer.CompositeObserver
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
@@ -38,6 +39,7 @@ fun createStreamingComponents(
     tokenProvider: suspend () -> StreamingToken,
     onEvaluationFetchNotification: suspend (EvaluationUpdateNotification?) -> Unit,
     onPushDisabled: suspend () -> Unit = {},
+    observer: CompositeObserver,
 ): StreamingComponents {
     val streamingScope = CoroutineScope(SupervisorJob())
 
@@ -55,6 +57,7 @@ fun createStreamingComponents(
         onOccupancyZero = { /* TODO: handle occupancy zero */ },
         onEvaluationFetchNotification = onEvaluationFetchNotification,
         onPushDisabled = onPushDisabled,
+        observer = observer,
     )
 
     return StreamingComponents(

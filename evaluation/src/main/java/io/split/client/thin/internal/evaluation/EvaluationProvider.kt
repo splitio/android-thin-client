@@ -26,7 +26,7 @@ class DefaultEvaluationProvider(
         onEvalFetchStarted(evalKey)
         val target = evalKey.toEvaluationTarget()
         val response = secureHttpClient.fetchEvaluations(target, filters, changeNumber)
-        if (response.getHttpStatus() == HTTP_NOT_MODIFIED) return null
+        if (response.httpStatus == HTTP_NOT_MODIFIED) return null
         val body = response.getData()
         if (body.isNullOrEmpty()) {
             onEmptyResponseBody(evalKey)
