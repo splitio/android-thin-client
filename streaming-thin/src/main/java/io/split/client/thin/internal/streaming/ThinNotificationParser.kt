@@ -24,11 +24,16 @@ internal class ThinNotificationParser(
 
     fun parse(raw: RawThinNotification): ThinNotification? {
         return try {
-            when {
-                raw.data.contains("\"type\":\"EVALUATIONS_UPDATE\"") -> parseEvaluationUpdate(raw)
-                raw.data.contains("\"type\":\"CONTROL\"") -> parseControl(raw)
-                raw.data.contains("\"type\":\"ERROR\"") -> parseError(raw)
-                else -> parseOccupancy(raw)
+            val typeDto = json.decodeFromString<NotificationTypeDto>(raw.data)
+            when (typeDto.type) {
+                "EVALUATIONS_UPDATE" -> parseEvaluationUpdate(raw)
+                "CONTROL" -> parseControl(raw)
+                "ERROR" -> parseError(raw)
+                null -> parseOccupancy(raw)
+                else -> {
+                    Logger.w("Unknown notification type: ${typeDto.type}")
+                    null
+                }
             }
         } catch (e: Exception) {
             Logger.e("Failed to parse notification: ${e.message}")

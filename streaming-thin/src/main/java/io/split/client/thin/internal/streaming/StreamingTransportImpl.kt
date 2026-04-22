@@ -7,7 +7,7 @@ import io.split.android.client.service.sseclient.spi.StreamingTransport
 import java.io.BufferedReader
 import java.net.URI
 
-class StreamingTransportImpl(
+internal class StreamingTransportImpl(
     private val httpClient: HttpClient
 ) : StreamingTransport {
 

@@ -56,6 +56,31 @@ class DefaultCredentialFetcherTest {
 
         assertEquals(stubbedCredential, result)
     }
+
+    @Test
+    fun `fetchCredential URL-encodes target with special characters`() = runTest {
+        val specialTarget = "user key&id=1 test"
+        val (fetcher, fakeClient) = makeFetcher()
+
+        fetcher.fetchCredential(specialTarget)
+
+        // URLEncoder encodes space as +, & as %26, = as %3D
+        val uri = fakeClient.lastRequest?.uri?.toString() ?: ""
+        assertEquals("$serviceUrl/?users=user+key%26id%3D1+test", uri)
+    }
+
+    @Test
+    fun `fetchCredential URL-encodes target with non-ASCII characters`() = runTest {
+        val nonAsciiTarget = "usuário"
+        val (fetcher, fakeClient) = makeFetcher()
+
+        fetcher.fetchCredential(nonAsciiTarget)
+
+        val uri = fakeClient.lastRequest?.uri?.toString() ?: ""
+        // Must not contain the raw non-ASCII characters
+        assertEquals(false, uri.contains("usuário"))
+        assertEquals(true, uri.startsWith("$serviceUrl/?users="))
+    }
 }
 
 private class FakeHttpClient(private val responseJson: String) : RetryableHttpClient {

@@ -11,6 +11,12 @@ internal data class RawThinNotificationDto(
     @SerialName("timestamp") val timestamp: Long
 )
 
+// Discriminator DTO — parse once to determine the notification type
+@Serializable
+internal data class NotificationTypeDto(
+    @SerialName("type") val type: String? = null
+)
+
 // Inner data DTOs (one per notification type)
 @Serializable
 internal data class EvaluationUpdateDataDto(

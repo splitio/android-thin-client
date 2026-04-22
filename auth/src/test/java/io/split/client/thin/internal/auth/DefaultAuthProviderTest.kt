@@ -206,4 +206,88 @@ class DefaultAuthProviderTest {
 
         verify(fetcher).fetchCredential("user-1,user-2")
     }
+
+    // ---- Ref-counting tests (fix #4) ----
+
+    @Test
+    fun `removeTarget does not remove key when a second client shares the same matchingKey`() {
+        // Two clients with the same matchingKey — removing one should leave it in the active set
+        authProvider = DefaultAuthProvider(fetcher, storage, compositeKeyBuilder)
+        authProvider.addTarget("shared-key") // ref=1
+        authProvider.addTarget("shared-key") // ref=2
+
+        val allEmpty = authProvider.removeTarget("shared-key") // ref=1 — NOT empty
+
+        assertFalse("Target set should not be empty while a second client still holds the key", allEmpty)
+    }
+
+    @Test
+    fun `removeTarget returns true only when last ref for that key is removed`() {
+        authProvider = DefaultAuthProvider(fetcher, storage, compositeKeyBuilder)
+        authProvider.addTarget("shared-key") // ref=1
+        authProvider.addTarget("shared-key") // ref=2
+
+        authProvider.removeTarget("shared-key") // ref=1
+        val allEmpty = authProvider.removeTarget("shared-key") // ref=0 — empty
+
+        assertTrue("Target set should be empty after removing all refs", allEmpty)
+    }
+
+    @Test
+    fun `addTarget returns true only on first add of a new key`() {
+        authProvider = DefaultAuthProvider(fetcher, storage, compositeKeyBuilder)
+
+        val first = authProvider.addTarget("key-a")
+        val second = authProvider.addTarget("key-a")
+
+        assertTrue("First add should return true (new target)", first)
+        assertFalse("Second add should return false (existing target)", second)
+    }
+
+    @Test
+    fun `credential no-arg includes all uniquely-keyed active targets`() = runTest {
+        authProvider = DefaultAuthProvider(fetcher, storage, compositeKeyBuilder)
+        authProvider.addTarget("user-a")
+        authProvider.addTarget("user-b")
+        `when`(storage.getCredential()).thenReturn(null)
+        `when`(fetcher.fetchCredential("user-a,user-b")).thenReturn(validCredential)
+
+        authProvider.credential()
+
+        verify(fetcher).fetchCredential("user-a,user-b")
+    }
+
+    // ---- invalidateAll cancels in-flight Deferreds (fix #9) ----
+
+    @Test
+    fun `invalidateAll cancels in-flight fetch and allows fresh fetch after`() = runTest {
+        val fetchStarted = CompletableDeferred<Unit>()
+        var fetchAttempts = 0
+        val blockingFetcher = CredentialFetcher {
+            fetchAttempts++
+            if (fetchAttempts == 1) {
+                fetchStarted.complete(Unit)
+                awaitCancellation()
+            } else {
+                validCredential
+            }
+        }
+        authProvider = DefaultAuthProvider(blockingFetcher, storage, compositeKeyBuilder, defaultTarget = target)
+        `when`(storage.getCredential()).thenReturn(null)
+
+        // Start a fetch that will block
+        val inflightJob = launch(Job()) { authProvider.credential() }
+        fetchStarted.await()
+
+        // invalidateAll should cancel the in-flight deferred
+        authProvider.invalidateAll()
+        inflightJob.cancelAndJoin()
+
+        // A subsequent fetch should issue a new network call
+        `when`(storage.getCredential()).thenReturn(null)
+        val result = authProvider.credential()
+
+        assertEquals(validCredential, result)
+        assertEquals(2, fetchAttempts)
+    }
 }

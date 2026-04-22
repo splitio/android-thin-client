@@ -246,7 +246,7 @@ class ThinNotificationParserTest {
     }
 
     @Test
-    fun `parse returns null for unknown notification type`() {
+    fun `parse returns null for unknown notification type - does not fall through to occupancy`() {
         val raw = RawThinNotification(
             channel = "test",
             data = """{"type":"UNKNOWN_TYPE"}""",
@@ -255,7 +255,23 @@ class ThinNotificationParserTest {
 
         val result = parser.parse(raw)
 
+        // Unknown type must return null, not silently parse as occupancy
         assertNull(result)
+    }
+
+    @Test
+    fun `parse routes to occupancy when type field is absent`() {
+        val raw = RawThinNotification(
+            channel = "occupancy-channel",
+            data = """{"metrics":{"publishers":2}}""",
+            timestamp = 3000L
+        )
+
+        val result = parser.parse(raw)
+
+        // No "type" field → occupancy path
+        assertTrue(result is ThinOccupancyNotification)
+        assertEquals(2, (result as ThinOccupancyNotification).publishers)
     }
 
     @Test
