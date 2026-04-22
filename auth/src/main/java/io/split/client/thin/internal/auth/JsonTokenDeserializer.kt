@@ -13,11 +13,12 @@ internal class JsonTokenDeserializer(
 
     override fun deserialize(json: String): JwtCredential {
         val dto = format.decodeFromString<AuthResponse>(json)
+        val token = dto.token ?: ""
         return JwtCredential(
-            token = dto.token,
-            expiresAt = decodeJwtExp(dto.token),
-            pushEnabled = dto.pushEnabled,
-            connDelaySeconds = dto.connDelay,
+            token = token,
+            expiresAt = if (token.isNotEmpty()) decodeJwtExp(token) else 0L,
+            pushEnabled = dto.pushEnabled ?: false,
+            connDelaySeconds = dto.connDelay ?: 60,
         )
     }
 
@@ -38,7 +39,7 @@ internal class JsonTokenDeserializer(
 
 @Serializable
 private data class AuthResponse(
-    @SerialName("token") val token: String,
-    @SerialName("pushEnabled") val pushEnabled: Boolean,
-    @SerialName("connDelay") val connDelay: Long = 0,
+    @SerialName("token") val token: String? = null,
+    @SerialName("pushEnabled") val pushEnabled: Boolean? = null,
+    @SerialName("connDelay") val connDelay: Long? = null,
 )

@@ -13,6 +13,7 @@ import io.split.client.thin.internal.sdkevents.SplitEventDelivery
 import io.split.client.thin.internal.sdkevents.ThinClientEventsConfig
 import io.split.client.thin.internal.secure.EvaluationFilters
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 
 internal class DefaultClientFactory(
     private val compositeObserver: CompositeObserver,
@@ -30,9 +31,9 @@ internal class DefaultClientFactory(
             ThinClientEventsConfig.create(),
             SplitEventDelivery(scope),
         )
-        val eventManagerObserver = EventManagerObserver(eventsManager)
+        val eventManagerObserver = EventManagerObserver(eventsManager, target.key.matchingKey)
         compositeObserver.register(eventManagerObserver)
-        return DefaultSplitClient(
+        val client = DefaultSplitClient(
             initialTarget = target,
             tracker = eventTracker.tracker,
             evaluationRepository = evaluationRepository,
@@ -41,6 +42,11 @@ internal class DefaultClientFactory(
             eventsManager = eventsManager,
             flushOperation = flushFn,
             scope = scope,
+            onTargetChanged = { newKey -> eventManagerObserver.matchingKey = newKey },
         )
+        scope.launch {
+            evaluationRepository.setTarget(target, filters, isInitialization = true)
+        }
+        return client
     }
 }

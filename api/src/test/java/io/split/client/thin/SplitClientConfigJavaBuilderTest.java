@@ -23,8 +23,8 @@ public class SplitClientConfigJavaBuilderTest {
         assertEquals(3600, config.getSync().getEvaluationRefreshRate());
         assertEquals(1800, config.getSync().getPushRate());
         assertNull(config.getSync().getServiceEndpoints());
+        assertEquals(-1, config.getSync().getTimeout());
         assertNull(config.getStorage().getPrefix());
-        assertEquals(-1, config.getStorage().getTimeout());
     }
 
     @Test
@@ -132,44 +132,44 @@ public class SplitClientConfigJavaBuilderTest {
     }
 
     @Test
-    public void builderCanSetStorageTimeout() {
+    public void builderCanSetSyncTimeout() {
         SplitClientConfig config = new SplitClientConfig.Builder()
-                .storage(new SplitClientConfig.StorageConfig.Builder()
+                .sync(new SplitClientConfig.SyncConfig.Builder()
                         .timeout(30)
                         .build())
                 .build();
 
-        assertEquals(30, config.getStorage().getTimeout());
+        assertEquals(30, config.getSync().getTimeout());
     }
 
     @Test
     public void builderFallsBackInvalidValuesToDefaults() {
         SplitClientConfig config = new SplitClientConfig.Builder()
                 .sync(new SplitClientConfig.SyncConfig.Builder()
-                        .evaluationRefreshRate(1)
+                        .evaluationRefreshRate(0)
                         .pushRate(1)
+                        .timeout(-2)
                         .build())
                 .storage(new SplitClientConfig.StorageConfig.Builder()
                         .prefix("!!!invalid!!!")
-                        .timeout(-2)
                         .build())
                 .build();
 
         assertEquals(3600, config.getSync().getEvaluationRefreshRate());
         assertEquals(1800, config.getSync().getPushRate());
         assertNull(config.getStorage().getPrefix());
-        assertEquals(-1, config.getStorage().getTimeout());
+        assertEquals(-1, config.getSync().getTimeout());
     }
 
     @Test
     public void builderAcceptsEvaluationRefreshRateAtMinimumBoundary() {
         SplitClientConfig config = new SplitClientConfig.Builder()
                 .sync(new SplitClientConfig.SyncConfig.Builder()
-                        .evaluationRefreshRate(60)
+                        .evaluationRefreshRate(1)
                         .build())
                 .build();
 
-        assertEquals(60, config.getSync().getEvaluationRefreshRate());
+        assertEquals(1, config.getSync().getEvaluationRefreshRate());
     }
 
     @Test
@@ -184,14 +184,14 @@ public class SplitClientConfigJavaBuilderTest {
     }
 
     @Test
-    public void builderAcceptsStorageTimeoutOfZero() {
+    public void builderAcceptsSyncTimeoutOfZero() {
         SplitClientConfig config = new SplitClientConfig.Builder()
-                .storage(new SplitClientConfig.StorageConfig.Builder()
+                .sync(new SplitClientConfig.SyncConfig.Builder()
                         .timeout(0)
                         .build())
                 .build();
 
-        assertEquals(0, config.getStorage().getTimeout());
+        assertEquals(0, config.getSync().getTimeout());
     }
 
     @Test
