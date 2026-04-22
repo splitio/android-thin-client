@@ -4,28 +4,23 @@ import io.split.android.client.submitter.RecorderStorage
 import io.split.android.client.submitter.StoragePusher
 import io.split.android.client.tracker.TrackerEvent
 import io.split.client.thin.internal.persistence.PersistentEventsStorage as RoomEventsPersistence
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
 
 internal class PersistentEventsStorage(
     private val roomEventsPersistence: RoomEventsPersistence,
     private val serializer: TrackerEventSerializer,
     private val callbacks: EventsPersistenceCallbacks,
-    private val scope: CoroutineScope
 ) : RecorderStorage<TrackerEvent>, StoragePusher<TrackerEvent> {
 
     private val poppedIds = ConcurrentHashMap<Int, Long>()
 
     override fun push(element: TrackerEvent) {
-        scope.launch {
-            try {
-                val json = serializer.serialize(element)
-                roomEventsPersistence.push(json)
-                callbacks.onEventPushed()
-            } catch (e: Exception) {
-                callbacks.onPersistenceFailed(e.message ?: "Unknown error")
-            }
+        try {
+            val json = serializer.serialize(element)
+            roomEventsPersistence.push(json)
+            callbacks.onEventPushed()
+        } catch (e: Exception) {
+            callbacks.onPersistenceFailed(e.message ?: "Unknown error")
         }
     }
 
