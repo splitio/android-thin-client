@@ -1,14 +1,12 @@
 package io.split.client.thin.internal.auth
 
-import io.split.android.client.network.HttpResponse
 import io.split.client.thin.http.HttpRequestDescriptor
 import io.split.client.thin.http.RequestCategory
 import io.split.client.thin.http.RetryableHttpClient
+import io.split.client.thin.http.contracts.HttpResponse
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Test
-import org.mockito.Mockito.mock
-import org.mockito.Mockito.`when`
 
 class DefaultCredentialFetcherTest {
 
@@ -70,8 +68,10 @@ private class FakeHttpClient(private val responseJson: String) : RetryableHttpCl
     override suspend fun execute(request: HttpRequestDescriptor, category: RequestCategory): HttpResponse {
         lastRequest = request
         lastCategory = category
-        val response = mock(HttpResponse::class.java)
-        `when`(response.data).thenReturn(responseJson)
-        return response
+        return object : HttpResponse {
+            override val isSuccess: Boolean = true
+            override val httpStatus: Int = 200
+            override fun getData(): String? = responseJson
+        }
     }
 }

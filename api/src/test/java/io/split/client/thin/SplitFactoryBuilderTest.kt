@@ -35,11 +35,12 @@ class SplitFactoryBuilderTest {
     }
 
     private fun buildFactory(config: SplitClientConfig? = null): SplitFactory =
-        SplitFactoryBuilder.build(
+        SplitFactoryBuilder.buildInternal(
             context = mockContext,
             sdkKey = sdkKey,
             defaultTarget = defaultTarget,
             config = config,
+            configChangeDetectorFactory = { false },
         ).also { createdFactories.add(it) }
 
     private fun assertIsDefaultSplitFactory(factory: SplitFactory) {
@@ -137,5 +138,61 @@ class SplitFactoryBuilderTest {
         assertEquals(60000L, capturedArgs[1])
         assertEquals(7, capturedArgs[2])
         assertEquals(1, capturedArgs[3])
+    }
+
+    @Test
+    fun `buildCacheLoadedPayload returns SdkReadyMetadata with isInitialCacheLoad false`() {
+        val result = buildCacheLoadedPayload(lastUpdateTimestamp = 12345L)
+        assertEquals(false, result.isInitialCacheLoad)
+        assertEquals(12345L, result.lastUpdateTimestamp)
+    }
+
+    @Test
+    fun `buildCacheLoadedPayload passes null lastUpdateTimestamp`() {
+        val result = buildCacheLoadedPayload(lastUpdateTimestamp = null)
+        assertEquals(false, result.isInitialCacheLoad)
+        assertNull(result.lastUpdateTimestamp)
+    }
+
+    @Test
+    fun `buildEvaluationsUpdatedPayload INITIALIZATION no cache returns isInitialCacheLoad true`() {
+        val result = buildEvaluationsUpdatedPayload(
+            reason = io.split.client.thin.internal.evaluation.FetchReason.INITIALIZATION,
+            changedFlagNames = emptyList(),
+            isCacheLoaded = false
+        ) as SdkReadyMetadata
+        assertEquals(true, result.isInitialCacheLoad)
+        assertNull(result.lastUpdateTimestamp)
+    }
+
+    @Test
+    fun `buildEvaluationsUpdatedPayload INITIALIZATION with cache returns isInitialCacheLoad false`() {
+        val result = buildEvaluationsUpdatedPayload(
+            reason = io.split.client.thin.internal.evaluation.FetchReason.INITIALIZATION,
+            changedFlagNames = emptyList(),
+            isCacheLoaded = true
+        ) as SdkReadyMetadata
+        assertEquals(false, result.isInitialCacheLoad)
+    }
+
+    @Test
+    fun `buildEvaluationsUpdatedPayload PERIODIC with flags returns SdkUpdateMetadata`() {
+        val result = buildEvaluationsUpdatedPayload(
+            reason = io.split.client.thin.internal.evaluation.FetchReason.PERIODIC,
+            changedFlagNames = listOf("flag-a", "flag-b"),
+            isCacheLoaded = true
+        ) as SdkUpdateMetadata
+        assertEquals(SdkUpdateMetadata.Type.FLAGS_UPDATE, result.type)
+        assertEquals(listOf("flag-a", "flag-b"), result.names)
+    }
+
+    @Test
+    fun `buildEvaluationsUpdatedPayload PERIODIC empty flags returns null`() {
+        val result = buildEvaluationsUpdatedPayload(
+            reason = io.split.client.thin.internal.evaluation.FetchReason.PERIODIC,
+            changedFlagNames = emptyList(),
+            isCacheLoaded = true
+        )
+        assertNull(result)
     }
 }

@@ -1,5 +1,7 @@
 package io.split.client.thin.internal.streaming
 
+import io.split.client.thin.internal.observer.CompositeObserver
+import io.split.client.thin.internal.observer.ObservableEventType
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -159,7 +161,7 @@ class StreamingConnectionManagerTest {
         advanceUntilIdle()
 
         eventSourceClient.simulateMessage(
-            mapOf("data" to """{"channel":"evaluations","data":"{\"type\":\"EVALUATION_UPDATE\",\"changeNumber\":123}","timestamp":1000}""")
+            mapOf("data" to """{"channel":"evaluations","data":"{\"type\":\"EVALUATIONS_UPDATE\",\"changeNumber\":123}","timestamp":1000}""")
         )
         advanceUntilIdle()
 
@@ -197,7 +199,7 @@ class StreamingConnectionManagerTest {
         capturedNotification = null
 
         eventSourceClient.simulateMessage(
-            mapOf("data" to """{"channel":"evaluations","data":"{\"type\":\"EVALUATION_UPDATE\",\"changeNumber\":42,\"i\":60000,\"s\":10,\"h\":1}","timestamp":1000}""")
+            mapOf("data" to """{"channel":"evaluations","data":"{\"type\":\"EVALUATIONS_UPDATE\",\"changeNumber\":42,\"i\":60000,\"s\":10,\"h\":1}","timestamp":1000}""")
         )
         advanceUntilIdle()
 
@@ -304,7 +306,7 @@ class StreamingConnectionManagerTest {
     }
 
     @Test
-    fun `onMessage with OCCUPANCY publishers=0 triggers callback`() = runTest {
+    fun `onMessage with OCCUPANCY publishers=0 on all channels after having publishers triggers callback`() = runTest {
         val eventSourceClient = FakeEventSourceClient()
         var callbackInvoked = false
         val manager = createManager(
@@ -315,12 +317,43 @@ class StreamingConnectionManagerTest {
         manager.start()
         advanceUntilIdle()
 
+        // First establish that there are publishers
         eventSourceClient.simulateMessage(
-            mapOf("data" to """{"channel":"[?occupancy=metrics.publishers]control_pri","data":"{\"metrics\":{\"publishers\":0}}","timestamp":1000}""")
+            mapOf("data" to """{"channel":"[?occupancy=metrics.publishers]control_pri","data":"{\"metrics\":{\"publishers\":2}}","timestamp":1000}""")
+        )
+        advanceUntilIdle()
+
+        // Now publishers drop to 0
+        eventSourceClient.simulateMessage(
+            mapOf("data" to """{"channel":"[?occupancy=metrics.publishers]control_pri","data":"{\"metrics\":{\"publishers\":0}}","timestamp":2000}""")
         )
         advanceUntilIdle()
 
         assertTrue(callbackInvoked)
+    }
+
+    @Test
+    fun `onMessage with OCCUPANCY publishers=0 on one channel but non-zero on another does not trigger callback`() = runTest {
+        val eventSourceClient = FakeEventSourceClient()
+        var callbackInvoked = false
+        val manager = createManager(
+            eventSourceClientProvider = { eventSourceClient },
+            onOccupancyZero = { callbackInvoked = true },
+        )
+
+        manager.start()
+        advanceUntilIdle()
+
+        // sec channel has 0 publishers, but pri has 2 — should NOT stop
+        eventSourceClient.simulateMessage(
+            mapOf("data" to """{"channel":"[?occupancy=metrics.publishers]control_sec","data":"{\"metrics\":{\"publishers\":0}}","timestamp":1000}""")
+        )
+        eventSourceClient.simulateMessage(
+            mapOf("data" to """{"channel":"[?occupancy=metrics.publishers]control_pri","data":"{\"metrics\":{\"publishers\":2}}","timestamp":1000}""")
+        )
+        advanceUntilIdle()
+
+        assertFalse(callbackInvoked)
     }
 
     @Test
@@ -405,12 +438,60 @@ class StreamingConnectionManagerTest {
         assertFalse("URL should not use ?token= param", uri.contains("?token="))
     }
 
+    @Test
+    fun `connecting notifies streaming_connect_started and streaming_connected events`() = runTest {
+        val observer = FakeCompositeObserver()
+        val manager = createManager(observer = observer)
+
+        manager.start()
+        advanceUntilIdle()
+
+        val types = observer.events.map { it.type }
+        assertTrue(types.contains(ObservableEventType.STREAMING_CONNECT_STARTED))
+        assertTrue(types.contains(ObservableEventType.STREAMING_CONNECTED))
+    }
+
+    @Test
+    fun `receiving a notification notifies streaming_notification_received with notificationType`() = runTest {
+        val observer = FakeCompositeObserver()
+        val eventSourceClient = FakeEventSourceClient()
+        val manager = createManager(eventSourceClientProvider = { eventSourceClient }, observer = observer)
+
+        manager.start()
+        advanceUntilIdle()
+
+        eventSourceClient.simulateMessage(
+            mapOf("data" to """{"channel":"evaluations","data":"{\"type\":\"EVALUATIONS_UPDATE\",\"changeNumber\":1}","timestamp":1000}""")
+        )
+        advanceUntilIdle()
+
+        val notifEvent = observer.events.find { it.type == ObservableEventType.STREAMING_NOTIFICATION_RECEIVED }
+        assertNotNull(notifEvent)
+        assertEquals("EVALUATIONS_UPDATE", notifEvent!!.properties["notificationType"])
+    }
+
+    @Test
+    fun `disconnecting notifies streaming_disconnected event`() = runTest {
+        val observer = FakeCompositeObserver()
+        val manager = createManager(observer = observer)
+
+        manager.start()
+        advanceUntilIdle()
+        observer.events.clear()
+
+        manager.stop()
+        advanceUntilIdle()
+
+        assertTrue(observer.events.any { it.type == ObservableEventType.STREAMING_DISCONNECTED })
+    }
+
     private fun TestScope.createManager(
         eventSourceClientProvider: () -> FakeEventSourceClient = { FakeEventSourceClient() },
         backoffCounter: FakeBackoffCounter = FakeBackoffCounter(),
         onOccupancyZero: suspend () -> Unit = {},
         onEvaluationFetchNotification: suspend (EvaluationUpdateNotification?) -> Unit = {},
         channelExtractor: (String) -> List<String> = { listOf("evaluations", "[?occupancy=metrics.publishers]control_pri") },
+        observer: CompositeObserver = FakeCompositeObserver(),
     ): StreamingConnectionManager = StreamingConnectionManager(
         streamingUrl = "https://streaming.test.io/sse",
         tokenProvider = { StreamingToken("test-token") },
@@ -421,5 +502,6 @@ class StreamingConnectionManagerTest {
         connectionDispatcher = UnconfinedTestDispatcher(testScheduler),
         onOccupancyZero = onOccupancyZero,
         onEvaluationFetchNotification = onEvaluationFetchNotification,
+        observer = observer,
     )
 }

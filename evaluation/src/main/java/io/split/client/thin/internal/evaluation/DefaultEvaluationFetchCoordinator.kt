@@ -10,8 +10,8 @@ class DefaultEvaluationFetchCoordinator(
     private val provider: EvaluationProvider,
     private val readStorage: EvaluationReadStorage,
     private val writeStorage: EvaluationWriteStorage,
-    private val onEvaluationsUpdated: (EvaluationKey, FetchReason) -> Unit = { _, _ -> },
-    private val onEvalFetchRequested: (evalKey: EvaluationKey, reason: FetchReason) -> Unit = { _, _ -> },
+    private val onEvaluationsUpdated: (EvaluationKey, FetchReason, List<String>) -> Unit = { _, _, _ -> },
+    private val onEvalFetchRequested: (evalKey: EvaluationKey, reason: FetchReason, delayMs: Long) -> Unit = { _, _, _ -> },
     private val onEvalFetchDeduped: (evalKey: EvaluationKey) -> Unit = {},
     private val onEvalFetchSucceeded: (evalKey: EvaluationKey) -> Unit = {},
     private val onEvalFetchFailed: (evalKey: EvaluationKey, error: Throwable) -> Unit = { _, _ -> },
@@ -20,8 +20,8 @@ class DefaultEvaluationFetchCoordinator(
     private val inFlight: MutableSet<EvaluationKey> = Collections.newSetFromMap(ConcurrentHashMap())
     private val fetchedKeys: MutableSet<EvaluationKey> = Collections.newSetFromMap(ConcurrentHashMap())
 
-    override suspend fun fetchIfNeeded(evalKey: EvaluationKey, filters: EvaluationFilters?, reason: FetchReason): Boolean {
-        onEvalFetchRequested(evalKey, reason)
+    override suspend fun fetchIfNeeded(evalKey: EvaluationKey, filters: EvaluationFilters?, reason: FetchReason, delayMs: Long): Boolean {
+        onEvalFetchRequested(evalKey, reason, delayMs)
         if (!inFlight.add(evalKey)) {
             onEvalFetchDeduped(evalKey)
             return false
@@ -31,10 +31,10 @@ class DefaultEvaluationFetchCoordinator(
             val change = provider.fetch(evalKey, filters, changeNumber)
             val isFirstFetch = fetchedKeys.add(evalKey)
             if (change != null) {
-                val updated = writeStorage.upsert(change)
-                if (isFirstFetch || updated) onEvaluationsUpdated(evalKey, reason)
+                val upsertResult = writeStorage.upsert(change)
+                if (isFirstFetch || upsertResult.updated) onEvaluationsUpdated(evalKey, reason, upsertResult.changedFlagNames)
             } else if (isFirstFetch) {
-                onEvaluationsUpdated(evalKey, reason)
+                onEvaluationsUpdated(evalKey, reason, emptyList())
             }
             onEvalFetchSucceeded(evalKey)
             return true
@@ -54,7 +54,7 @@ class DefaultEvaluationFetchCoordinator(
             try {
                 val delayMs = delayProvider?.invoke(evalKey) ?: 0L
                 if (delayMs > 0) delay(delayMs)
-                fetchIfNeeded(evalKey, filters, reason)
+                fetchIfNeeded(evalKey, filters, reason, delayMs)
             } catch (e: Throwable) {
                 // Silently continue - errors don't stop the batch
             }
