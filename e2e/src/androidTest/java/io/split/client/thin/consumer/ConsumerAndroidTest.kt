@@ -22,10 +22,13 @@ import io.split.client.thin.SplitVoidCallback
 import io.split.client.thin.Target
 import io.split.client.thin.fallbackTreatments
 import io.split.client.thin.splitClientConfig
+import io.split.client.thin.e2e.MockSplitServer
 import kotlinx.coroutines.test.runTest
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -33,6 +36,44 @@ import org.junit.runner.RunWith
 class ConsumerAndroidTest {
 
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
+
+    private lateinit var server: MockSplitServer
+
+    @Before
+    fun setUp() {
+        server = MockSplitServer()
+    }
+
+    @After
+    fun tearDown() {
+        server.shutdown()
+    }
+
+    /** Builds a factory with all endpoints pointed at the mock server. */
+    private fun buildFactory(
+        sdkKey: SdkKey = SdkKey("test-sdk-key"),
+        target: Target = Target(key = Key("user"), trafficType = "user"),
+        config: SplitClientConfig = mockConfig(),
+    ): SplitFactory = SplitFactoryBuilder.build(
+        context = context,
+        sdkKey = sdkKey,
+        defaultTarget = target,
+        config = config,
+    )
+
+    /** Base config pointing all service endpoints at the mock server. */
+    private fun mockConfig(): SplitClientConfig = splitClientConfig {
+        sync {
+            mode = SplitClientConfig.SyncMode.POLLING
+            serviceEndpoints {
+                authUrl = server.url("/api")
+                evaluationsUrl = server.url("/api/v2/evaluations")
+                eventsUrl = server.url("/api/v1/events/bulk")
+                telemetryUrl = server.url("/api/v1/metrics/config")
+            }
+        }
+        storage { prefix = "consumer_test" }
+    }
 
     /**
      * Given value-type constructors for Key, Target, and SdkKey,
@@ -73,11 +114,7 @@ class ConsumerAndroidTest {
         val sdkKey = SdkKey("test-sdk-key")
         val target = Target(key = Key("user-1"), trafficType = "user")
 
-        val factory: SplitFactory = SplitFactoryBuilder.build(
-            context = context,
-            sdkKey = sdkKey,
-            defaultTarget = target
-        )
+        val factory: SplitFactory = buildFactory(sdkKey = sdkKey, target = target)
 
         val client: SplitClient = factory.getClient()
         assertNotNull(client)
@@ -100,6 +137,15 @@ class ConsumerAndroidTest {
     fun factoryBuilderWithConfig() {
         val config = SplitClientConfig.Builder()
             .logLevel(SplitClientConfig.LogLevel.VERBOSE)
+            .sync(SplitClientConfig.SyncConfig.Builder()
+                .mode(SplitClientConfig.SyncMode.POLLING)
+                .serviceEndpoints(SplitClientConfig.ServiceEndpoints(
+                    authUrl = server.url("/api"),
+                    evaluationsUrl = server.url("/api/v2/evaluations"),
+                    eventsUrl = server.url("/api/v1/events/bulk"),
+                    telemetryUrl = server.url("/api/v1/metrics/config"),
+                ))
+                .build())
             .build()
         val factory = SplitFactoryBuilder.build(
             context = context,
@@ -117,11 +163,7 @@ class ConsumerAndroidTest {
      */
     @Test
     fun clientEvaluation() {
-        val factory = SplitFactoryBuilder.build(
-            context = context,
-            sdkKey = SdkKey("key"),
-            defaultTarget = Target(key = Key("user"), trafficType = "user")
-        )
+        val factory = buildFactory()
         val client = factory.getClient()
 
         val result: EvaluationResult = client.getTreatment("my-flag")
@@ -147,11 +189,7 @@ class ConsumerAndroidTest {
      */
     @Test
     fun managerFlagNames() {
-        val factory = SplitFactoryBuilder.build(
-            context = context,
-            sdkKey = SdkKey("key"),
-            defaultTarget = Target(key = Key("user"), trafficType = "user")
-        )
+        val factory = buildFactory()
         val manager = factory.getManager()
         val names: List<String> = manager.flagNames
         assertNotNull(names)
@@ -259,7 +297,7 @@ class ConsumerAndroidTest {
     @Test
     fun splitEventListenerSubclass() {
         val listener = object : SplitEventListener() {
-            override fun onReady(client: SplitClient, metadata: SdkReadyMetadata) {
+            override fun onReady(client: SplitClient, metadata: SdkReadyMetadata?) {
                 // no-op
             }
         }
@@ -276,16 +314,12 @@ class ConsumerAndroidTest {
         // TODO: fully test once MockWebServer is set up — verify that registered callbacks
         //  (onReady, onReadyFromCache, onUpdate) are actually invoked when the server delivers
         //  the corresponding events.
-        val factory = SplitFactoryBuilder.build(
-            context = context,
-            sdkKey = SdkKey("key"),
-            defaultTarget = Target(key = Key("user"), trafficType = "user")
-        )
+        val factory = buildFactory()
         val client = factory.getClient()
         val listener = object : SplitEventListener() {
-            override fun onReady(client: SplitClient, metadata: SdkReadyMetadata) {}
-            override fun onReadyFromCache(client: SplitClient, metadata: SdkReadyMetadata) {}
-            override fun onUpdate(client: SplitClient, metadata: SdkUpdateMetadata) {}
+            override fun onReady(client: SplitClient, metadata: SdkReadyMetadata?) {}
+            override fun onReadyFromCache(client: SplitClient, metadata: SdkReadyMetadata?) {}
+            override fun onUpdate(client: SplitClient, metadata: SdkUpdateMetadata?) {}
         }
 
         client.addEventListener(listener)
@@ -381,11 +415,7 @@ class ConsumerAndroidTest {
      */
     @Test
     fun trackMethodVariants() {
-        val client = SplitFactoryBuilder.build(
-            context = context,
-            sdkKey = SdkKey("key"),
-            defaultTarget = Target(key = Key("user"), trafficType = "user")
-        ).getClient()
+        val client = buildFactory().getClient()
 
         client.track("purchase")
         client.track("purchase", 9.99)
@@ -399,11 +429,7 @@ class ConsumerAndroidTest {
      */
     @Test
     fun clientDestroy() = runTest {
-        val client = SplitFactoryBuilder.build(
-            context = context,
-            sdkKey = SdkKey("key"),
-            defaultTarget = Target(key = Key("user"), trafficType = "user")
-        ).getClient()
+        val client = buildFactory().getClient()
 
         client.destroy()
     }
@@ -415,11 +441,7 @@ class ConsumerAndroidTest {
      */
     @Test
     fun clientFlush() = runTest {
-        val client = SplitFactoryBuilder.build(
-            context = context,
-            sdkKey = SdkKey("key"),
-            defaultTarget = Target(key = Key("user"), trafficType = "user")
-        ).getClient()
+        val client = buildFactory().getClient()
 
         client.flush()
     }
@@ -431,11 +453,7 @@ class ConsumerAndroidTest {
      */
     @Test
     fun factoryDestroy() = runTest {
-        val factory = SplitFactoryBuilder.build(
-            context = context,
-            sdkKey = SdkKey("key"),
-            defaultTarget = Target(key = Key("user"), trafficType = "user")
-        )
+        val factory = buildFactory()
 
         factory.destroy()
     }
@@ -507,15 +525,15 @@ class ConsumerAndroidTest {
     @Test
     fun eventListenerViewCallbacks() {
         val listener = object : SplitEventListener() {
-            override fun onReadyView(client: SplitClient, metadata: SdkReadyMetadata) {
+            override fun onReadyView(client: SplitClient, metadata: SdkReadyMetadata?) {
                 // no-op
             }
 
-            override fun onUpdateView(client: SplitClient, metadata: SdkUpdateMetadata) {
+            override fun onUpdateView(client: SplitClient, metadata: SdkUpdateMetadata?) {
                 // no-op
             }
 
-            override fun onReadyFromCacheView(client: SplitClient, metadata: SdkReadyMetadata) {
+            override fun onReadyFromCacheView(client: SplitClient, metadata: SdkReadyMetadata?) {
                 // no-op
             }
         }

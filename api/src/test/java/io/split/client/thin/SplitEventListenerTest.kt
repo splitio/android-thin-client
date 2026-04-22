@@ -42,12 +42,12 @@ class SplitEventListenerTest {
         val readyMetadata = SdkReadyMetadata()
         val updateMetadata = SdkUpdateMetadata()
 
-        listener.onReady(noOpClient, readyMetadata)
-        listener.onReadyView(noOpClient, readyMetadata)
-        listener.onReadyFromCache(noOpClient, readyMetadata)
-        listener.onReadyFromCacheView(noOpClient, readyMetadata)
-        listener.onUpdate(noOpClient, updateMetadata)
-        listener.onUpdateView(noOpClient, updateMetadata)
+        listener.onReady(noOpClient, null)
+        listener.onReadyView(noOpClient, null)
+        listener.onReadyFromCache(noOpClient, null)
+        listener.onReadyFromCacheView(noOpClient, null)
+        listener.onUpdate(noOpClient, null)
+        listener.onUpdateView(noOpClient, null)
         listener.onTimeout(noOpClient)
         listener.onTimeoutView(noOpClient)
     }
@@ -56,7 +56,7 @@ class SplitEventListenerTest {
     fun `overridden listener callback is invoked`() {
         var called = false
         val listener = object : SplitEventListener() {
-            override fun onUpdate(client: SplitClient, metadata: SdkUpdateMetadata) {
+            override fun onUpdate(client: SplitClient, metadata: SdkUpdateMetadata?) {
                 called = true
             }
         }
