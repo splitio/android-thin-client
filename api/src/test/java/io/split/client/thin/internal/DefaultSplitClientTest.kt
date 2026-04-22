@@ -325,10 +325,11 @@ class FakeEvaluationReadStorage : EvaluationReadStorage {
         storedEvaluations.keys.filter { it.second == evalKey }.map { it.first }.toSet()
 
     override fun lastChangeNumber(evalKey: EvaluationKey): Long = -1L
+    override fun lastUpdateTimestamp(evalKey: EvaluationKey): Long? = null
 }
 
 class FakeEvaluationFetchCoordinator : EvaluationFetchCoordinator {
-    override suspend fun fetchIfNeeded(evalKey: EvaluationKey, filters: EvaluationFilters?, reason: FetchReason): Boolean = false
+    override suspend fun fetchIfNeeded(evalKey: EvaluationKey, filters: EvaluationFilters?, reason: FetchReason, delayMs: Long): Boolean = false
     override suspend fun refetchAll(filters: EvaluationFilters?, reason: FetchReason, delayProvider: ((EvaluationKey) -> Long)?) {}
 }
 
