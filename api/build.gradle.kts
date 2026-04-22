@@ -8,9 +8,6 @@ plugins {
 
 android {
     namespace = "io.split.client.thin"
-    compileSdk {
-        version = release(36)
-    }
 
     buildFeatures {
         buildConfig = true
@@ -61,6 +58,7 @@ dependencies {
     implementation(project(":streaming-thin"))
     implementation(project(":streaming"))
     implementation(project(":backoff"))
+    implementation(project(":http"))
     implementation(project(":retryable-http-client"))
     implementation(project(":auth"))
     implementation(project(":observer"))

@@ -16,8 +16,8 @@ internal class JsonTokenDeserializer(
         val token = dto.token ?: ""
         return JwtCredential(
             token = token,
-            expiresAt = if (token.isNotEmpty()) decodeJwtExp(token) else Long.MAX_VALUE,
-            pushEnabled = dto.pushEnabled ?: true,
+            expiresAt = if (token.isNotEmpty()) decodeJwtExp(token) else 0L,
+            pushEnabled = dto.pushEnabled ?: false,
             connDelaySeconds = dto.connDelay ?: 60,
         )
     }

@@ -28,6 +28,7 @@ internal class DefaultSplitClient(
     private val eventsManager: EventsManager<SplitEvent, SdkInternalEvent, Any?>,
     private val flushOperation: suspend () -> Unit = {},
     private val scope: CoroutineScope,
+    private val onTargetChanged: (String) -> Unit = {},
     private val asyncBridge: AsyncBridgeLike = AsyncBridge(),
 ) : SplitClient {
 
@@ -66,6 +67,7 @@ internal class DefaultSplitClient(
         this.target = target
         val newEvalKey = target.toEvaluationKey()
         if (oldEvalKey != newEvalKey) {
+            onTargetChanged(target.key.matchingKey)
             scope.launch { evaluationRepository.setTarget(target, filters) }
         }
     }

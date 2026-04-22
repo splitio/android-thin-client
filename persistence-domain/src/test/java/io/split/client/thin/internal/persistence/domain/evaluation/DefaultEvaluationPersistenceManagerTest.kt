@@ -13,7 +13,6 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
@@ -83,7 +82,7 @@ class DefaultEvaluationPersistenceManagerTest {
         val result = manager.loadLocal(testEvalKey)
 
         val expected = EvaluationChange(evaluationKey = testEvalKey, changeNumber = 42L, evaluations = listOf(storedEval))
-        assertEquals(expected, result)
+        assertEquals(expected, result?.change)
     }
 
     @Test
@@ -97,9 +96,8 @@ class DefaultEvaluationPersistenceManagerTest {
 
         val result = manager.loadLocal(testEvalKey)
 
-        // The returned EvaluationKey should be exactly the caller's evalKey
-        assertEquals(testEvalKey, result?.evaluationKey)
-        assertEquals(testEvalKey.attributes, result?.evaluationKey?.attributes)
+        assertEquals(testEvalKey, result?.change?.evaluationKey)
+        assertEquals(testEvalKey.attributes, result?.change?.evaluationKey?.attributes)
     }
 
     @Test
