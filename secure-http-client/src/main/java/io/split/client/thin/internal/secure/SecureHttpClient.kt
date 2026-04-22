@@ -1,6 +1,6 @@
 package io.split.client.thin.internal.secure
 
-import io.split.android.client.network.HttpResponse
+import io.split.client.thin.http.contracts.HttpResponse
 
 interface SecureHttpClient {
     suspend fun fetchEvaluations(target: EvaluationTarget, filters: EvaluationFilters?, changeNumber: Long): HttpResponse

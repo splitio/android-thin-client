@@ -7,7 +7,12 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [28])
 class DefaultSecureHttpClientFetchEvaluationsTest {
 
     @Test
@@ -148,7 +153,7 @@ class DefaultSecureHttpClientFetchEvaluationsTest {
 
         client.fetchEvaluations(testDefaultTarget, filters, -1L)
 
-        assertTrue(http.lastRequest?.uri?.query?.contains("withDynamicConfig=true") == true)
+        assertTrue(http.lastRequest?.uri?.query?.contains("configs=true") == true)
     }
 
     @Test
@@ -158,7 +163,7 @@ class DefaultSecureHttpClientFetchEvaluationsTest {
 
         client.fetchEvaluations(testDefaultTarget, filters, -1L)
 
-        assertFalse(http.lastRequest?.uri?.query?.contains("withDynamicConfig") == true)
+        assertFalse(http.lastRequest?.uri?.query?.contains("configs") == true)
     }
 
     @Test
@@ -187,7 +192,7 @@ class DefaultSecureHttpClientFetchEvaluationsTest {
 
         client.fetchEvaluations(testDefaultTarget, testDefaultFilters, -1L)
 
-        assertEquals("android-thin-test-version", http.lastRequest?.headers?.get("X-Harness-FME-SDK-Thin-Version"))
+        assertEquals("android_thin-test-version", http.lastRequest?.headers?.get("X-Harness-FME-SDK-Thin-Version"))
     }
 
     @Test
@@ -215,6 +220,40 @@ class DefaultSecureHttpClientFetchEvaluationsTest {
         client.fetchEvaluations(testDefaultTarget, testDefaultFilters, -1L)
 
         assertFalse(http.lastRequest?.uri?.query?.contains("impressionsMode") == true)
+    }
+
+    @Test
+    fun `X-Harness-FME-Content-Digest header sent on evaluations`() = runTest {
+        val (client, _, http) = makeClient()
+
+        client.fetchEvaluations(testDefaultTarget, testDefaultFilters, -1L)
+
+        val digest = http.lastRequest?.headers?.get("X-Harness-FME-Content-Digest")
+        assertFalse("X-Harness-FME-Content-Digest header must be present", digest.isNullOrEmpty())
+    }
+
+    @Test
+    fun `X-Harness-FME-Content-Digest header is deterministic for same target`() = runTest {
+        val (client, _, http) = makeClient()
+
+        client.fetchEvaluations(testDefaultTarget, testDefaultFilters, -1L)
+        val first = http.lastRequest?.headers?.get("X-Harness-FME-Content-Digest")
+
+        client.fetchEvaluations(testDefaultTarget, testDefaultFilters, -1L)
+        val second = http.lastRequest?.headers?.get("X-Harness-FME-Content-Digest")
+
+        assertEquals(first, second)
+    }
+
+    @Test
+    fun `X-Harness-FME-Content-Digest header matches ContentDigest utility`() = runTest {
+        val (client, _, http) = makeClient()
+
+        client.fetchEvaluations(testDefaultTarget, testDefaultFilters, -1L)
+
+        val headerDigest = http.lastRequest?.headers?.get("X-Harness-FME-Content-Digest")
+        val expectedDigest = ContentDigest.compute(testDefaultTarget)
+        assertEquals(expectedDigest, headerDigest)
     }
 
     @Test
@@ -288,5 +327,73 @@ class DefaultSecureHttpClientFetchEvaluationsTest {
 
         assertTrue("Expected RuntimeException", thrown is RuntimeException)
         assertEquals("network failed", thrown?.message)
+    }
+
+    @Test
+    fun `numeric attributes preserved as numbers in body`() = runTest {
+        val target = EvaluationTarget(
+            matchingKey = "user-1",
+            bucketingKey = null,
+            attributes = mapOf("count" to 42, "price" to 99.99, "active" to true)
+        )
+        val (client, _, http) = makeClient()
+
+        client.fetchEvaluations(target, null, -1L)
+
+        val body = http.lastRequest?.body ?: ""
+        assertTrue("Body should contain numeric count", body.contains("\"count\":42"))
+        assertTrue("Body should contain numeric price", body.contains("\"price\":99.99"))
+        assertTrue("Body should contain boolean active", body.contains("\"active\":true"))
+    }
+
+    @Test
+    fun `string attributes preserved as strings in body`() = runTest {
+        val target = EvaluationTarget(
+            matchingKey = "user-1",
+            bucketingKey = null,
+            attributes = mapOf("name" to "John", "email" to "john@example.com")
+        )
+        val (client, _, http) = makeClient()
+
+        client.fetchEvaluations(target, null, -1L)
+
+        val body = http.lastRequest?.body ?: ""
+        assertTrue("Body should contain quoted name", body.contains("\"name\":\"John\""))
+        assertTrue("Body should contain quoted email", body.contains("\"email\":\"john@example.com\""))
+    }
+
+    @Test
+    fun `mixed attribute types preserved correctly in body`() = runTest {
+        val target = EvaluationTarget(
+            matchingKey = "user-1",
+            bucketingKey = null,
+            attributes = mapOf("plan" to "premium", "tier" to 3, "premium" to true)
+        )
+        val (client, _, http) = makeClient()
+
+        client.fetchEvaluations(target, null, -1L)
+
+        val body = http.lastRequest?.body ?: ""
+        assertTrue("Body should contain quoted plan", body.contains("\"plan\":\"premium\""))
+        assertTrue("Body should contain numeric tier", body.contains("\"tier\":3"))
+        assertTrue("Body should contain boolean premium", body.contains("\"premium\":true"))
+    }
+
+    @Test
+    fun `list attribute preserved as JSON array in body`() = runTest {
+        val target = EvaluationTarget(
+            matchingKey = "user-1",
+            bucketingKey = null,
+            attributes = mapOf("tags" to listOf("vip", "beta", "early-access"))
+        )
+        val (client, _, http) = makeClient()
+
+        client.fetchEvaluations(target, null, -1L)
+
+        val body = http.lastRequest?.body ?: ""
+        assertTrue("Body should contain tags array", body.contains("\"tags\":["))
+        assertTrue("Body should contain first tag", body.contains("\"vip\""))
+        assertTrue("Body should contain second tag", body.contains("\"beta\""))
+        assertTrue("Body should contain third tag", body.contains("\"early-access\""))
     }
 }

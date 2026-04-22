@@ -22,7 +22,7 @@ internal class DefaultAuthProvider(
     // Completion callbacks may run on different threads, so this map must be thread-safe.
     private val inFlight = ConcurrentHashMap<String, Deferred<JwtCredential>>()
 
-    private val activeTargets = mutableSetOf<String>()
+    private val activeTargets = if (defaultTarget != null) mutableSetOf(defaultTarget) else mutableSetOf()
     private val activeTargetsLock = Any()
 
     override fun addTarget(target: String): Boolean {
