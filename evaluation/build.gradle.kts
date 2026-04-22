@@ -8,9 +8,6 @@ plugins {
 
 android {
     namespace = "io.split.client.thin.evaluation"
-    compileSdk {
-        version = release(36)
-    }
 
     defaultConfig {
         minSdk = 21
@@ -35,7 +32,7 @@ android {
 
 dependencies {
     implementation(project(":models"))
-    implementation(project(":http"))
+    implementation(project(":retryable-http-client"))
     implementation(project(":observer"))
     implementation(project(":auth"))
     implementation(project(":secure-http-client"))

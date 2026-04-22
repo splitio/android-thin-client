@@ -134,9 +134,9 @@ class DefaultEvaluationRepositoryTest {
             }
         }
         val coordinator = object : FakeEvaluationFetchCoordinator() {
-            override suspend fun fetchIfNeeded(evalKey: EvaluationKey, filters: EvaluationFilters?, reason: FetchReason): Boolean {
+            override suspend fun fetchIfNeeded(evalKey: EvaluationKey, filters: EvaluationFilters?, reason: FetchReason, delayMs: Long): Boolean {
                 callOrder.add("fetchIfNeeded")
-                return super.fetchIfNeeded(evalKey, filters, reason)
+                return super.fetchIfNeeded(evalKey, filters, reason, delayMs)
             }
         }
         val repo = makeRepository(coordinator = coordinator, persistenceBackedStorage = persistenceStorage)
