@@ -129,7 +129,7 @@ class DefaultStreamingManagerTest {
         advanceUntilIdle()
 
         eventSourceClient.simulateMessage(
-            mapOf("data" to """{"channel":"evaluations","data":"{\"type\":\"EVALUATION_UPDATE\",\"changeNumber\":123}","timestamp":1000}""")
+            mapOf("data" to """{"channel":"evaluations","data":"{\"type\":\"EVALUATIONS_UPDATE\",\"changeNumber\":123}","timestamp":1000}""")
         )
         advanceUntilIdle()
 
@@ -151,5 +151,6 @@ class DefaultStreamingManagerTest {
         connectionDispatcher = UnconfinedTestDispatcher(testScheduler),
         onOccupancyZero = onOccupancyZero,
         onEvaluationFetchNotification = onEvaluationFetchNotification,
+        observer = FakeCompositeObserver(),
     )
 }

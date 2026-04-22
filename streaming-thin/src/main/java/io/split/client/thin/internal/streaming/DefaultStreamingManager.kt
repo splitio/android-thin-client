@@ -2,6 +2,7 @@ package io.split.client.thin.internal.streaming
 
 import io.split.android.client.backoff.BackoffCounter
 import io.split.android.client.service.sseclient.sseclient.EventSourceClient
+import io.split.client.thin.internal.observer.CompositeObserver
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -19,6 +20,7 @@ class DefaultStreamingManager(
     private val onEvaluationFetchNotification: suspend (EvaluationUpdateNotification?) -> Unit,
     private val onPushDisabled: suspend () -> Unit = {},
     private val connectionDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val observer: CompositeObserver,
 ) : StreamingManager {
 
     private val mutex = Mutex()
@@ -73,6 +75,7 @@ class DefaultStreamingManager(
             onOccupancyZero = onOccupancyZero,
             onEvaluationFetchNotification = onEvaluationFetchNotification,
             onPushDisabled = onPushDisabled,
+            observer = observer,
         )
     }
 }

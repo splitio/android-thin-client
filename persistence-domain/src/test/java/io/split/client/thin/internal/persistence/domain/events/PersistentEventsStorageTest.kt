@@ -44,7 +44,7 @@ class PersistentEventsStorageTest {
         serializer = mock(TrackerEventSerializer::class.java)
         callbacks = mock(EventsPersistenceCallbacks::class.java)
         scope = TestScope()
-        storage = PersistentEventsStorage(roomStorage, serializer, callbacks, scope)
+        storage = PersistentEventsStorage(roomStorage, serializer, callbacks)
     }
 
     @Test
@@ -140,6 +140,18 @@ class PersistentEventsStorageTest {
         storage.delete(popped1 + popped2)
 
         verify(roomStorage).delete(listOf(10L, 20L))
+    }
+
+    @Test
+    fun `push persists event synchronously without coroutine advancement`() {
+        val event = makeEvent()
+        `when`(serializer.serialize(event)).thenReturn("{\"key\":\"user1\"}")
+
+        storage.push(event) // must complete synchronously — no advanceUntilIdle()
+
+        verify(serializer).serialize(event)
+        verify(roomStorage).push("{\"key\":\"user1\"}")
+        verify(callbacks).onEventPushed()
     }
 
     @Test

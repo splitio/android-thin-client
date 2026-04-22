@@ -8,7 +8,6 @@ import io.split.android.client.tracker.TrackerEvent
 import io.split.client.thin.events.EventsRecorderTask
 import io.split.client.thin.internal.persistence.RoomEventsPersistence
 import io.split.client.thin.internal.persistence.ThinClientDatabase
-import kotlinx.coroutines.test.TestScope
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -38,7 +37,6 @@ class EventsRecorderTaskPersistenceTest {
             roomEventsPersistence = roomPersistence,
             serializer = serializer,
             callbacks = mock(EventsPersistenceCallbacks::class.java),
-            scope = TestScope()
         )
     }
 

@@ -5,9 +5,6 @@ plugins {
 
 android {
     namespace = "io.split.client.thin.internal.persistence.domain"
-    compileSdk {
-        version = release(36)
-    }
 
     defaultConfig {
         minSdk = 21

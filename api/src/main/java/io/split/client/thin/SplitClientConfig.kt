@@ -96,6 +96,7 @@ class SplitClientConfig private constructor(
         private const val DEFAULT_TIMEOUT = -1
         private const val DEFAULT_EVALUATION_REFRESH_RATE = 3600
         private const val DEFAULT_PUSH_RATE = 1800
+        private val MIN_EVALUATION_REFRESH_RATE = BuildConfig.MIN_EVALUATION_REFRESH_RATE
 
         internal fun applyLogLevel(logLevel: LogLevel) {
             val loggerLevel = when (logLevel) {
@@ -134,9 +135,9 @@ class SplitClientConfig private constructor(
             var pushRate = sync.pushRate
             var timeout = sync.timeout
 
-            if (evaluationRefreshRate < 60) {
+            if (evaluationRefreshRate < MIN_EVALUATION_REFRESH_RATE) {
                 Logger.w(
-                    "SplitClientConfig validation failed: sync.evaluationRefreshRate must be >= 60. " +
+                    "SplitClientConfig validation failed: sync.evaluationRefreshRate must be >= $MIN_EVALUATION_REFRESH_RATE. " +
                         "Received: ${sync.evaluationRefreshRate}. Falling back to default: $DEFAULT_EVALUATION_REFRESH_RATE"
                 )
                 evaluationRefreshRate = DEFAULT_EVALUATION_REFRESH_RATE
