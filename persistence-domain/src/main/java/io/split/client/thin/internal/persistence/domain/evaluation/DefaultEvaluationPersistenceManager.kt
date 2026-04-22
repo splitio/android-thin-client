@@ -1,5 +1,6 @@
 package io.split.client.thin.internal.persistence.domain.evaluation
 
+import io.split.client.thin.internal.evaluation.CacheLoadResult
 import io.split.client.thin.internal.evaluation.EvaluationChange
 import io.split.client.thin.internal.evaluation.EvaluationKey
 import io.split.client.thin.internal.evaluation.StoredEvaluation
@@ -16,7 +17,7 @@ internal class DefaultEvaluationPersistenceManager(
     private val scope: CoroutineScope
 ) : EvaluationPersistenceManager {
 
-    override suspend fun loadLocal(evalKey: EvaluationKey): EvaluationChange? {
+    override suspend fun loadLocal(evalKey: EvaluationKey): CacheLoadResult? {
         callbacks.onLoadStarted()
         return try {
             val hashed = targetHasher.hash(evalKey)
@@ -30,9 +31,10 @@ internal class DefaultEvaluationPersistenceManager(
             )
 
             callbacks.onEvalStorageUpdated(evalKey, persistedData.changeNumber, evaluations)
-            callbacks.onLoadSucceeded(System.currentTimeMillis())
+            val timestamp = persistedData.lastUpdateTimestamp ?: System.currentTimeMillis()
+            callbacks.onLoadSucceeded(timestamp)
 
-            change
+            CacheLoadResult(change, persistedData.lastUpdateTimestamp)
         } catch (e: Exception) {
             callbacks.onLoadFailed(e.message ?: "Unknown load error")
             null

@@ -124,7 +124,7 @@ class LoggerObserver(
             ObservableEventType.HTTP_REQUEST_FAILED_NON_RETRYABLE to "HTTP failed for [category] (status: [statusCode])",
             ObservableEventType.HTTP_RETRY_EXHAUSTED to "Retry attempts exhausted for [category]",
             // Eval sync
-            ObservableEventType.EVAL_FETCH_REQUESTED to "Evaluations fetch requested (reason: [reason])",
+            ObservableEventType.EVAL_FETCH_REQUESTED to "Evaluations fetch requested (reason: [reason])[delayMs]",
             ObservableEventType.EVAL_FETCH_DEDUPED to "Evaluations fetch deduped (awaiting fetch in progress)",
             ObservableEventType.EVAL_FETCH_STARTED to "Evaluations fetch started",
             ObservableEventType.EVAL_FETCH_SUCCEEDED to "Evaluations fetch succeeded",

@@ -82,7 +82,7 @@ class DefaultEvaluationPersistenceManagerTest {
         val result = manager.loadLocal(testEvalKey)
 
         val expected = EvaluationChange(evaluationKey = testEvalKey, changeNumber = 42L, evaluations = listOf(storedEval))
-        assertEquals(expected, result)
+        assertEquals(expected, result?.change)
     }
 
     @Test
@@ -96,8 +96,8 @@ class DefaultEvaluationPersistenceManagerTest {
 
         val result = manager.loadLocal(testEvalKey)
 
-        assertEquals(testEvalKey, result?.evaluationKey)
-        assertEquals(testEvalKey.attributes, result?.evaluationKey?.attributes)
+        assertEquals(testEvalKey, result?.change?.evaluationKey)
+        assertEquals(testEvalKey.attributes, result?.change?.evaluationKey?.attributes)
     }
 
     @Test

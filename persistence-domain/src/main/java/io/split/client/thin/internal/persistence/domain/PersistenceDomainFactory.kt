@@ -16,6 +16,8 @@ import io.split.client.thin.internal.persistence.domain.events.EventsPersistence
 import io.split.client.thin.internal.persistence.domain.events.PersistentEventsStorage
 import io.split.client.thin.internal.persistence.domain.events.TrackerEventSerializer
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 data class PersistenceDomainComponents(
     val evaluationPersistenceManager: EvaluationPersistenceManager?,
@@ -27,7 +29,8 @@ fun createPersistenceDomainComponents(
     config: PersistenceConfig,
     evaluationCallbacks: EvaluationPersistenceCallbacks,
     eventsCallbacks: EventsPersistenceCallbacks,
-    scope: CoroutineScope
+    scope: CoroutineScope,
+    configChangeDetectorFactory: ((Boolean) -> Boolean)? = null,
 ): PersistenceDomainComponents {
     if (!config.enabled) {
         return PersistenceDomainComponents(
@@ -38,12 +41,22 @@ fun createPersistenceDomainComponents(
 
     val database = ThinClientDatabase.build(context, config.prefix, config.sdkKey)
 
+    val roomEvalPersistence = RoomEvaluationPersistence(database = database)
+
+    val detectChange = configChangeDetectorFactory
+        ?: { dynamicConfig -> ConfigChangeDetector(database.generalPropertiesDao()).detectAndUpdate(dynamicConfig) }
+
+    scope.launch {
+        val changed = detectChange(config.dynamicConfig)
+        if (changed) roomEvalPersistence.clearAll()
+    }
+
     val targetHasher = TargetHasher()
     val evalSerializer = StoredEvaluationSerializer()
     val eventSerializer = TrackerEventSerializer()
 
     val evaluationPersistenceManager = DefaultEvaluationPersistenceManager(
-        persistentStorage = RoomEvaluationPersistence(database = database),
+        persistentStorage = roomEvalPersistence,
         callbacks = evaluationCallbacks,
         targetHasher = targetHasher,
         evalSerializer = evalSerializer,
