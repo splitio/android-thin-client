@@ -1,7 +1,9 @@
 package io.split.client.thin
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -79,5 +81,55 @@ class TargetTest {
         val target2 = Target(Key("test-target"), trafficType = "account")
 
         assertNotEquals(target1, target2)
+    }
+
+    // Attribute type validation
+
+    @Test
+    fun `valid attribute types are accepted`() {
+        Target(
+            key = Key("k"),
+            trafficType = "user",
+            attributes = mapOf(
+                "str" to "hello",
+                "long" to 42L,
+                "int" to 1,
+                "bool" to true,
+                "list" to listOf("a", "b"),
+                "nullVal" to null,
+            )
+        )
+        // no exception
+    }
+
+    @Test
+    fun `invalid attribute value type is silently ignored`() {
+        val target = Target(
+            key = Key("k"),
+            trafficType = "user",
+            attributes = mapOf("valid" to "hello", "bad" to Any())
+        )
+        assertTrue(target.attributes.containsKey("valid"))
+        assertFalse(target.attributes.containsKey("bad"))
+    }
+
+    @Test
+    fun `map attribute value is silently ignored`() {
+        val target = Target(
+            key = Key("k"),
+            trafficType = "user",
+            attributes = mapOf("nested" to mapOf("x" to 1))
+        )
+        assertFalse(target.attributes.containsKey("nested"))
+    }
+
+    @Test
+    fun `invalid type inside collection is silently ignored — entire entry dropped`() {
+        val target = Target(
+            key = Key("k"),
+            trafficType = "user",
+            attributes = mapOf("perms" to listOf("ok", Any()))
+        )
+        assertFalse(target.attributes.containsKey("perms"))
     }
 }
