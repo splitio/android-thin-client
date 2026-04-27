@@ -22,15 +22,8 @@ fun createEvaluationComponents(
     val cacheLoadedKeys: MutableSet<EvaluationKey> = Collections.newSetFromMap(ConcurrentHashMap())
     val storage = InMemoryEvaluationStorage(
         cacheLoader = cacheLoader,
-        onCacheLoaded = { evalKey, lastUpdateTimestamp ->
+        onCacheLoaded = { evalKey, _ ->
             cacheLoadedKeys.add(evalKey)
-            compositeObserver.notifyEvent(
-                ObservableEvent(
-                    type = ObservableEventType.EVAL_LOADED_FROM_STORAGE,
-                    properties = mapOf("matchingKey" to evalKey.key.matchingKey),
-                    payload = cacheLoadedPayloadBuilder?.invoke(evalKey, lastUpdateTimestamp),
-                )
-            )
         },
     )
     val provider = DefaultEvaluationProvider(

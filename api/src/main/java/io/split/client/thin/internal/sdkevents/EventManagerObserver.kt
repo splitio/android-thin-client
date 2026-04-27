@@ -24,11 +24,10 @@ internal class EventManagerObserver(
         private val KEY_SCOPED_EVENTS = setOf(
             ObservableEventType.EVAL_STORAGE_UPDATED,
             ObservableEventType.EVALUATIONS_UPDATED,
-            ObservableEventType.EVAL_LOADED_FROM_STORAGE,
         )
         private val EVENT_TYPE_MAP = mapOf(
             ObservableEventType.EVAL_STORAGE_UPDATED to SdkInternalEvent.EVALUATIONS_SYNC_COMPLETE,
-            ObservableEventType.EVAL_LOADED_FROM_STORAGE to SdkInternalEvent.EVALUATIONS_LOADED_FROM_STORAGE,
+            ObservableEventType.EVAL_STORAGE_LOAD_SUCCEEDED to SdkInternalEvent.EVALUATIONS_LOADED_FROM_STORAGE,
             ObservableEventType.SDK_READY_TIMEOUT_REACHED to SdkInternalEvent.SDK_READY_TIMEOUT_REACHED,
             ObservableEventType.EVALUATIONS_UPDATED to SdkInternalEvent.EVALUATIONS_UPDATED,
         )

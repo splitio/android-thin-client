@@ -13,7 +13,7 @@ internal object ContentDigest {
 
     fun compute(target: EvaluationTarget): String {
         val attrsJson = serializeAttributes(target.attributes)
-        val input = "${target.matchingKey}:$attrsJson"
+        val input = "${target.matchingKey}:${target.bucketingKey ?: ""}:$attrsJson"
         val inputBytes = input.toByteArray(Charsets.UTF_8)
         val hash = MurmurHash3().hash128x86(inputBytes)
         val first8Bytes = ByteBuffer.allocate(8).putInt(hash[0].toInt()).putInt(hash[1].toInt()).array()

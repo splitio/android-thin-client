@@ -49,13 +49,6 @@ class ObserverEvaluationPersistenceCallbacksTest {
     }
 
     @Test
-    fun `onLoadSucceeded dispatches EVAL_STORAGE_LOAD_SUCCEEDED event`() {
-        callbacks.onLoadSucceeded(1000L)
-
-        assertEquals(ObservableEventType.EVAL_STORAGE_LOAD_SUCCEEDED, captureEvent().type)
-    }
-
-    @Test
     fun `onLoadFailed dispatches EVAL_STORAGE_LOAD_FAILED event`() {
         callbacks.onLoadFailed("some error")
 
@@ -81,5 +74,32 @@ class ObserverEvaluationPersistenceCallbacksTest {
         callbacks.onWriteFailed("disk full")
 
         assertEquals(ObservableEventType.EVAL_STORAGE_WRITE_FAILED, captureEvent().type)
+    }
+
+    @Test
+    fun `onCacheLoaded dispatches EVAL_STORAGE_LOAD_SUCCEEDED with matchingKey and timestamp`() {
+        val evalKey = EvaluationKey(Key("user-1", "user-1"))
+
+        callbacks.onCacheLoaded(evalKey, 99000L, emptyList())
+
+        val event = captureEvent()
+        assertEquals(ObservableEventType.EVAL_STORAGE_LOAD_SUCCEEDED, event.type)
+        assertEquals("user-1", event.properties["matchingKey"])
+        assertEquals("99000", event.properties["lastUpdateTimestamp"])
+    }
+
+    @Test
+    fun `onCacheLoaded includes payload from cacheLoadedPayloadBuilder`() {
+        val payload = "test-payload"
+        val callbacksWithBuilder = ObserverEvaluationPersistenceCallbacks(
+            compositeObserver,
+            cacheLoadedPayloadBuilder = { _, _ -> payload },
+        )
+        val evalKey = EvaluationKey(Key("user-1"))
+
+        callbacksWithBuilder.onCacheLoaded(evalKey, 12345L, emptyList())
+
+        val event = captureEvent()
+        assertEquals(payload, event.payload)
     }
 }

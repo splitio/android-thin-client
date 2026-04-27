@@ -93,4 +93,71 @@ class TrackerEventSerializerTest {
         val result = serializer.deserialize(json)
         assertEquals(99.99, result.value, 0.001)
     }
+
+    @Test
+    fun `serialize list property preserves structure as JSON array`() {
+        val event = makeEvent(properties = mapOf("tags" to listOf("a", "b")))
+        val json = serializer.serialize(event)
+        val result = serializer.deserialize(json)
+        @Suppress("UNCHECKED_CAST")
+        val tags = result.properties?.get("tags") as? List<*>
+        assertEquals(listOf("a", "b"), tags)
+    }
+
+    @Test
+    fun `serialize map property preserves structure as JSON object`() {
+        val event = makeEvent(properties = mapOf("meta" to mapOf("k" to 1L)))
+        val json = serializer.serialize(event)
+        val result = serializer.deserialize(json)
+        @Suppress("UNCHECKED_CAST")
+        val meta = result.properties?.get("meta") as? Map<*, *>
+        assertEquals(1L, meta?.get("k"))
+    }
+
+    @Test
+    fun `deserialize event with null property value does not throw`() {
+        // A null value stored in the JSON properties map must not crash deserialization
+        val json = """{"trafficType":"user","eventType":"buy","key":"u","value":1.0,"timestamp":1000,"properties":{"x":null,"y":"ok"}}"""
+        val result = serializer.deserialize(json)
+        assertEquals("ok", result.properties?.get("y"))
+        // null entry must be absent from the result map
+        assertEquals(false, result.properties?.containsKey("x"))
+    }
+
+    @Test
+    fun `round-trip event with mixed-type properties preserves all non-null values`() {
+        val event = makeEvent(
+            properties = mapOf(
+                "tags" to listOf("a", "b"),
+                "meta" to mapOf("k" to 1L),
+                "count" to 5L,
+                "flag" to true,
+                "label" to "hello",
+            )
+        )
+        val json = serializer.serialize(event)
+        val result = serializer.deserialize(json)
+        @Suppress("UNCHECKED_CAST")
+        assertEquals(listOf("a", "b"), result.properties?.get("tags") as? List<*>)
+        @Suppress("UNCHECKED_CAST")
+        assertEquals(1L, (result.properties?.get("meta") as? Map<*, *>)?.get("k"))
+        assertEquals(5L, result.properties?.get("count"))
+        assertEquals(true, result.properties?.get("flag"))
+        assertEquals("hello", result.properties?.get("label"))
+    }
+
+    @Test
+    fun `serialize event with null property drops the entry`() {
+        val event = makeEvent(properties = mapOf("a" to null as Any?, "b" to 1L) as Map<String, Any>)
+        val json = serializer.serialize(event)
+        val result = serializer.deserialize(json)
+        assertEquals(mapOf("b" to 1L), result.properties)
+    }
+
+    @Test
+    fun `legacy row with embedded JsonNull decodes with that entry filtered`() {
+        val json = """{"trafficType":"user","eventType":"buy","key":"u","value":1.0,"timestamp":1000,"properties":{"a":null,"b":1}}"""
+        val result = serializer.deserialize(json)
+        assertEquals(mapOf("b" to 1L), result.properties)
+    }
 }

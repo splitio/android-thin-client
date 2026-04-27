@@ -183,42 +183,6 @@ class EvaluationFactoryTest {
         assertEquals(evalKey, persistCalls[0])
     }
 
-    @Test
-    fun `EVAL_LOADED_FROM_STORAGE fires when cache is loaded successfully`() = runTest {
-        val cachedChange = EvaluationChange(
-            evalKey,
-            5L,
-            listOf(StoredEvaluation(EvaluationResult(flag = "cached-flag", treatment = "off")))
-        )
-        val loader = object : EvaluationCacheLoader {
-            override suspend fun loadLocal(evalKey: EvaluationKey): CacheLoadResult? = CacheLoadResult(cachedChange, null)
-            override fun persistAsync(evalKey: EvaluationKey, changeNumber: Long, evaluations: List<StoredEvaluation>) = Unit
-        }
-
-        val (components, observer) = makeComponents(cacheLoader = loader)
-
-        components.repository.setTarget(Target(Key("user-1"), trafficType = "user"), null, isInitialization = false)
-
-        val event = observer.capturedEvents.firstOrNull { it.type == ObservableEventType.EVAL_LOADED_FROM_STORAGE }
-        assertNotNull(event)
-        assertEquals("user-1", event?.properties?.get("matchingKey"))
-    }
-
-    @Test
-    fun `EVAL_LOADED_FROM_STORAGE does not fire when loadLocal returns null`() = runTest {
-        val loader = object : EvaluationCacheLoader {
-            override suspend fun loadLocal(evalKey: EvaluationKey): CacheLoadResult? = null
-            override fun persistAsync(evalKey: EvaluationKey, changeNumber: Long, evaluations: List<StoredEvaluation>) = Unit
-        }
-
-        val (components, observer) = makeComponents(cacheLoader = loader)
-
-        components.repository.setTarget(Target(Key("user-1"), trafficType = "user"), null, isInitialization = false)
-
-        val event = observer.capturedEvents.firstOrNull { it.type == ObservableEventType.EVAL_LOADED_FROM_STORAGE }
-        assertEquals(null, event)
-    }
-
     // -------------------------------------------------------------------------
     // Metadata payload tests
     // -------------------------------------------------------------------------
@@ -238,26 +202,6 @@ class EvaluationFactoryTest {
             },
         )
         return components to observer
-    }
-
-    @Test
-    fun `EVAL_LOADED_FROM_STORAGE event carries payload from cacheLoadedPayloadBuilder`() = runTest {
-        val cachedChange = EvaluationChange(
-            evalKey, 5L, listOf(StoredEvaluation(EvaluationResult(flag = "f", treatment = "on")))
-        )
-        val loader = object : EvaluationCacheLoader {
-            override suspend fun loadLocal(evalKey: EvaluationKey): CacheLoadResult? = CacheLoadResult(cachedChange, null)
-            override fun persistAsync(evalKey: EvaluationKey, changeNumber: Long, evaluations: List<StoredEvaluation>) = Unit
-        }
-        val (components, observer) = makeComponentsWithPayloadBuilders(cacheLoader = loader)
-
-        components.repository.setTarget(Target(Key("user-1"), trafficType = "user"), null, isInitialization = false)
-
-        val event = observer.capturedEvents.first { it.type == ObservableEventType.EVAL_LOADED_FROM_STORAGE }
-        assertNotNull(event.payload)
-        @Suppress("UNCHECKED_CAST")
-        val payload = event.payload as Map<String, Any?>
-        assertEquals("CACHE_LOADED", payload["type"])
     }
 
     @Test
@@ -317,31 +261,4 @@ class EvaluationFactoryTest {
         assertEquals(false, capturedIsInitial)
     }
 
-    @Test
-    fun `EVAL_STORAGE_UPDATED isInitialCacheLoad=false when cache was loaded before INITIALIZATION sync`() = runTest {
-        var capturedCacheLoaded = false
-        val cachedChange = EvaluationChange(evalKey, 5L, listOf(StoredEvaluation(EvaluationResult(flag = "f", treatment = "on"))))
-        val loader = object : EvaluationCacheLoader {
-            override suspend fun loadLocal(evalKey: EvaluationKey): CacheLoadResult? = CacheLoadResult(cachedChange, null)
-            override fun persistAsync(evalKey: EvaluationKey, changeNumber: Long, evaluations: List<StoredEvaluation>) = Unit
-        }
-        var capturedIsInitial: Boolean? = null
-        val observer = FakeCompositeObserver()
-        val httpClient = FakeSecureHttpClient(responseBody = emptyResponseJson)
-        val components = createEvaluationComponents(
-            httpClient, observer, cacheLoader = loader,
-            cacheLoadedPayloadBuilder = { _, _ ->
-                capturedCacheLoaded = true
-                null
-            },
-            evaluationsUpdatedPayloadBuilder = { _, reason, _, isCacheLoaded ->
-                if (reason == FetchReason.INITIALIZATION) capturedIsInitial = isCacheLoaded
-                null
-            },
-        )
-        components.repository.setTarget(Target(Key("user-1"), trafficType = "user"), null, isInitialization = true)
-
-        assertTrue(capturedCacheLoaded)
-        assertEquals(true, capturedIsInitial)
-    }
 }

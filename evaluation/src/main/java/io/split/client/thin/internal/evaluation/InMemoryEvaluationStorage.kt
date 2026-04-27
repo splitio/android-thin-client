@@ -65,7 +65,7 @@ class InMemoryEvaluationStorage(
             val incomingByFlag = change.evaluations.associateBy { it.result.flag }
             val incomingFlagNames = incomingByFlag.keys
             val shouldUpdate = change.changeNumber > keyEvals.changeNumber ||
-                    incomingFlagNames != keyEvals.evaluations.keys
+                    (change.changeNumber >= keyEvals.changeNumber && incomingFlagNames != keyEvals.evaluations.keys)
             if (!shouldUpdate) return UpsertResult(updated = false, emptyList())
 
             val changedFlagNames = LinkedHashSet<String>()

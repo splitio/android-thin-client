@@ -155,4 +155,19 @@ class DefaultEvaluationRepositoryTest {
 
         assertEquals(1, coordinator.fetchCalls.size)
     }
+
+    @Test
+    fun `setTarget returns normally when ensureCacheLoaded throws and fetchIfNeeded is still invoked`() = runTest {
+        val persistenceStorage = object : PersistenceBackedStorage {
+            override suspend fun ensureCacheLoaded(evalKey: EvaluationKey) {
+                throw RuntimeException("simulated persistence error")
+            }
+        }
+        val coordinator = FakeEvaluationFetchCoordinator()
+        val repo = makeRepository(coordinator = coordinator, persistenceBackedStorage = persistenceStorage)
+
+        repo.setTarget(target, null, isInitialization = false)
+
+        assertEquals(1, coordinator.fetchCalls.size)
+    }
 }

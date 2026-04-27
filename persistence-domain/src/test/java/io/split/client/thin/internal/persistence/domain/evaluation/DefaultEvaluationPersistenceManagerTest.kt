@@ -23,6 +23,12 @@ import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 
+@Suppress("UNCHECKED_CAST")
+private fun anyEvalKey(): EvaluationKey = org.mockito.Mockito.any(EvaluationKey::class.java) ?: EvaluationKey(io.split.client.thin.Key(""))
+
+@Suppress("UNCHECKED_CAST")
+private fun <T> anyList(): List<T> = org.mockito.ArgumentMatchers.anyList<T>() ?: emptyList()
+
 @OptIn(ExperimentalCoroutinesApi::class)
 class DefaultEvaluationPersistenceManagerTest {
 
@@ -67,7 +73,6 @@ class DefaultEvaluationPersistenceManagerTest {
 
         assertNull(result)
         verify(callbacks).onLoadStarted()
-        verify(callbacks, never()).onLoadSucceeded(anyLong())
     }
 
     @Test
@@ -101,7 +106,7 @@ class DefaultEvaluationPersistenceManagerTest {
     }
 
     @Test
-    fun `loadLocal calls onLoadStarted and onLoadSucceeded when data exists`() = scope.runTest {
+    fun `loadLocal calls onLoadStarted and onCacheLoaded when data exists`() = scope.runTest {
         val evalJson = """{"result":{"flag":"my_flag","treatment":"on"},"flagSets":["set1"]}"""
         val storedEval = makeStoredEvaluation()
         val persistedData = PersistentEvaluationData(changeNumber = 42L, evaluations = listOf(evalJson))
@@ -112,9 +117,8 @@ class DefaultEvaluationPersistenceManagerTest {
         manager.loadLocal(testEvalKey)
 
         verify(callbacks).onLoadStarted()
-        verify(callbacks).onLoadSucceeded(anyLong())
+        verify(callbacks).onCacheLoaded(anyEvalKey(), anyLong(), anyList())
         verify(callbacks, never()).onLoadFailed(anyString())
-        verify(callbacks).onEvalStorageUpdated(testEvalKey, 42L, listOf(storedEval))
     }
 
     @Test
@@ -126,7 +130,6 @@ class DefaultEvaluationPersistenceManagerTest {
         assertNull(result)
         verify(callbacks).onLoadStarted()
         verify(callbacks).onLoadFailed("db error")
-        verify(callbacks, never()).onLoadSucceeded(anyLong())
     }
 
     // --- persistAsync tests ---

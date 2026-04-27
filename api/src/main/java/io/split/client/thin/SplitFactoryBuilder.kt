@@ -91,6 +91,7 @@ object SplitFactoryBuilder {
         defaultTarget: Target,
         config: SplitClientConfig? = null,
         configChangeDetectorFactory: ((Boolean) -> Boolean)? = null,
+        persistenceConfigCapture: ((PersistenceConfig) -> Unit)? = null,
     ): SplitFactory {
         val androidHttpClient = HttpClientImpl.Builder().build()
         val httpClient = HttpClientAdapter(androidHttpClient)
@@ -129,11 +130,16 @@ object SplitFactoryBuilder {
         val factoryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
         // Persistence components
+        val persistenceConfig = PersistenceConfig(prefix = config?.storage?.prefix, sdkKey = sdkKey.sdkKey, dynamicConfig = config?.dynamicConfig ?: false)
+        persistenceConfigCapture?.invoke(persistenceConfig)
         val persistenceComponents = createPersistenceDomainComponents(
             context = context.applicationContext,
-            config = PersistenceConfig(prefix = config?.storage?.prefix, sdkKey = sdkKey.sdkKey, dynamicConfig = config?.dynamicConfig ?: false),
+            config = persistenceConfig,
             configChangeDetectorFactory = configChangeDetectorFactory,
-            evaluationCallbacks = ObserverEvaluationPersistenceCallbacks(compositeObserver),
+            evaluationCallbacks = ObserverEvaluationPersistenceCallbacks(
+                compositeObserver,
+                cacheLoadedPayloadBuilder = { _, lastUpdateTimestamp -> buildCacheLoadedPayload(lastUpdateTimestamp) },
+            ),
             eventsCallbacks = ObserverEventsPersistenceCallbacks(compositeObserver),
             scope = factoryScope
         )
