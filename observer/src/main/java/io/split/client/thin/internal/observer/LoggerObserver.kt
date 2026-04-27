@@ -71,7 +71,6 @@ class LoggerObserver(
             ObservableEventType.EVAL_DESERIALIZE_FAILED to Level.ERROR,
             ObservableEventType.EVAL_STORAGE_UPDATED to Level.DEBUG,
             // Existing SDK events
-            ObservableEventType.EVAL_LOADED_FROM_STORAGE to Level.INFO,
             ObservableEventType.EVALUATIONS_UPDATED to Level.DEBUG,
             // Track events
             ObservableEventType.TRACK_CALLED to Level.DEBUG,
@@ -132,7 +131,6 @@ class LoggerObserver(
             ObservableEventType.EVAL_DESERIALIZE_FAILED to "Failed to parse evaluations response",
             ObservableEventType.EVAL_STORAGE_UPDATED to "Evaluations applied to in-memory storage",
             // Existing SDK events
-            ObservableEventType.EVAL_LOADED_FROM_STORAGE to "Loaded evaluations from storage",
             ObservableEventType.EVALUATIONS_UPDATED to "Evaluations updated",
             // Track events
             ObservableEventType.TRACK_CALLED to "Track called",

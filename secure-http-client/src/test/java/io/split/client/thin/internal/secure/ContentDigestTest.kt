@@ -122,9 +122,47 @@ class ContentDigestTest {
 
     @Test
     fun `known input produces expected digest`() {
-        // Pinned value for "user1:{}" with Murmur3-128x86, first half (h1+h2), Base64 no-padding.
+        // Pinned value for "user1::{}" with Murmur3-128x86, first half (h1+h2), Base64 no-padding.
         // If this fails the hash algorithm or serialization has changed — update deliberately.
+        // input is now "matchingKey:bucketingKey:attrsJson" per spec Appendix II
+        // null bucketingKey renders as empty string
         val target = EvaluationTarget(matchingKey = "user1", bucketingKey = null, attributes = null)
-        assertEquals("UjEmUGAWceM", ContentDigest.compute(target))
+        assertEquals("2YsSrtAzlcI", ContentDigest.compute(target))
+    }
+
+    @Test
+    fun `different bucketingKeys produce different digests`() {
+        val t1 = EvaluationTarget(matchingKey = "user1", bucketingKey = "bucket-a", attributes = null)
+        val t2 = EvaluationTarget(matchingKey = "user1", bucketingKey = "bucket-b", attributes = null)
+
+        assert(ContentDigest.compute(t1) != ContentDigest.compute(t2)) {
+            "Expected different digests for different bucketingKeys"
+        }
+    }
+
+    @Test
+    fun `null bucketingKey renders as empty string and differs from any non-null bucketingKey`() {
+        val withNull = EvaluationTarget(matchingKey = "user1", bucketingKey = null, attributes = null)
+        val withBucket = EvaluationTarget(matchingKey = "user1", bucketingKey = "x", attributes = null)
+        val withEmpty = EvaluationTarget(matchingKey = "user1", bucketingKey = "", attributes = null)
+
+        // null renders as "" → same as empty string
+        assertEquals(ContentDigest.compute(withNull), ContentDigest.compute(withEmpty))
+        // but different from "x"
+        assert(ContentDigest.compute(withNull) != ContentDigest.compute(withBucket)) {
+            "null bucketingKey (rendered as empty string) and non-empty bucketingKey must produce different digests"
+        }
+    }
+
+    @Test
+    fun `digest includes bucketingKey between matchingKey and attrsJson`() {
+        // Verify the input format: matchingKey:bucketingKey:attrsJson
+        // Two targets that differ only in bucketingKey must differ even with same matchingKey and attrs
+        val base = EvaluationTarget(matchingKey = "mk", bucketingKey = "bk1", attributes = mapOf("a" to 1))
+        val other = EvaluationTarget(matchingKey = "mk", bucketingKey = "bk2", attributes = mapOf("a" to 1))
+
+        assert(ContentDigest.compute(base) != ContentDigest.compute(other)) {
+            "bucketingKey must be part of the digest input"
+        }
     }
 }

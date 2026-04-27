@@ -29,7 +29,7 @@ internal class PersistentEventsStorage(
             val stored = roomEventsPersistence.pop(count)
             val events = stored.map { serializer.deserialize(it.json) }
             events.forEachIndexed { i, event -> poppedIds[System.identityHashCode(event)] = stored[i].id }
-            callbacks.onEventPopped(events.size)
+            if (events.isNotEmpty()) callbacks.onEventPopped(events.size)
             events
         } catch (e: Exception) {
             callbacks.onPersistenceFailed(e.message ?: "Unknown error")

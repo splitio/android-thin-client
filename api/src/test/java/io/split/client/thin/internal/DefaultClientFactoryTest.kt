@@ -80,3 +80,4 @@ private class FakeCompositeObserver : CompositeObserver {
         registeredObservers.forEach { it.notifyEvent(event) }
     }
 }
+

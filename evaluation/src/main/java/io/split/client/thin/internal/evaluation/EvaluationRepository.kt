@@ -31,7 +31,13 @@ class DefaultEvaluationRepository(
 
     override suspend fun setTarget(target: Target, filters: EvaluationFilters?, isInitialization: Boolean) {
         val evalKey = target.toEvaluationKey()
-        persistenceBackedStorage?.ensureCacheLoaded(evalKey)
+        try {
+            persistenceBackedStorage?.ensureCacheLoaded(evalKey)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // observer already saw onLoadFailed
+        }
         val reason = if (isInitialization) FetchReason.INITIALIZATION else FetchReason.TARGET_SWITCH
         fetchCoordinator.fetchIfNeeded(evalKey, filters, reason)
     }

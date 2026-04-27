@@ -89,8 +89,19 @@ class SplitFactoryBuilderTest {
 
     @Test
     fun `build uses storage prefix from config for persistence`() {
+        var capturedConfig: io.split.client.thin.internal.persistence.domain.PersistenceConfig? = null
         val config = splitClientConfig { storage { prefix = "my_app" } }
-        assertIsDefaultSplitFactory(buildFactory(config))
+
+        SplitFactoryBuilder.buildInternal(
+            context = mockContext,
+            sdkKey = sdkKey,
+            defaultTarget = defaultTarget,
+            config = config,
+            configChangeDetectorFactory = { false },
+            persistenceConfigCapture = { capturedConfig = it },
+        ).also { createdFactories.add(it) }
+
+        assertEquals("my_app", capturedConfig?.prefix)
     }
 
     @Test

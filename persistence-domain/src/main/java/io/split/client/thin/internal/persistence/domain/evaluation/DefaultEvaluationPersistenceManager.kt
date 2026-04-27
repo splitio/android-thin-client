@@ -30,9 +30,8 @@ internal class DefaultEvaluationPersistenceManager(
                 evaluations = evaluations
             )
 
-            callbacks.onEvalStorageUpdated(evalKey, persistedData.changeNumber, evaluations)
             val timestamp = persistedData.lastUpdateTimestamp ?: System.currentTimeMillis()
-            callbacks.onLoadSucceeded(timestamp)
+            callbacks.onCacheLoaded(evalKey, timestamp, evaluations)
 
             CacheLoadResult(change, persistedData.lastUpdateTimestamp)
         } catch (e: Exception) {

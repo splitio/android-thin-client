@@ -164,4 +164,13 @@ class PersistentEventsStorageTest {
         verify(roomStorage, never()).push(anyString())
         verify(roomStorage, never()).delete(anyList())
     }
+
+    @Test
+    fun `pop does not call onEventPopped when queue is empty`() {
+        `when`(roomStorage.pop(anyInt())).thenReturn(emptyList())
+
+        storage.pop(5)
+
+        verify(callbacks, never()).onEventPopped(anyInt())
+    }
 }

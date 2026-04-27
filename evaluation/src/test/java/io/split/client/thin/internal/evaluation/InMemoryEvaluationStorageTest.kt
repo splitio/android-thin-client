@@ -379,6 +379,18 @@ class InMemoryEvaluationStorageTest {
     }
 
     @Test
+    fun `upsert with fresher remote data wins over stale cache with different flag set`() {
+        // Remote upsert arrives first with cn=5, flags=[flag-a]
+        storage.upsert(change(key1, 5L, storedEval("flag-a", "on")))
+        // Stale cache arrives later with cn=3 but different flag set [flag-b]
+        storage.upsert(change(key1, 3L, storedEval("flag-b", "off")))
+        // Remote data (cn=5, flag-a) must NOT be overwritten
+        assertEquals("on", storage.get("flag-a", key1)?.result?.treatment)
+        assertNull(storage.get("flag-b", key1))
+        assertEquals(5L, storage.lastChangeNumber(key1))
+    }
+
+    @Test
     fun `ensureCacheLoaded does not call onCacheLoaded when key already loaded`() = runTest {
         val cached = change(key1, 10L, storedEval("flag-cached", "on"))
         val cacheLoader = FakeCacheLoader(onLoad = { cached })

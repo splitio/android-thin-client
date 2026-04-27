@@ -31,8 +31,8 @@ class EventManagerObserverTest {
     }
 
     @Test
-    fun `eval_loaded_from_storage maps to EVALUATIONS_LOADED_FROM_STORAGE`() {
-        observer.notifyEvent(ObservableEvent("eval_loaded_from_storage"))
+    fun `eval_storage_load_succeeded maps to EVALUATIONS_LOADED_FROM_STORAGE`() {
+        observer.notifyEvent(ObservableEvent("eval_storage_load_succeeded"))
 
         verify(eventsManager).notifyInternalEvent(SdkInternalEvent.EVALUATIONS_LOADED_FROM_STORAGE, null)
     }
@@ -133,44 +133,10 @@ class EventManagerObserverTest {
     // -------------------------------------------------------------------------
 
     @Test
-    fun `event payload is forwarded to notifyInternalEvent`() {
-        val metadata = SdkReadyMetadata(isInitialCacheLoad = true, lastUpdateTimestamp = 123L)
-        observer.notifyEvent(ObservableEvent("eval_loaded_from_storage", payload = metadata))
-
-        verify(eventsManager).notifyInternalEvent(SdkInternalEvent.EVALUATIONS_LOADED_FROM_STORAGE, metadata)
-    }
-
-    @Test
     fun `null payload is forwarded as null`() {
         observer.notifyEvent(ObservableEvent("eval_storage_updated", payload = null))
 
         verify(eventsManager).notifyInternalEvent(SdkInternalEvent.EVALUATIONS_SYNC_COMPLETE, null)
     }
 
-    // -------------------------------------------------------------------------
-    // EVAL_LOADED_FROM_STORAGE is KEY_SCOPED
-    // -------------------------------------------------------------------------
-
-    @Test
-    fun `eval_loaded_from_storage for different matchingKey is ignored`() {
-        val scopedObserver = EventManagerObserver(eventsManager, "user_a")
-
-        scopedObserver.notifyEvent(
-            ObservableEvent("eval_loaded_from_storage", mapOf("matchingKey" to "user_b"))
-        )
-
-        verifyNoInteractions(eventsManager)
-    }
-
-    @Test
-    fun `eval_loaded_from_storage for own matchingKey fires event with payload`() {
-        val metadata = SdkReadyMetadata(isInitialCacheLoad = false, lastUpdateTimestamp = 999L)
-        val scopedObserver = EventManagerObserver(eventsManager, "user_a")
-
-        scopedObserver.notifyEvent(
-            ObservableEvent("eval_loaded_from_storage", mapOf("matchingKey" to "user_a"), payload = metadata)
-        )
-
-        verify(eventsManager).notifyInternalEvent(SdkInternalEvent.EVALUATIONS_LOADED_FROM_STORAGE, metadata)
-    }
 }

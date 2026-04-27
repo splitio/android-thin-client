@@ -66,4 +66,62 @@ class TargetHasherTest {
         assertEquals(16, h.keyHash.length)
         assertEquals(16, h.attrsHash.length)
     }
+
+    @Test
+    fun `matchingKey with colon and null bucketingKey does not collide with other splits`() {
+        // "user:1" + null → must not equal "user" + "1:null"
+        val a = EvaluationKey(Key("user:1", null))
+        val b = EvaluationKey(Key("user", "1:null"))
+        assertNotEquals(
+            "matchingKey='user:1', bucketingKey=null collides with matchingKey='user', bucketingKey='1:null'",
+            hasher.hash(a).keyHash,
+            hasher.hash(b).keyHash,
+        )
+    }
+
+    @Test
+    fun `attribute key containing equals sign does not collide with other attribute`() {
+        // attr key "a=b" with value "c" must not collide with key "a" value "b=c"
+        val a = keyWithAttrs("user1", mapOf("a=b" to "c"))
+        val b = keyWithAttrs("user1", mapOf("a" to "b=c"))
+        assertNotEquals(
+            "Attribute key containing '=' aliases different attribute",
+            hasher.hash(a).attrsHash,
+            hasher.hash(b).attrsHash,
+        )
+    }
+
+    @Test
+    fun `attribute value containing comma does not collide with adjacent attribute`() {
+        // key "a" value "x,b=y" must not collide with keys "a"="x", "b"="y"
+        val a = keyWithAttrs("user1", mapOf("a" to "x,b=y"))
+        val b = keyWithAttrs("user1", mapOf("a" to "x", "b" to "y"))
+        assertNotEquals(
+            "Attribute value containing ',' aliases adjacent attribute pair",
+            hasher.hash(a).attrsHash,
+            hasher.hash(b).attrsHash,
+        )
+    }
+
+    @Test
+    fun `attrs with Int 1 and String "1" produce different attrsHash`() {
+        val a = keyWithAttrs("user1", mapOf("val" to 1L))
+        val b = keyWithAttrs("user1", mapOf("val" to "1"))
+        assertNotEquals(
+            "Int 1 and String '1' produce same attrsHash (type not preserved)",
+            hasher.hash(a).attrsHash,
+            hasher.hash(b).attrsHash,
+        )
+    }
+
+    @Test
+    fun `attrs with listOf("a","b") and listOf("a, b") produce different attrsHash`() {
+        val a = keyWithAttrs("user1", mapOf("items" to listOf("a", "b")))
+        val b = keyWithAttrs("user1", mapOf("items" to listOf("a, b")))
+        assertNotEquals(
+            "List [a,b] and List [a, b] produce same attrsHash",
+            hasher.hash(a).attrsHash,
+            hasher.hash(b).attrsHash,
+        )
+    }
 }
