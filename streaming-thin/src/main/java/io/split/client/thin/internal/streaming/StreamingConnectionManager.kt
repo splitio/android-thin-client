@@ -39,6 +39,7 @@ internal class StreamingConnectionManager(
     private val stateMutex = Mutex()
     private var state: ConnectionState = ConnectionState.Stopped
     private var connectionJob: Job? = null
+    private var notificationHandlerJob: Job? = null
     private var currentEventSourceClient: EventSourceClient? = null
     private val notificationParser = ThinNotificationParser()
     private val occupancyByChannel = mutableMapOf<String, Int>()
@@ -93,6 +94,8 @@ internal class StreamingConnectionManager(
     private fun disconnectLocked() {
         connectionJob?.cancel()
         connectionJob = null
+        notificationHandlerJob?.cancel()
+        notificationHandlerJob = null
         val client = currentEventSourceClient
         currentEventSourceClient = null
         // Disconnect asynchronously: BufferedReader.close() blocks while readLine()
@@ -188,7 +191,8 @@ internal class StreamingConnectionManager(
         val raw = notificationParser.parseRaw(jsonData) ?: return
         val notification = notificationParser.parse(raw) ?: return
 
-        scope.launch {
+        notificationHandlerJob?.cancel()
+        notificationHandlerJob = scope.launch {
             when (notification) {
                 is EvaluationUpdateNotification -> {
                     observer.notifyEvent(ObservableEvent(
