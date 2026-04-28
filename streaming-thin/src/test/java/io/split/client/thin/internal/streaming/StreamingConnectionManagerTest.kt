@@ -2,6 +2,7 @@ package io.split.client.thin.internal.streaming
 
 import io.split.client.thin.internal.observer.CompositeObserver
 import io.split.client.thin.internal.observer.ObservableEventType
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -483,6 +484,40 @@ class StreamingConnectionManagerTest {
         advanceUntilIdle()
 
         assertTrue(observer.events.any { it.type == ObservableEventType.STREAMING_DISCONNECTED })
+    }
+
+    @Test
+    fun `pause cancels in-flight evaluation fetch notification callback`() = runTest {
+        val eventSourceClient = FakeEventSourceClient()
+        var fetchCallbackInvoked = false
+        val manager = createManager(
+            eventSourceClientProvider = { eventSourceClient },
+            onEvaluationFetchNotification = { _ ->
+                fetchCallbackInvoked = true
+            }
+        )
+
+        manager.start()
+        advanceUntilIdle()
+
+        // Trigger PUSH notification
+        eventSourceClient.simulateMessage(
+            mapOf("data" to """{"channel":"evaluations","data":"{\"type\":\"EVALUATIONS_UPDATE\",\"changeNumber":123,\"i\":5000,\"s\":10,\"h":1}","timestamp":1000}""")
+        )
+        advanceUntilIdle() // Let callback complete
+
+        assertTrue("Callback should have been invoked", fetchCallbackInvoked)
+        fetchCallbackInvoked = false // Reset
+
+        // Trigger another PUSH notification, then pause immediately
+        eventSourceClient.simulateMessage(
+            mapOf("data" to """{"channel":"evaluations","data":"{\"type\":\"EVALUATIONS_UPDATE\",\"changeNumber":124,\"i\":5000,\"s\":10,\"h\":1}","timestamp":2000}""")
+        )
+        manager.pause()
+        advanceUntilIdle()
+
+        // Second callback should have been cancelled and NOT invoked
+        assertFalse("Second callback should not have been invoked after pause", fetchCallbackInvoked)
     }
 
     private fun TestScope.createManager(

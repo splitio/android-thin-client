@@ -984,6 +984,106 @@ class SdkBehaviorAndroidTest {
     }
 
     // -------------------------------------------------------------------------
+    // Test 15 — Delayed PUSH notification fetches cancelled on background
+    // -------------------------------------------------------------------------
+
+    /**
+     * Given the SDK is in STREAMING mode and receives a PUSH notification with delay params
+     * When the app goes to background before the delayed fetch executes
+     * Then the delayed fetch is cancelled and does not execute
+     * And when the app returns to foreground, evaluations can be re-fetched normally
+     */
+    @Test
+    fun delayedPushFetchCancelledOnBackground() {
+        val uiDevice = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+
+        val server = MockSplitServer()
+        repeat(5) { server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_ENABLED)) }
+
+        // Return RESPONSE_1 initially, then RESPONSE_2 after foreground returns
+        val returnUpdatedResponse = AtomicBoolean(false)
+        server.evaluationsHandler = {
+            if (returnUpdatedResponse.get()) MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_2)
+            else MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1)
+        }
+
+        val scenario = launchActivity()
+        // Use a specific target key that produces a predictably long delay
+        // With key="delay_test_key_xyz", seed=42, interval=120000, hash produces ~80+ second delay
+        val targetKey = "delay_test_key_xyz"
+        val factory = buildStreamingFactory(
+            server,
+            prefix = "e2e_delayed_push_cancel_$RUN_ID",
+            defaultTarget = Target(key = Key(targetKey), trafficType = "user")
+        )
+        val client = factory.getClient()
+        val listener = TestEventListener()
+        client.addEventListener(listener.asSplitEventListener)
+
+        try {
+            assertTrue("onReady did not fire", listener.awaitReady())
+
+            // Wait for SSE connection
+            val sseDeadline = System.currentTimeMillis() + 5_000
+            while (server.sseConnectionCount.get() == 0 && System.currentTimeMillis() < sseDeadline) {
+                Thread.sleep(100)
+            }
+            assertTrue("SSE should have connected", server.sseConnectionCount.get() >= 1)
+
+            // Record how many evaluation fetches have occurred so far
+            val fetchCountBeforePush = server.evaluationRequestCount.get()
+
+            // Send PUSH notification with 120-second delay interval
+            // Even with worst-case hash, the computed delay will be >> 5 seconds
+            val longDelayEvent = """{"channel":"${E2EFixtures.STREAMING_CHANNEL}",""" +
+                    """"data":"{\"type\":\"EVALUATION_UPDATE\",\"changeNumber\":2000,""" +
+                    """\"i\":120000,\"s\":42,\"h\":1}",""" +
+                    """"timestamp":1000000}"""
+            server.enqueueSse(
+                server.buildSseResponse(listOf(longDelayEvent), delaySeconds = 0)
+            )
+            Thread.sleep(500) // Let SSE message be received
+
+            // Immediately background the app before the delay completes
+            uiDevice.pressHome()
+            uiDevice.waitForIdle(2_000)
+            Thread.sleep(1_000) // ProcessLifecycleOwner 700ms debounce + margin
+
+            // Wait a few seconds to ensure fetch would have happened if not cancelled properly
+            Thread.sleep(3_000)
+
+            // Verify no evaluation fetch occurred during background
+            val fetchCountDuringBackground = server.evaluationRequestCount.get()
+            assertEquals(
+                "Delayed PUSH fetch should have been cancelled while backgrounded",
+                fetchCountBeforePush,
+                fetchCountDuringBackground
+            )
+
+            // Return to foreground and trigger new SSE event
+            returnUpdatedResponse.set(true)
+            server.enqueueSse(
+                server.buildSseResponse(listOf(E2EFixtures.SSE_EVALUATION_UPDATE), delaySeconds = 0)
+            )
+
+            InstrumentationRegistry.getInstrumentation().targetContext.startActivity(
+                Intent(InstrumentationRegistry.getInstrumentation().targetContext, TestActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+            uiDevice.waitForIdle(2_000)
+
+            // Verify SDK can still fetch normally after returning to foreground
+            assertTrue("onUpdate should fire after foreground return", listener.awaitUpdate(15))
+            assertEquals("off", client.getTreatment("flag_a").treatment)
+
+        } finally {
+            scenario.close()
+            runBlocking { factory.destroy() }
+            server.shutdown()
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
 
@@ -1055,6 +1155,7 @@ class SdkBehaviorAndroidTest {
     private fun buildStreamingFactory(
         server: MockSplitServer,
         prefix: String,
+        defaultTarget: Target = Target(key = Key("user_a"), trafficType = "user"),
     ): SplitFactory {
         val config = splitClientConfig {
             sync {
@@ -1073,7 +1174,7 @@ class SdkBehaviorAndroidTest {
         return SplitFactoryBuilder.build(
             context = context,
             sdkKey = SdkKey("e2e-test-key"),
-            defaultTarget = Target(key = Key("user_a"), trafficType = "user"),
+            defaultTarget = defaultTarget,
             config = config,
         )
     }
