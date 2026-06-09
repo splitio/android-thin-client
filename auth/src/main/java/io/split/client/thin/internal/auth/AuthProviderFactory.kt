@@ -10,8 +10,8 @@ fun createAuthProvider(
     sdkKey: String,
     authUrl: String,
     compositeObserver: CompositeObserver,
-    compositeKeyBuilder: (Set<String>) -> String,
     defaultTarget: String? = null,
+    onUnauthorized: (target: String) -> Unit = {},
 ): AuthProvider {
     val storage = InMemoryCredentialStorage()
     val fetcher = DefaultCredentialFetcher(
@@ -33,7 +33,8 @@ fun createAuthProvider(
                     properties = mapOf(
                         "matchingKey" to target,
                         "expiresAt" to credential.expiresAt.toString(),
-                        "pushEnabled" to credential.pushEnabled.toString()
+                        "pushEnabled" to credential.pushEnabled.toString(),
+                        "connDelaySeconds" to credential.connDelaySeconds.toString()
                     )
                 )
             )
@@ -49,11 +50,11 @@ fun createAuthProvider(
                 )
             )
         },
+        onUnauthorized = onUnauthorized,
     )
     return DefaultAuthProvider(
         credentialFetcher = fetcher,
         credentialStorage = storage,
-        compositeKeyBuilder = compositeKeyBuilder,
         defaultTarget = defaultTarget,
         onJwtRequestStarted = { target ->
             compositeObserver.notifyEvent(

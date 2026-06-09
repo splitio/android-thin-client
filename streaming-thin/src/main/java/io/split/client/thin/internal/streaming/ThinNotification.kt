@@ -1,5 +1,20 @@
 package io.split.client.thin.internal.streaming
 
+import io.split.android.client.streaming.support.CompressionType
+
+enum class EvaluationUpdateStrategy(val code: Int) {
+    UNBOUNDED_FETCH_REQUEST(0),
+    BOUNDED_FETCH_REQUEST(1);
+
+    companion object {
+        fun from(code: Int?): EvaluationUpdateStrategy? = when (code) {
+            null, 0 -> UNBOUNDED_FETCH_REQUEST
+            1 -> BOUNDED_FETCH_REQUEST
+            else -> null
+        }
+    }
+}
+
 sealed class ThinNotification(
     val type: ThinNotificationType,
     val channel: String?,
@@ -12,7 +27,10 @@ data class EvaluationUpdateNotification(
     val eventTimestamp: Long,
     val updateIntervalMs: Long? = null,
     val algorithmSeed: Int? = null,
-    val hashingAlgorithm: Int? = null
+    val hashingAlgorithm: Int? = null,
+    val updateStrategy: EvaluationUpdateStrategy? = EvaluationUpdateStrategy.UNBOUNDED_FETCH_REQUEST,
+    val data: String? = null,
+    val compression: CompressionType = CompressionType.NONE,
 ) : ThinNotification(ThinNotificationType.EVALUATION_UPDATE, channelName, eventTimestamp)
 
 internal data class ThinControlNotification(

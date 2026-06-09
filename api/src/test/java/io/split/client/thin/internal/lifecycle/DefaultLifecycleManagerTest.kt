@@ -157,6 +157,7 @@ private class FakeCompositeObserver : CompositeObserver {
     val events = mutableListOf<ObservableEvent>()
 
     override fun register(observer: Observer) {}
+    override fun unregister(observer: Observer) {}
     override fun unregisterAll() {}
     override fun notifyEvent(event: ObservableEvent) {
         events.add(event)

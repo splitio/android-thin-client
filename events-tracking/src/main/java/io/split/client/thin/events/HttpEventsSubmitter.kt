@@ -11,7 +11,17 @@ class HttpEventsSubmitter(
 ) : RecorderSubmitter<String> {
 
     override fun execute(data: String) {
-        val response = runBlocking(Dispatchers.IO) { postEvents(data) }
+        val response = try {
+            runBlocking(Dispatchers.IO) { postEvents(data) }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            throw RecorderException(
+                /* message = */ "Events submission failed: ${e.message}",
+                /* httpStatus = */ -1,
+                /* retryable = */ false
+            )
+        }
 
         if (!response.isSuccess) {
             throw RecorderException(

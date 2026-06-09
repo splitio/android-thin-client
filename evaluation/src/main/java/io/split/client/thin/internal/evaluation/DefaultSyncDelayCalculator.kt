@@ -11,13 +11,18 @@ class DefaultSyncDelayCalculator : SyncDelayCalculator {
 
     override fun calculateDelay(key: String, updateIntervalMs: Long?, algorithmSeed: Int?, hashingAlgorithm: Int?): Long {
         if (hashingAlgorithm == null || hashingAlgorithm == HASHING_NONE) {
-            return 0L
+            return 500L
         }
 
         val intervalMs = if (updateIntervalMs == null || updateIntervalMs <= 0) DEFAULT_INTERVAL_MS else updateIntervalMs
         val seed = algorithmSeed ?: 0
 
         val hash = MurmurHash3(seed.toUInt()).hash32x86(key.toByteArray(Charsets.UTF_8))
-        return (hash.toLong() and 0xFFFFFFFFL) % intervalMs
+        val lng = (hash.toLong() and 0xFFFFFFFFL) % intervalMs
+        return if (lng >= 500L) {
+            lng
+        } else {
+            500L
+        }
     }
 }

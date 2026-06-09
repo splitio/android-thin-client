@@ -130,6 +130,19 @@ class InMemoryEvaluationStorageTest {
     }
 
     @Test
+    fun `getFlagNames with no key returns names from any stored key`() {
+        storage.upsert(change(key1, 1L, storedEval("flag-a", "on"), storedEval("flag-b", "off")))
+
+        val names = storage.getFlagNames()
+        assertEquals(setOf("flag-a", "flag-b"), names)
+    }
+
+    @Test
+    fun `getFlagNames with no key returns empty when store is empty`() {
+        assertEquals(emptySet<String>(), storage.getFlagNames())
+    }
+
+    @Test
     fun `lastChangeNumber returns -1 for unknown key`() {
         assertEquals(-1L, storage.lastChangeNumber(key1))
     }
@@ -376,6 +389,14 @@ class InMemoryEvaluationStorageTest {
         val result = storage.upsert(change(key1, 2L, eval))
         assertEquals(true, result.updated)
         assertEquals(emptyList<String>(), result.changedFlagNames)
+    }
+
+    @Test
+    fun `upsert changing treatment when API omits per-flag changeNumber includes flag in changedFlagNames`() {
+        storage.upsert(change(key1, 1L, storedEval("flag-a", "on")))
+        val result = storage.upsert(change(key1, 2L, storedEval("flag-a", "off")))
+        assertEquals(true, result.updated)
+        assertEquals(listOf("flag-a"), result.changedFlagNames)
     }
 
     @Test

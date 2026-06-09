@@ -22,7 +22,7 @@ class DefaultSecureHttpClientFetchEvaluationsTest {
         val http = FakeRetryableHttpClient(statusCode = 200)
         val (client, _, _) = makeClient(auth, http)
 
-        client.fetchEvaluations(testDefaultTarget, testDefaultFilters, -1L)
+        client.fetchEvaluations(testDefaultTarget, testDefaultRequest, -1L)
 
         assertEquals("Bearer my-token", http.lastRequest?.headers?.get("Authorization"))
     }
@@ -31,7 +31,7 @@ class DefaultSecureHttpClientFetchEvaluationsTest {
     fun `sends POST to evaluationsUrl`() = runTest {
         val (client, _, http) = makeClient()
 
-        client.fetchEvaluations(testDefaultTarget, testDefaultFilters, -1L)
+        client.fetchEvaluations(testDefaultTarget, testDefaultRequest, -1L)
 
         assertTrue(http.lastRequest?.uri?.toString()?.startsWith(testEvaluationsUrl) == true)
     }
@@ -40,79 +40,154 @@ class DefaultSecureHttpClientFetchEvaluationsTest {
     fun `uses EVALUATIONS category`() = runTest {
         val (client, _, http) = makeClient()
 
-        client.fetchEvaluations(testDefaultTarget, testDefaultFilters, -1L)
+        client.fetchEvaluations(testDefaultTarget, testDefaultRequest, -1L)
 
         assertEquals(RequestCategory.EVALUATIONS, http.lastCategory)
     }
 
     @Test
-    fun `matchingKey sent as user query param`() = runTest {
+    fun `matchingKey sent as key field in body`() = runTest {
         val (client, _, http) = makeClient()
 
-        client.fetchEvaluations(testDefaultTarget, testDefaultFilters, -1L)
+        client.fetchEvaluations(testDefaultTarget, testDefaultRequest, -1L)
 
-        assertTrue(http.lastRequest?.uri?.query?.contains("user=user-1") == true)
+        assertTrue(http.lastRequest?.body?.contains("\"key\":\"user-1\"") == true)
     }
 
     @Test
-    fun `matchingKey is NOT in request body`() = runTest {
+    fun `matchingKey NOT in query params`() = runTest {
         val (client, _, http) = makeClient()
 
-        client.fetchEvaluations(testDefaultTarget, testDefaultFilters, -1L)
+        client.fetchEvaluations(testDefaultTarget, testDefaultRequest, -1L)
 
-        assertFalse(http.lastRequest?.body?.contains("matchingKey") == true)
-        assertFalse(http.lastRequest?.body?.contains("user-1") == true)
+        assertFalse(http.lastRequest?.uri?.query?.contains("user=") == true)
+    }
+
+    @Test
+    fun `bucketingKey sent as bucketingKey field in body when non-null`() = runTest {
+        val target = EvaluationTarget(matchingKey = "user-1", bucketingKey = "bucket-key", attributes = null)
+        val (client, _, http) = makeClient()
+
+        client.fetchEvaluations(target, testDefaultRequest, -1L)
+
+        assertTrue(http.lastRequest?.body?.contains("\"bucketingKey\":\"bucket-key\"") == true)
+    }
+
+    @Test
+    fun `bucketingKey is JSON null in body when null`() = runTest {
+        val target = EvaluationTarget(matchingKey = "user-1", bucketingKey = null, attributes = null)
+        val (client, _, http) = makeClient()
+
+        client.fetchEvaluations(target, testDefaultRequest, -1L)
+
+        assertTrue(http.lastRequest?.body?.contains("\"bucketingKey\":null") == true)
+    }
+
+    @Test
+    fun `bucketingKey NOT in query params`() = runTest {
+        val target = EvaluationTarget(matchingKey = "user-1", bucketingKey = "bk", attributes = null)
+        val (client, _, http) = makeClient()
+
+        client.fetchEvaluations(target, testDefaultRequest, -1L)
+
+        assertFalse(http.lastRequest?.uri?.query?.contains("bucketingkey=") == true)
+    }
+
+    @Test
+    fun `configs true sent in body when request sets configs true`() = runTest {
+        val request = EvaluationFilters(sets = emptySet(), configs = true)
+        val (client, _, http) = makeClient()
+
+        client.fetchEvaluations(testDefaultTarget, request, -1L)
+
+        assertTrue(http.lastRequest?.body?.contains("\"configs\":true") == true)
+    }
+
+    @Test
+    fun `configs false sent in body when request sets configs false`() = runTest {
+        val request = EvaluationFilters(sets = emptySet(), configs = false)
+        val (client, _, http) = makeClient()
+
+        client.fetchEvaluations(testDefaultTarget, request, -1L)
+
+        assertTrue(http.lastRequest?.body?.contains("\"configs\":false") == true)
+    }
+
+    @Test
+    fun `configs NOT in query params`() = runTest {
+        val request = EvaluationFilters(sets = emptySet(), configs = true)
+        val (client, _, http) = makeClient()
+
+        client.fetchEvaluations(testDefaultTarget, request, -1L)
+
+        assertFalse(http.lastRequest?.uri?.query?.contains("withconfig") == true)
+    }
+
+    @Test
+    fun `sets sent as sorted JSON array in body`() = runTest {
+        val request = EvaluationFilters(sets = setOf("set-b", "set-a"), configs = false)
+        val (client, _, http) = makeClient()
+
+        client.fetchEvaluations(testDefaultTarget, request, -1L)
+
+        assertTrue(http.lastRequest?.body?.contains("\"sets\":[\"set-a\",\"set-b\"]") == true)
+    }
+
+    @Test
+    fun `empty sets sends empty array in body`() = runTest {
+        val request = EvaluationFilters(sets = emptySet(), configs = false)
+        val (client, _, http) = makeClient()
+
+        client.fetchEvaluations(testDefaultTarget, request, -1L)
+
+        assertTrue(http.lastRequest?.body?.contains("\"sets\":[]") == true)
+    }
+
+    @Test
+    fun `sets NOT in query params`() = runTest {
+        val request = EvaluationFilters(sets = setOf("set-a"), configs = false)
+        val (client, _, http) = makeClient()
+
+        client.fetchEvaluations(testDefaultTarget, request, -1L)
+
+        assertFalse(http.lastRequest?.uri?.query?.contains("sets=") == true)
+    }
+
+    @Test
+    fun `body top-level keys are in alphabetical order`() = runTest {
+        val target = EvaluationTarget(matchingKey = "user-1", bucketingKey = null, attributes = null)
+        val (client, _, http) = makeClient()
+
+        client.fetchEvaluations(target, testDefaultRequest, -1L)
+
+        // With no attributes, body is flat — check key order directly by position
+        val body = http.lastRequest?.body ?: ""
+        val attrPos = body.indexOf("\"attributes\"")
+        val bkPos = body.indexOf("\"bucketingKey\"")
+        val cfgPos = body.indexOf("\"configs\"")
+        val keyPos = body.indexOf("\"key\"")
+        val setsPos = body.indexOf("\"sets\"")
+        assertTrue("attributes before bucketingKey", attrPos < bkPos)
+        assertTrue("bucketingKey before configs", bkPos < cfgPos)
+        assertTrue("configs before key", cfgPos < keyPos)
+        assertTrue("key before sets", keyPos < setsPos)
     }
 
     @Test
     fun `attributes sent in body under attributes key`() = runTest {
         val (client, _, http) = makeClient()
 
-        client.fetchEvaluations(testDefaultTarget, testDefaultFilters, -1L)
+        client.fetchEvaluations(testDefaultTarget, testDefaultRequest, -1L)
 
         assertTrue(http.lastRequest?.body?.contains("\"attributes\"") == true)
         assertTrue(http.lastRequest?.body?.contains("premium") == true)
     }
 
     @Test
-    fun `flagNames sent as flags query params`() = runTest {
-        val (client, _, http) = makeClient()
-
-        client.fetchEvaluations(testDefaultTarget, testDefaultFilters, -1L)
-
-        val query = http.lastRequest?.uri?.query ?: ""
-        assertTrue(query.contains("flags=flag-a"))
-        assertTrue(query.contains("flags=flag-b"))
-    }
-
-    @Test
-    fun `flagNames are NOT in request body`() = runTest {
-        val (client, _, http) = makeClient()
-
-        client.fetchEvaluations(testDefaultTarget, testDefaultFilters, -1L)
-
-        assertFalse(http.lastRequest?.body?.contains("flag-a") == true)
-        assertFalse(http.lastRequest?.body?.contains("flag-b") == true)
-    }
-
-    @Test
-    fun `flagSets sent as sets query params`() = runTest {
-        val target = testDefaultTarget
-        val filters = EvaluationFilters(flagNames = null, flagSets = setOf("set-x", "set-y"))
-        val (client, _, http) = makeClient()
-
-        client.fetchEvaluations(target, filters, -1L)
-
-        val query = http.lastRequest?.uri?.query ?: ""
-        assertTrue(query.contains("sets=set-x"))
-        assertTrue(query.contains("sets=set-y"))
-    }
-
-    @Test
     fun `changeNumber sent as since query param`() = runTest {
         val (client, _, http) = makeClient()
 
-        client.fetchEvaluations(testDefaultTarget, null, 42L)
+        client.fetchEvaluations(testDefaultTarget, testDefaultRequest, 42L)
 
         assertTrue(http.lastRequest?.uri?.query?.contains("since=42") == true)
     }
@@ -121,138 +196,81 @@ class DefaultSecureHttpClientFetchEvaluationsTest {
     fun `changeNumber -1 sent as since=-1`() = runTest {
         val (client, _, http) = makeClient()
 
-        client.fetchEvaluations(testDefaultTarget, null, -1L)
+        client.fetchEvaluations(testDefaultTarget, testDefaultRequest, -1L)
 
         assertTrue(http.lastRequest?.uri?.query?.contains("since=-1") == true)
     }
 
     @Test
-    fun `with null filters body only contains empty object or attributes`() = runTest {
+    fun `till query param is absent when targetChangeNumber is null`() = runTest {
         val (client, _, http) = makeClient()
 
-        client.fetchEvaluations(testDefaultTarget, null, -1L)
+        client.fetchEvaluations(testDefaultTarget, testDefaultRequest, -1L, targetChangeNumber = null)
 
-        assertTrue(http.lastRequest?.uri?.toString()?.startsWith(testEvaluationsUrl) == true)
-        assertTrue(http.lastRequest?.body?.contains("user-1") == false)
+        assertFalse(http.lastRequest?.uri?.query?.contains("till=") == true)
     }
 
     @Test
-    fun `target with no attributes sends empty body`() = runTest {
-        val targetWithNoAttrs = EvaluationTarget(matchingKey = "user-2", bucketingKey = null, attributes = null)
+    fun `till query param is appended when targetChangeNumber is provided`() = runTest {
         val (client, _, http) = makeClient()
 
-        client.fetchEvaluations(targetWithNoAttrs, null, -1L)
+        client.fetchEvaluations(testDefaultTarget, testDefaultRequest, -1L, targetChangeNumber = 42L)
 
-        assertEquals("{}", http.lastRequest?.body)
+        assertTrue(http.lastRequest?.uri?.query?.contains("till=42") == true)
     }
 
     @Test
-    fun `withDynamicConfig sent as query param when set`() = runTest {
-        val filters = EvaluationFilters(flagNames = null, flagSets = null, withDynamicConfig = true)
+    fun `URI only has since and optionally till — no other params`() = runTest {
         val (client, _, http) = makeClient()
 
-        client.fetchEvaluations(testDefaultTarget, filters, -1L)
+        client.fetchEvaluations(testDefaultTarget, testDefaultRequest, -1L)
 
-        assertTrue(http.lastRequest?.uri?.query?.contains("configs=true") == true)
+        val paramNames = http.lastRequest?.uri?.query
+            ?.split("&")?.map { it.substringBefore("=") } ?: emptyList()
+        assertEquals(listOf("since"), paramNames)
     }
 
     @Test
-    fun `withDynamicConfig not sent when null`() = runTest {
-        val filters = EvaluationFilters(flagNames = null, flagSets = null, withDynamicConfig = null)
-        val (client, _, http) = makeClient()
-
-        client.fetchEvaluations(testDefaultTarget, filters, -1L)
-
-        assertFalse(http.lastRequest?.uri?.query?.contains("configs") == true)
-    }
-
-    @Test
-    fun `bucketingKey sent as query param when non-null`() = runTest {
-        val target = EvaluationTarget(matchingKey = "user-1", bucketingKey = "bucket-key", attributes = null)
-        val (client, _, http) = makeClient()
-
-        client.fetchEvaluations(target, testDefaultFilters, -1L)
-
-        assertTrue(http.lastRequest?.uri?.query?.contains("bucketingKey=bucket-key") == true)
-    }
-
-    @Test
-    fun `bucketingKey not sent when null`() = runTest {
-        val target = EvaluationTarget(matchingKey = "user-1", bucketingKey = null, attributes = null)
-        val (client, _, http) = makeClient()
-
-        client.fetchEvaluations(target, testDefaultFilters, -1L)
-
-        assertFalse(http.lastRequest?.uri?.query?.contains("bucketingKey") == true)
-    }
-
-    @Test
-    fun `X-Harness-FME-SDK-Thin-Version header sent on evaluations`() = runTest {
+    fun `X-Harness-FME-SDK-Version header sent on evaluations`() = runTest {
         val (client, _, http) = makeClient(sdkVersion = "test-version")
 
-        client.fetchEvaluations(testDefaultTarget, testDefaultFilters, -1L)
+        client.fetchEvaluations(testDefaultTarget, testDefaultRequest, -1L)
 
-        assertEquals("android_thin-test-version", http.lastRequest?.headers?.get("X-Harness-FME-SDK-Thin-Version"))
-    }
-
-    @Test
-    fun `X-Harness-FME-SDK-Thin-Spec header sent on evaluations`() = runTest {
-        val (client, _, http) = makeClient()
-
-        client.fetchEvaluations(testDefaultTarget, testDefaultFilters, -1L)
-
-        assertEquals(SDK_SPEC_VERSION, http.lastRequest?.headers?.get("X-Harness-FME-SDK-Thin-Spec"))
-    }
-
-    @Test
-    fun `impressionsMode sent as query param when configured`() = runTest {
-        val (client, _, http) = makeClient(impressionsMode = 1)
-
-        client.fetchEvaluations(testDefaultTarget, testDefaultFilters, -1L)
-
-        assertTrue(http.lastRequest?.uri?.query?.contains("impressionsMode=1") == true)
-    }
-
-    @Test
-    fun `impressionsMode not sent when not configured`() = runTest {
-        val (client, _, http) = makeClient(impressionsMode = null)
-
-        client.fetchEvaluations(testDefaultTarget, testDefaultFilters, -1L)
-
-        assertFalse(http.lastRequest?.uri?.query?.contains("impressionsMode") == true)
+        assertEquals("android-thin-test-version", http.lastRequest?.headers?.get("X-Harness-FME-SDK-Version"))
     }
 
     @Test
     fun `X-Harness-FME-Content-Digest header sent on evaluations`() = runTest {
         val (client, _, http) = makeClient()
 
-        client.fetchEvaluations(testDefaultTarget, testDefaultFilters, -1L)
+        client.fetchEvaluations(testDefaultTarget, testDefaultRequest, -1L)
 
         val digest = http.lastRequest?.headers?.get("X-Harness-FME-Content-Digest")
         assertFalse("X-Harness-FME-Content-Digest header must be present", digest.isNullOrEmpty())
     }
 
     @Test
-    fun `X-Harness-FME-Content-Digest header is deterministic for same target`() = runTest {
+    fun `X-Harness-FME-Content-Digest header is deterministic for same target and request`() = runTest {
         val (client, _, http) = makeClient()
 
-        client.fetchEvaluations(testDefaultTarget, testDefaultFilters, -1L)
+        client.fetchEvaluations(testDefaultTarget, testDefaultRequest, -1L)
         val first = http.lastRequest?.headers?.get("X-Harness-FME-Content-Digest")
 
-        client.fetchEvaluations(testDefaultTarget, testDefaultFilters, -1L)
+        client.fetchEvaluations(testDefaultTarget, testDefaultRequest, -1L)
         val second = http.lastRequest?.headers?.get("X-Harness-FME-Content-Digest")
 
         assertEquals(first, second)
     }
 
     @Test
-    fun `X-Harness-FME-Content-Digest header matches ContentDigest utility`() = runTest {
+    fun `X-Harness-FME-Content-Digest covers full body`() = runTest {
         val (client, _, http) = makeClient()
 
-        client.fetchEvaluations(testDefaultTarget, testDefaultFilters, -1L)
+        client.fetchEvaluations(testDefaultTarget, testDefaultRequest, -1L)
 
         val headerDigest = http.lastRequest?.headers?.get("X-Harness-FME-Content-Digest")
-        val expectedDigest = ContentDigest.compute(testDefaultTarget)
+        val body = http.lastRequest?.body ?: ""
+        val expectedDigest = ContentDigest.compute(body)
         assertEquals(expectedDigest, headerDigest)
     }
 
@@ -264,9 +282,9 @@ class DefaultSecureHttpClientFetchEvaluationsTest {
         val http = FakeRetryableHttpClient(statusCodeSequence = listOf(401, 200))
         val (client, _, _) = makeClient(auth, http)
 
-        client.fetchEvaluations(testDefaultTarget, testDefaultFilters, -1L)
+        client.fetchEvaluations(testDefaultTarget, testDefaultRequest, -1L)
 
-        assertEquals(1, auth.invalidateCallCount) // once for 401
+        assertEquals(1, auth.invalidateCallCount)
         assertEquals(2, http.executeCallCount)
         assertEquals("Bearer second-token", http.requests[1].headers["Authorization"])
     }
@@ -280,7 +298,7 @@ class DefaultSecureHttpClientFetchEvaluationsTest {
         val http = FakeRetryableHttpClient(statusCodeSequence = listOf(401, 401))
         val (client, _, _) = makeClient(auth, http)
 
-        val result = client.fetchEvaluations(testDefaultTarget, testDefaultFilters, -1L)
+        val result = client.fetchEvaluations(testDefaultTarget, testDefaultRequest, -1L)
 
         assertEquals(2, http.executeCallCount)
         assertEquals(401, result.httpStatus)
@@ -291,42 +309,10 @@ class DefaultSecureHttpClientFetchEvaluationsTest {
         val http = FakeRetryableHttpClient(statusCode = 500)
         val (client, _, _) = makeClient(httpClient = http)
 
-        val result = client.fetchEvaluations(testDefaultTarget, testDefaultFilters, -1L)
+        val result = client.fetchEvaluations(testDefaultTarget, testDefaultRequest, -1L)
 
         assertEquals(1, http.executeCallCount)
         assertEquals(500, result.httpStatus)
-    }
-
-    @Test
-    fun `propagates AuthProvider exception`() = runTest {
-        val auth = FakeAuthProvider(throwOnCredential = RuntimeException("auth failed"))
-        val (client, _, _) = makeClient(auth)
-        var thrown: Throwable? = null
-
-        try {
-            client.fetchEvaluations(testDefaultTarget, testDefaultFilters, -1L)
-        } catch (e: RuntimeException) {
-            thrown = e
-        }
-
-        assertTrue("Expected RuntimeException", thrown is RuntimeException)
-        assertEquals("auth failed", thrown?.message)
-    }
-
-    @Test
-    fun `propagates RetryableHttpClient exception`() = runTest {
-        val http = FakeRetryableHttpClient(throwOnExecute = RuntimeException("network failed"))
-        val (client, _, _) = makeClient(httpClient = http)
-        var thrown: Throwable? = null
-
-        try {
-            client.fetchEvaluations(testDefaultTarget, testDefaultFilters, -1L)
-        } catch (e: RuntimeException) {
-            thrown = e
-        }
-
-        assertTrue("Expected RuntimeException", thrown is RuntimeException)
-        assertEquals("network failed", thrown?.message)
     }
 
     @Test
@@ -338,45 +324,50 @@ class DefaultSecureHttpClientFetchEvaluationsTest {
         )
         val (client, _, http) = makeClient()
 
-        client.fetchEvaluations(target, null, -1L)
+        client.fetchEvaluations(target, testDefaultRequest, -1L)
 
         val body = http.lastRequest?.body ?: ""
-        assertTrue("Body should contain numeric count", body.contains("\"count\":42"))
-        assertTrue("Body should contain numeric price", body.contains("\"price\":99.99"))
-        assertTrue("Body should contain boolean active", body.contains("\"active\":true"))
+        assertTrue(body.contains("\"count\":42"))
+        assertTrue(body.contains("\"price\":99.99"))
+        assertTrue(body.contains("\"active\":true"))
     }
 
     @Test
-    fun `string attributes preserved as strings in body`() = runTest {
+    fun `attribute keys are sorted alphabetically in body`() = runTest {
         val target = EvaluationTarget(
             matchingKey = "user-1",
             bucketingKey = null,
-            attributes = mapOf("name" to "John", "email" to "john@example.com")
+            attributes = mapOf("z_attr" to "last", "a_attr" to "first", "m_attr" to "mid"),
         )
         val (client, _, http) = makeClient()
 
-        client.fetchEvaluations(target, null, -1L)
+        client.fetchEvaluations(target, testDefaultRequest, -1L)
 
         val body = http.lastRequest?.body ?: ""
-        assertTrue("Body should contain quoted name", body.contains("\"name\":\"John\""))
-        assertTrue("Body should contain quoted email", body.contains("\"email\":\"john@example.com\""))
+        val aPos = body.indexOf("\"a_attr\"")
+        val mPos = body.indexOf("\"m_attr\"")
+        val zPos = body.indexOf("\"z_attr\"")
+        assertTrue("a_attr before m_attr in body: $body", aPos < mPos)
+        assertTrue("m_attr before z_attr in body: $body", mPos < zPos)
     }
 
     @Test
-    fun `mixed attribute types preserved correctly in body`() = runTest {
+    fun `list attribute values are sorted alphabetically in body`() = runTest {
         val target = EvaluationTarget(
             matchingKey = "user-1",
             bucketingKey = null,
-            attributes = mapOf("plan" to "premium", "tier" to 3, "premium" to true)
+            attributes = mapOf("tags" to listOf("zzz", "aaa", "mmm")),
         )
         val (client, _, http) = makeClient()
 
-        client.fetchEvaluations(target, null, -1L)
+        client.fetchEvaluations(target, testDefaultRequest, -1L)
 
         val body = http.lastRequest?.body ?: ""
-        assertTrue("Body should contain quoted plan", body.contains("\"plan\":\"premium\""))
-        assertTrue("Body should contain numeric tier", body.contains("\"tier\":3"))
-        assertTrue("Body should contain boolean premium", body.contains("\"premium\":true"))
+        val aaaPos = body.indexOf("\"aaa\"")
+        val mmmPos = body.indexOf("\"mmm\"")
+        val zzzPos = body.indexOf("\"zzz\"")
+        assertTrue("aaa before mmm in list: $body", aaaPos < mmmPos)
+        assertTrue("mmm before zzz in list: $body", mmmPos < zzzPos)
     }
 
     @Test
@@ -388,12 +379,11 @@ class DefaultSecureHttpClientFetchEvaluationsTest {
         )
         val (client, _, http) = makeClient()
 
-        client.fetchEvaluations(target, null, -1L)
+        client.fetchEvaluations(target, testDefaultRequest, -1L)
 
         val body = http.lastRequest?.body ?: ""
-        assertTrue("Body should contain tags array", body.contains("\"tags\":["))
-        assertTrue("Body should contain first tag", body.contains("\"vip\""))
-        assertTrue("Body should contain second tag", body.contains("\"beta\""))
-        assertTrue("Body should contain third tag", body.contains("\"early-access\""))
+        assertTrue(body.contains("\"tags\":["))
+        assertTrue(body.contains("\"vip\""))
+        assertTrue(body.contains("\"beta\""))
     }
 }

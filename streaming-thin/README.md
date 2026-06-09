@@ -26,7 +26,7 @@ Manages the SSE connection lifecycle. Internal states: `Stopped → Started → 
 1. Calls `tokenProvider()` to obtain a fresh JWT.
 2. Opens an SSE connection via `EventSourceClient`.
 3. On failure, backs off and retries via `BackoffCounter`.
-4. Parses incoming events as typed `ThinNotification`s and fires `onEvaluationFetchNotification` or `onOccupancyZero` callbacks.
+4. Parses incoming events as typed `ThinNotification`s and fires the evaluation-fetch callback, or the push enable/disable callbacks when control-pause or occupancy transitions flip the push state.
 
 **`StreamingTransportImpl`**
 Bridges `EventSourceClient.StreamingTransport` (from android-client) to `RetryableHttpClient`. Issues an HTTP GET with `Accept: text/event-stream`.

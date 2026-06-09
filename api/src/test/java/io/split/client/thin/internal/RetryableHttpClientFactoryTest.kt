@@ -24,6 +24,7 @@ class RetryableHttpClientFactoryTest {
     private val fakeObserver = object : CompositeObserver {
         override fun notifyEvent(event: ObservableEvent) { capturedEvents.add(event) }
         override fun register(observer: Observer) {}
+        override fun unregister(observer: Observer) {}
         override fun unregisterAll() {}
     }
 

@@ -20,7 +20,6 @@ class StoredEvaluationSerializerTest {
         assertEquals("my_flag", result.result.flag)
         assertEquals("on", result.result.treatment)
         assertNull(result.result.config)
-        assertNull(result.result.label)
         assertNull(result.result.changeNumber)
         assertEquals(emptySet<String>(), result.flagSets)
     }
@@ -32,7 +31,6 @@ class StoredEvaluationSerializerTest {
                 flag = "feature",
                 treatment = "variant_a",
                 config = "{\"key\":\"value\"}",
-                label = "default rule",
                 changeNumber = 1234567890L
             ),
             flagSets = setOf("set1", "set2")
@@ -42,7 +40,6 @@ class StoredEvaluationSerializerTest {
         assertEquals("feature", result.result.flag)
         assertEquals("variant_a", result.result.treatment)
         assertEquals("{\"key\":\"value\"}", result.result.config)
-        assertEquals("default rule", result.result.label)
         assertEquals(1234567890L, result.result.changeNumber)
         assertEquals(setOf("set1", "set2"), result.flagSets)
     }

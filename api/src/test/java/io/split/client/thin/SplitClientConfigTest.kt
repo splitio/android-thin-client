@@ -23,15 +23,9 @@ class SplitClientConfigTest {
     }
 
     @Test
-    fun `default config has impressionsMode DEFAULT`() {
+    fun `default config has configsEnabled false`() {
         val config = defaultConfig()
-        assertEquals(SplitClientConfig.ImpressionsMode.DEFAULT, config.impressionsMode)
-    }
-
-    @Test
-    fun `default config has dynamicConfig false`() {
-        val config = defaultConfig()
-        assertFalse(config.dynamicConfig)
+        assertFalse(config.configsEnabled)
     }
 
     @Test
@@ -41,9 +35,9 @@ class SplitClientConfigTest {
     }
 
     @Test
-    fun `default sync config has evaluationRefreshRate 3600`() {
+    fun `default sync config has pollingRate 3600`() {
         val config = defaultConfig()
-        assertEquals(3600, config.sync.evaluationRefreshRate)
+        assertEquals(3600, config.sync.pollingRate)
     }
 
     @Test
@@ -65,9 +59,9 @@ class SplitClientConfigTest {
     }
 
     @Test
-    fun `default sync config has timeout minus one`() {
+    fun `default sync config has readyTimeout ten`() {
         val config = defaultConfig()
-        assertEquals(-1, config.sync.timeout)
+        assertEquals(10, config.sync.readyTimeout)
     }
 
     @Test
@@ -91,19 +85,11 @@ class SplitClientConfigTest {
     }
 
     @Test
-    fun `DSL creates config with impressionsMode`() {
+    fun `DSL creates config with configsEnabled`() {
         val config = splitClientConfig {
-            impressionsMode = SplitClientConfig.ImpressionsMode.NONE
+            configsEnabled = true
         }
-        assertEquals(SplitClientConfig.ImpressionsMode.NONE, config.impressionsMode)
-    }
-
-    @Test
-    fun `DSL creates config with dynamicConfig`() {
-        val config = splitClientConfig {
-            dynamicConfig = true
-        }
-        assertTrue(config.dynamicConfig)
+        assertTrue(config.configsEnabled)
     }
 
     @Test
@@ -128,12 +114,12 @@ class SplitClientConfigTest {
         val config = splitClientConfig {
             sync {
                 mode = SplitClientConfig.SyncMode.POLLING
-                evaluationRefreshRate = 120
+                pollingRate = 120
                 pushRate = 60
             }
         }
         assertEquals(SplitClientConfig.SyncMode.POLLING, config.sync.mode)
-        assertEquals(120, config.sync.evaluationRefreshRate)
+        assertEquals(120, config.sync.pollingRate)
         assertEquals(60, config.sync.pushRate)
     }
 
@@ -144,11 +130,11 @@ class SplitClientConfigTest {
                 prefix = "test_prefix"
             }
             sync {
-                timeout = 30
+                readyTimeout = 30
             }
         }
         assertEquals("test_prefix", config.storage.prefix)
-        assertEquals(30, config.sync.timeout)
+        assertEquals(30, config.sync.readyTimeout)
     }
 
     @Test
@@ -156,19 +142,17 @@ class SplitClientConfigTest {
         val config = splitClientConfig {
             sync {
                 serviceEndpoints {
-                    authUrl = "https://auth.example.com"
-                    evaluationsUrl = "https://evaluations.example.com"
-                    eventsUrl = "https://events.example.com"
-                    telemetryUrl = "https://telemetry.example.com"
+                    auth = "https://auth.example.com"
+                    evaluations = "https://evaluations.example.com"
+                    events = "https://events.example.com"
                 }
             }
         }
         assertEquals(
             SplitClientConfig.ServiceEndpoints(
-                authUrl = "https://auth.example.com",
-                evaluationsUrl = "https://evaluations.example.com",
-                eventsUrl = "https://events.example.com",
-                telemetryUrl = "https://telemetry.example.com",
+                auth = "https://auth.example.com",
+                evaluations = "https://evaluations.example.com",
+                events = "https://events.example.com",
             ),
             config.sync.serviceEndpoints
         )
@@ -177,10 +161,9 @@ class SplitClientConfigTest {
     @Test
     fun `builder and DSL produce equal configs for same inputs`() {
         val endpoints = SplitClientConfig.ServiceEndpoints(
-            authUrl = "https://auth.example.com",
-            evaluationsUrl = "https://evaluations.example.com",
-            eventsUrl = "https://events.example.com",
-            telemetryUrl = "https://telemetry.example.com",
+            auth = "https://auth.example.com",
+            evaluations = "https://evaluations.example.com",
+            events = "https://events.example.com",
         )
         val fallbacks = FallbackTreatmentsConfiguration.builder()
             .byFlagStrings(mapOf("flag_a" to "on"))
@@ -188,15 +171,14 @@ class SplitClientConfigTest {
 
         val viaBuilder = SplitClientConfig.Builder()
             .logLevel(SplitClientConfig.LogLevel.INFO)
-            .impressionsMode(SplitClientConfig.ImpressionsMode.NONE)
-            .dynamicConfig(true)
+            .configsEnabled(true)
             .fallbackTreatments(fallbacks)
             .sync(
                 SplitClientConfig.SyncConfig.Builder()
                     .mode(SplitClientConfig.SyncMode.POLLING)
-                    .evaluationRefreshRate(300)
+                    .pollingRate(300)
                     .pushRate(60)
-                    .timeout(10)
+                    .readyTimeout(10)
                     .serviceEndpoints(endpoints)
                     .build()
             )
@@ -209,19 +191,17 @@ class SplitClientConfigTest {
 
         val viaDsl = splitClientConfig {
             logLevel = SplitClientConfig.LogLevel.INFO
-            impressionsMode = SplitClientConfig.ImpressionsMode.NONE
-            dynamicConfig = true
+            configsEnabled = true
             fallbackTreatments = fallbacks
             sync {
                 mode = SplitClientConfig.SyncMode.POLLING
-                evaluationRefreshRate = 300
+                pollingRate = 300
                 pushRate = 60
-                timeout = 10
+                readyTimeout = 10
                 serviceEndpoints {
-                    authUrl = endpoints.authUrl
-                    evaluationsUrl = endpoints.evaluationsUrl
-                    eventsUrl = endpoints.eventsUrl
-                    telemetryUrl = endpoints.telemetryUrl
+                    auth = endpoints.auth
+                    evaluations = endpoints.evaluations
+                    events = endpoints.events
                 }
             }
             storage {
@@ -248,19 +228,19 @@ class SplitClientConfigTest {
     }
 
     @Test
-    fun `builder falls back evaluationRefreshRate to default when below minimum`() {
+    fun `builder clamps pollingRate to minimum when below minimum`() {
         val config = SplitClientConfig.Builder()
-            .sync(SplitClientConfig.SyncConfig.Builder().evaluationRefreshRate(0).build())
+            .sync(SplitClientConfig.SyncConfig.Builder().pollingRate(0).build())
             .build()
-        assertEquals(3600, config.sync.evaluationRefreshRate)
+        assertEquals(1, config.sync.pollingRate)
     }
 
     @Test
-    fun `builder falls back pushRate to default when below minimum`() {
+    fun `builder clamps pushRate to minimum when below minimum`() {
         val config = SplitClientConfig.Builder()
             .sync(SplitClientConfig.SyncConfig.Builder().pushRate(1).build())
             .build()
-        assertEquals(1800, config.sync.pushRate)
+        assertEquals(30, config.sync.pushRate)
     }
 
     @Test
@@ -272,23 +252,39 @@ class SplitClientConfigTest {
     }
 
     @Test
-    fun `builder falls back sync timeout to default when below minimum`() {
+    fun `builder falls back sync readyTimeout to default when below minimum`() {
         val config = SplitClientConfig.Builder()
-            .sync(SplitClientConfig.SyncConfig.Builder().timeout(-2).build())
+            .sync(SplitClientConfig.SyncConfig.Builder().readyTimeout(-2).build())
             .build()
-        assertEquals(-1, config.sync.timeout)
+        assertEquals(10, config.sync.readyTimeout)
     }
 
     @Test
-    fun `DSL falls back evaluationRefreshRate to default when below minimum`() {
-        val config = splitClientConfig { sync { evaluationRefreshRate = 0 } }
-        assertEquals(3600, config.sync.evaluationRefreshRate)
+    fun `builder accepts sync readyTimeout of minus one to disable timeout`() {
+        val config = SplitClientConfig.Builder()
+            .sync(SplitClientConfig.SyncConfig.Builder().readyTimeout(-1).build())
+            .build()
+        assertEquals(-1, config.sync.readyTimeout)
     }
 
     @Test
-    fun `DSL falls back pushRate to default when below minimum`() {
+    fun `builder accepts sync readyTimeout at minimum boundary`() {
+        val config = SplitClientConfig.Builder()
+            .sync(SplitClientConfig.SyncConfig.Builder().readyTimeout(1).build())
+            .build()
+        assertEquals(1, config.sync.readyTimeout)
+    }
+
+    @Test
+    fun `DSL clamps pollingRate to minimum when below minimum`() {
+        val config = splitClientConfig { sync { pollingRate = 0 } }
+        assertEquals(1, config.sync.pollingRate)
+    }
+
+    @Test
+    fun `DSL clamps pushRate to minimum when below minimum`() {
         val config = splitClientConfig { sync { pushRate = 1 } }
-        assertEquals(1800, config.sync.pushRate)
+        assertEquals(30, config.sync.pushRate)
     }
 
     @Test
@@ -298,9 +294,21 @@ class SplitClientConfigTest {
     }
 
     @Test
-    fun `DSL falls back sync timeout to default when below minimum`() {
-        val config = splitClientConfig { sync { timeout = -2 } }
-        assertEquals(-1, config.sync.timeout)
+    fun `DSL falls back sync readyTimeout to default when below minimum`() {
+        val config = splitClientConfig { sync { readyTimeout = -2 } }
+        assertEquals(10, config.sync.readyTimeout)
+    }
+
+    @Test
+    fun `DSL accepts sync readyTimeout of minus one to disable timeout`() {
+        val config = splitClientConfig { sync { readyTimeout = -1 } }
+        assertEquals(-1, config.sync.readyTimeout)
+    }
+
+    @Test
+    fun `DSL accepts sync readyTimeout at minimum boundary`() {
+        val config = splitClientConfig { sync { readyTimeout = 1 } }
+        assertEquals(1, config.sync.readyTimeout)
     }
 
     @Test
@@ -323,11 +331,11 @@ class SplitClientConfigTest {
     }
 
     @Test
-    fun `builder accepts evaluationRefreshRate at minimum boundary`() {
+    fun `builder accepts pollingRate at minimum boundary`() {
         val config = SplitClientConfig.Builder()
-            .sync(SplitClientConfig.SyncConfig.Builder().evaluationRefreshRate(1).build())
+            .sync(SplitClientConfig.SyncConfig.Builder().pollingRate(1).build())
             .build()
-        assertEquals(1, config.sync.evaluationRefreshRate)
+        assertEquals(1, config.sync.pollingRate)
     }
 
     @Test
@@ -339,17 +347,17 @@ class SplitClientConfigTest {
     }
 
     @Test
-    fun `builder accepts sync timeout of zero`() {
+    fun `builder falls back sync readyTimeout to default when zero`() {
         val config = SplitClientConfig.Builder()
-            .sync(SplitClientConfig.SyncConfig.Builder().timeout(0).build())
+            .sync(SplitClientConfig.SyncConfig.Builder().readyTimeout(0).build())
             .build()
-        assertEquals(0, config.sync.timeout)
+        assertEquals(10, config.sync.readyTimeout)
     }
 
     @Test
-    fun `DSL accepts evaluationRefreshRate at minimum boundary`() {
-        val config = splitClientConfig { sync { evaluationRefreshRate = 1 } }
-        assertEquals(1, config.sync.evaluationRefreshRate)
+    fun `DSL accepts pollingRate at minimum boundary`() {
+        val config = splitClientConfig { sync { pollingRate = 1 } }
+        assertEquals(1, config.sync.pollingRate)
     }
 
     @Test
@@ -359,9 +367,9 @@ class SplitClientConfigTest {
     }
 
     @Test
-    fun `DSL accepts sync timeout of zero`() {
-        val config = splitClientConfig { sync { timeout = 0 } }
-        assertEquals(0, config.sync.timeout)
+    fun `DSL falls back sync readyTimeout to default when zero`() {
+        val config = splitClientConfig { sync { readyTimeout = 0 } }
+        assertEquals(10, config.sync.readyTimeout)
     }
 
     @Test
@@ -408,6 +416,105 @@ class SplitClientConfigTest {
         val a = SplitClientConfig.Builder().logLevel(SplitClientConfig.LogLevel.DEBUG).build()
         val b = SplitClientConfig.Builder().logLevel(SplitClientConfig.LogLevel.VERBOSE).build()
         assertNotEquals(a.hashCode(), b.hashCode())
+    }
+
+    // --- FiltersConfig tests ---
+
+    @Test
+    fun `default filters config has null flagSets`() {
+        val config = defaultConfig()
+        assertNull(config.filters.flagSets)
+    }
+
+    @Test
+    fun `builder can set filters flagSets`() {
+        val config = SplitClientConfig.Builder()
+            .filters(SplitClientConfig.FiltersConfig.Builder().flagSets(setOf("set_a", "set_b")).build())
+            .build()
+        assertEquals(setOf("set_a", "set_b"), config.filters.flagSets)
+    }
+
+    @Test
+    fun `DSL can set filters flagSets`() {
+        val config = splitClientConfig {
+            filters {
+                flagSets = setOf("set_a", "set_b")
+            }
+        }
+        assertEquals(setOf("set_a", "set_b"), config.filters.flagSets)
+    }
+
+    @Test
+    fun `normalizeFilters lowercases entries and warns`() {
+        val config = SplitClientConfig.Builder()
+            .filters(SplitClientConfig.FiltersConfig.Builder().flagSets(setOf("Set_A")).build())
+            .build()
+        assertEquals(setOf("set_a"), config.filters.flagSets)
+    }
+
+    @Test
+    fun `normalizeFilters trims whitespace and warns`() {
+        val config = SplitClientConfig.Builder()
+            .filters(SplitClientConfig.FiltersConfig.Builder().flagSets(setOf(" set_a ")).build())
+            .build()
+        assertEquals(setOf("set_a"), config.filters.flagSets)
+    }
+
+    @Test
+    fun `normalizeFilters drops entries failing regex`() {
+        val config = SplitClientConfig.Builder()
+            .filters(SplitClientConfig.FiltersConfig.Builder().flagSets(setOf("!!!bad", "good_set")).build())
+            .build()
+        assertEquals(setOf("good_set"), config.filters.flagSets)
+    }
+
+    @Test
+    fun `normalizeFilters deduplicates entries`() {
+        val config = SplitClientConfig.Builder()
+            .filters(SplitClientConfig.FiltersConfig.Builder().flagSets(setOf("set_a", "set_a")).build())
+            .build()
+        assertEquals(setOf("set_a"), config.filters.flagSets)
+    }
+
+    @Test
+    fun `normalizeFilters stores null when all entries invalid`() {
+        val config = SplitClientConfig.Builder()
+            .filters(SplitClientConfig.FiltersConfig.Builder().flagSets(setOf("!!!bad")).build())
+            .build()
+        assertNull(config.filters.flagSets)
+    }
+
+    @Test
+    fun `normalizeFilters sorts entries`() {
+        val config = SplitClientConfig.Builder()
+            .filters(SplitClientConfig.FiltersConfig.Builder().flagSets(setOf("zz_set", "aa_set")).build())
+            .build()
+        assertEquals(listOf("aa_set", "zz_set"), config.filters.flagSets?.toList())
+    }
+
+    @Test
+    fun `normalizeFilters drops entries exceeding 50 chars`() {
+        val longName = "a".repeat(51)
+        val config = SplitClientConfig.Builder()
+            .filters(SplitClientConfig.FiltersConfig.Builder().flagSets(setOf(longName, "good")).build())
+            .build()
+        assertEquals(setOf("good"), config.filters.flagSets)
+    }
+
+    // --- normalizeSync with explicit minPollingRate (covers release-build semantics in debug variant) ---
+
+    @Test
+    fun `normalizeSync clamps pollingRate below 60 to 60 when minPollingRate is 60`() {
+        val sync = SplitClientConfig.SyncConfig.Builder().pollingRate(30).build()
+        val result = SplitClientConfig.normalizeSync(sync, minPollingRate = 60)
+        assertEquals(60, result.pollingRate)
+    }
+
+    @Test
+    fun `normalizeSync accepts pollingRate of exactly 60 when minPollingRate is 60`() {
+        val sync = SplitClientConfig.SyncConfig.Builder().pollingRate(60).build()
+        val result = SplitClientConfig.normalizeSync(sync, minPollingRate = 60)
+        assertEquals(60, result.pollingRate)
     }
 
     private fun defaultConfig(): SplitClientConfig = SplitClientConfig.Builder().build()

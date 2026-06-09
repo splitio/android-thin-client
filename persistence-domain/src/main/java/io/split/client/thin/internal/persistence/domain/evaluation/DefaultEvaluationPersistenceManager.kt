@@ -7,6 +7,8 @@ import io.split.client.thin.internal.evaluation.StoredEvaluation
 import io.split.client.thin.internal.persistence.PersistentEvaluationStorage
 import io.split.client.thin.internal.persistence.SerializedEvaluation
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 
 internal class DefaultEvaluationPersistenceManager(
@@ -14,10 +16,12 @@ internal class DefaultEvaluationPersistenceManager(
     private val callbacks: EvaluationPersistenceCallbacks,
     private val targetHasher: TargetHasher,
     private val evalSerializer: StoredEvaluationSerializer,
-    private val scope: CoroutineScope
+    private val scope: CoroutineScope,
+    private val pendingClearDeferred: Deferred<Unit>? = null,
 ) : EvaluationPersistenceManager {
 
     override suspend fun loadLocal(evalKey: EvaluationKey): CacheLoadResult? {
+        pendingClearDeferred?.await()
         callbacks.onLoadStarted()
         return try {
             val hashed = targetHasher.hash(evalKey)

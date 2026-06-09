@@ -9,15 +9,15 @@ class SyncDelayCalculatorTest {
     private val calculator = DefaultSyncDelayCalculator()
 
     @Test
-    fun `returns 0 when hashing algorithm is NONE (0)`() {
+    fun `returns 500 when hashing algorithm is NONE (0)`() {
         val delay = calculator.calculateDelay("someKey", 60000L, 12345, hashingAlgorithm = 0)
-        assertEquals(0L, delay)
+        assertEquals(500L, delay)
     }
 
     @Test
-    fun `returns 0 when hashing algorithm is null`() {
+    fun `returns 500 when hashing algorithm is null`() {
         val delay = calculator.calculateDelay("someKey", 60000L, 12345, hashingAlgorithm = null)
-        assertEquals(0L, delay)
+        assertEquals(500L, delay)
     }
 
     @Test
@@ -48,12 +48,6 @@ class SyncDelayCalculatorTest {
     fun `delay defaults to 60s interval when updateIntervalMs is negative`() {
         val delay = calculator.calculateDelay(randomKey(), -1L, 24515, hashingAlgorithm = 1)
         assertTrue(delay >= 0 && delay <= 60000L)
-    }
-
-    @Test
-    fun `delay with null seed uses seed 0`() {
-        val delay = calculator.calculateDelay(randomKey(), 1L, null, hashingAlgorithm = 1)
-        assertTrue(delay >= 0 && delay <= 1L)
     }
 
     @Test

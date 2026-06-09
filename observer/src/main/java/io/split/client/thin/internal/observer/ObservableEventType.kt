@@ -48,6 +48,7 @@ object ObservableEventType {
     const val HTTP_RETRY_EXHAUSTED = "http_retry_exhausted"
 
     // Evaluations sync events
+    const val RUNTIME_SYNC_MODE_CHANGED = "runtime_sync_mode_changed"
     const val EVAL_FETCH_REQUESTED = "eval_fetch_requested"
     const val EVAL_FETCH_DEDUPED = "eval_fetch_deduped"
     const val EVAL_FETCH_STARTED = "eval_fetch_started"

@@ -2,13 +2,21 @@ plugins {
     id("com.android.library")
 }
 
+val thinClientProject = project(":android-thin-client")
+val thinClientCoordinate = "${thinClientProject.group}:android-thin-client:${thinClientProject.version}"
+
 android {
     namespace = "io.split.client.thin.consumer"
+
+    buildFeatures {
+        buildConfig = true
+    }
 
     defaultConfig {
         minSdk = 21
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         testInstrumentationRunnerArguments["clearPackageData"] = "true"
+        buildConfigField("String", "THIN_CLIENT_VERSION_HEADER", "\"android-thin-${thinClientProject.version}\"")
     }
 
     compileOptions {
@@ -19,13 +27,13 @@ android {
 
 tasks.configureEach {
     if (name == "connectedCheck" || (name.startsWith("connected") && name.contains("AndroidTest"))) {
-        dependsOn(":android-thin-client:publishToMavenLocal")
+        dependsOn(":publishToMavenLocalForE2e")
     }
 }
 
 dependencies {
     // Thin client dep
-    androidTestImplementation("io.split.client:android-thin-client:0.1.0")
+    androidTestImplementation(thinClientCoordinate)
 
     // "Regular" SDK to verify side-by-side build
     androidTestImplementation("io.split.client:android-client:5.5.0")

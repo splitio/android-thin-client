@@ -65,6 +65,33 @@ class DefaultCompositeObserverTest {
     }
 
     @Test
+    fun `unregister removes observer so it no longer receives events`() {
+        val observer = mock(Observer::class.java)
+        val event = ObservableEvent("test_event")
+
+        composite.register(observer)
+        composite.unregister(observer)
+        composite.notifyEvent(event)
+
+        verify(observer, never()).notifyEvent(event)
+    }
+
+    @Test
+    fun `unregister only removes the specified observer leaving others intact`() {
+        val observer1 = mock(Observer::class.java)
+        val observer2 = mock(Observer::class.java)
+        val event = ObservableEvent("test_event")
+
+        composite.register(observer1)
+        composite.register(observer2)
+        composite.unregister(observer1)
+        composite.notifyEvent(event)
+
+        verify(observer1, never()).notifyEvent(event)
+        verify(observer2).notifyEvent(event)
+    }
+
+    @Test
     fun `concurrent registration and notification does not throw`() {
         val latch = CountDownLatch(10)
         val executor = Executors.newFixedThreadPool(10)

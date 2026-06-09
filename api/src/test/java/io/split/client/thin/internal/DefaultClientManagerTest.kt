@@ -11,6 +11,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -36,6 +37,91 @@ class DefaultClientManagerTest {
             },
             scope = testScope,
         )
+    }
+
+    @Test
+    fun `destroy calls tearDownInternal on InternalDestroyable, not destroy`() = testScope.runTest {
+        manager.getOrCreate(target1)
+        manager.destroy(key1)
+
+        assertEquals(1, createdClients[0].tearDownCallCount)
+        assertEquals(0, createdClients[0].destroyCallCount)
+    }
+
+    @Test
+    fun `destroy fires onTargetsEmpty when last client is removed`() = testScope.runTest {
+        var emptyCalled = false
+        val m = DefaultClientManager(
+            clientFactory = { _ -> FakeSplitClient().also { createdClients.add(it) } },
+            scope = testScope,
+            onTargetsEmpty = { emptyCalled = true },
+        )
+
+        m.getOrCreate(target1)
+        m.destroy(key1)
+
+        assertTrue(emptyCalled)
+    }
+
+    @Test
+    fun `destroy does not fire onTargetsEmpty when other clients remain`() = testScope.runTest {
+        var emptyCount = 0
+        val m = DefaultClientManager(
+            clientFactory = { _ -> FakeSplitClient().also { createdClients.add(it) } },
+            scope = testScope,
+            onTargetsEmpty = { emptyCount++ },
+        )
+
+        m.getOrCreate(target1)
+        m.getOrCreate(target2)
+        m.destroy(key1)
+
+        assertEquals(0, emptyCount)
+    }
+
+    @Test
+    fun `destroy fires onTargetsEmpty even when tearDownInternal throws`() = testScope.runTest {
+        var emptyCalled = false
+        val m = DefaultClientManager(
+            clientFactory = { _ ->
+                FakeSplitClient(tearDownShouldThrow = true).also { createdClients.add(it) }
+            },
+            scope = testScope,
+            onTargetsEmpty = { emptyCalled = true },
+        )
+
+        m.getOrCreate(target1)
+        m.destroy(key1)
+
+        assertTrue(emptyCalled)
+    }
+
+    @Test
+    fun `destroyAll fires onTargetsEmpty`() = testScope.runTest {
+        var emptyCalled = false
+        val m = DefaultClientManager(
+            clientFactory = { _ -> FakeSplitClient().also { createdClients.add(it) } },
+            scope = testScope,
+            onTargetsEmpty = { emptyCalled = true },
+        )
+
+        m.getOrCreate(target1)
+        m.getOrCreate(target2)
+        m.destroyAll()
+
+        assertTrue(emptyCalled)
+    }
+
+    @Test
+    fun `destroyAll calls tearDownInternal on all clients`() = testScope.runTest {
+        manager.getOrCreate(target1)
+        manager.getOrCreate(target2)
+        manager.destroyAll()
+
+        createdClients.forEach {
+            assertEquals(1, it.tearDownCallCount)
+            assertEquals(0, it.destroyCallCount)
+        }
     }
 
     @Test
@@ -85,11 +171,11 @@ class DefaultClientManagerTest {
         }
 
     @Test
-    fun `destroy with known key removes client and calls destroy on it`() = testScope.runTest {
+    fun `destroy with known key removes client and tears it down`() = testScope.runTest {
         manager.getOrCreate(target1)
         manager.destroy(key1)
 
-        assertEquals(1, createdClients[0].destroyCallCount)
+        assertEquals(1, createdClients[0].tearDownCallCount)
         // Getting the same key again should create a fresh client
         val fresh = manager.getOrCreate(target1)
         assertEquals(2, createdClients.size)
@@ -110,7 +196,7 @@ class DefaultClientManagerTest {
             manager.destroyAll()
 
             assertEquals(2, createdClients.size)
-            createdClients.forEach { assertEquals(1, it.destroyCallCount) }
+            createdClients.forEach { assertEquals(1, it.tearDownCallCount) }
 
             // Registry should be empty: next getOrCreate creates a new client
             manager.getOrCreate(target1)
@@ -118,10 +204,10 @@ class DefaultClientManagerTest {
         }
 
     @Test
-    fun `destroyAll continues destroying remaining clients if one throws`() =
+    fun `destroyAll continues tearing down remaining clients if one throws`() =
         testScope.runTest {
             val throwingFactory = { _: Target ->
-                FakeSplitClient(destroyShouldThrow = true).also { createdClients.add(it) }
+                FakeSplitClient(tearDownShouldThrow = true).also { createdClients.add(it) }
             }
             val normalFactory = { _: Target ->
                 FakeSplitClient().also { createdClients.add(it) }
@@ -139,7 +225,7 @@ class DefaultClientManagerTest {
             mixedManager.destroyAll()
 
             assertEquals(2, createdClients.size)
-            createdClients.forEach { assertEquals(1, it.destroyCallCount) }
+            createdClients.forEach { assertEquals(1, it.tearDownCallCount) }
         }
 
     @Test
@@ -160,7 +246,7 @@ class DefaultClientManagerTest {
             testScheduler.advanceUntilIdle()
 
             assertEquals(2, createdClients.size)
-            assertEquals(1, createdClients[0].destroyCallCount)
+            assertEquals(1, createdClients[0].tearDownCallCount)
             assertEquals(0, createdClients[0].setTargetCallCount)
             assertEquals(0, createdClients[1].setTargetCallCount)
         }
@@ -177,7 +263,7 @@ class DefaultClientManagerTest {
             testScheduler.advanceUntilIdle()
 
             assertEquals(2, createdClients.size)
-            assertEquals(1, createdClients[0].destroyCallCount)
+            assertEquals(1, createdClients[0].tearDownCallCount)
             assertEquals(0, createdClients[0].setTargetCallCount)
             assertEquals(0, createdClients[1].setTargetCallCount)
         }
@@ -239,13 +325,16 @@ class DefaultClientManagerTest {
 
 private class FakeSplitClient(
     private val destroyShouldThrow: Boolean = false,
-) : SplitClient {
+    private val tearDownShouldThrow: Boolean = false,
+) : SplitClient, InternalDestroyable {
 
     var setTargetCallCount = 0
         private set
     var lastSetTarget: Target? = null
         private set
     var destroyCallCount = 0
+        private set
+    var tearDownCallCount = 0
         private set
 
     override fun getTreatment(flag: String, evaluationOptions: EvaluationOptions?): EvaluationResult =
@@ -278,6 +367,11 @@ private class FakeSplitClient(
     override suspend fun destroy() {
         destroyCallCount++
         if (destroyShouldThrow) throw RuntimeException("destroy failed")
+    }
+
+    override suspend fun tearDownInternal() {
+        tearDownCallCount++
+        if (tearDownShouldThrow) throw RuntimeException("tearDown failed")
     }
 
     @Deprecated("Use suspend destroy()", level = DeprecationLevel.ERROR)

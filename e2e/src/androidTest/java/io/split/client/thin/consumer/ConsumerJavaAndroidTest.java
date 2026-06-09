@@ -2,6 +2,7 @@ package io.split.client.thin.consumer;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import android.content.Context;
@@ -64,13 +65,11 @@ public class ConsumerJavaAndroidTest {
         return new SplitClientConfig.Builder()
                 .sync(new SplitClientConfig.SyncConfig.Builder()
                         .mode(SplitClientConfig.SyncMode.POLLING)
-                        .serviceEndpoints(new SplitClientConfig.ServiceEndpoints(
-                                server.url("/api"),
-                                server.url("/api/v2/evaluations"),
-                                server.url("/api/v1/events/bulk"),
-                                server.url("/api/v1/metrics/config"),
-                                null
-                        ))
+                        .serviceEndpoints(new SplitClientConfig.ServiceEndpoints.Builder()
+                                .auth(server.url(""))
+                                .evaluations(server.url(""))
+                                .events(server.url(""))
+                                .build())
                         .build())
                 .storage(new SplitClientConfig.StorageConfig.Builder()
                         .prefix("consumer_java_test")
@@ -199,12 +198,11 @@ public class ConsumerJavaAndroidTest {
     @Test
     public void evaluationResultFields() {
         EvaluationResult result = new EvaluationResult(
-                "my-flag", "on", "{\"color\":\"red\"}", "default rule", 42L
+                "my-flag", "on", "{\"color\":\"red\"}", 42L
         );
         assertEquals("my-flag", result.getFlag());
         assertEquals("on", result.getTreatment());
         assertEquals("{\"color\":\"red\"}", result.getConfig());
-        assertEquals("default rule", result.getLabel());
         assertEquals(Long.valueOf(42L), result.getChangeNumber());
     }
 
@@ -217,8 +215,7 @@ public class ConsumerJavaAndroidTest {
     public void splitClientConfigBuilder() {
         SplitClientConfig config = new SplitClientConfig.Builder()
                 .logLevel(SplitClientConfig.LogLevel.WARN)
-                .impressionsMode(SplitClientConfig.ImpressionsMode.DEFAULT)
-                .dynamicConfig(false)
+                .configsEnabled(false)
                 .sync(new SplitClientConfig.SyncConfig.Builder()
                         .mode(SplitClientConfig.SyncMode.STREAMING)
                         .build())
@@ -284,9 +281,6 @@ public class ConsumerJavaAndroidTest {
      */
     @Test
     public void addEventListenerAcceptsListenerWithoutThrowing() {
-        // TODO: fully test once MockWebServer is set up — verify that registered callbacks
-        //  (onReady, onReadyFromCache, onUpdate) are actually invoked when the server delivers
-        //  the corresponding events.
         SplitFactory factory = buildFactory("key", "user");
         SplitClient client = factory.getClient(null);
         SplitEventListener listener = new SplitEventListener() {
@@ -350,7 +344,7 @@ public class ConsumerJavaAndroidTest {
 
         FallbackTreatment ftNoConfig = new FallbackTreatment("off");
         assertEquals("off", ftNoConfig.getTreatment());
-        assertEquals(null, ftNoConfig.getConfig());
+        assertNull(ftNoConfig.getConfig());
     }
 
     /**
@@ -445,24 +439,22 @@ public class ConsumerJavaAndroidTest {
 
     /**
      * Given the ServiceEndpoints constructor,
-     * When instantiated with all five fields (including optional streamingUrl),
+     * When instantiated with all five fields (including optional streaming),
      * Then each getter returns the provided value.
      */
     @Test
     public void serviceEndpointsFields() {
-        SplitClientConfig.ServiceEndpoints endpoints = new SplitClientConfig.ServiceEndpoints(
-                "https://auth.example.com",
-                "https://eval.example.com",
-                "https://events.example.com",
-                "https://telemetry.example.com",
-                "https://streaming.example.com"
-        );
+        SplitClientConfig.ServiceEndpoints endpoints = new SplitClientConfig.ServiceEndpoints.Builder()
+                .auth("https://auth.example.com")
+                .evaluations("https://eval.example.com")
+                .events("https://events.example.com")
+                .streaming("https://streaming.example.com")
+                .build();
 
-        assertEquals("https://auth.example.com", endpoints.getAuthUrl());
-        assertEquals("https://eval.example.com", endpoints.getEvaluationsUrl());
-        assertEquals("https://events.example.com", endpoints.getEventsUrl());
-        assertEquals("https://telemetry.example.com", endpoints.getTelemetryUrl());
-        assertEquals("https://streaming.example.com", endpoints.getStreamingUrl());
+        assertEquals("https://auth.example.com", endpoints.getAuth());
+        assertEquals("https://eval.example.com", endpoints.getEvaluations());
+        assertEquals("https://events.example.com", endpoints.getEvents());
+        assertEquals("https://streaming.example.com", endpoints.getStreaming());
     }
 
     /**
@@ -529,5 +521,25 @@ public class ConsumerJavaAndroidTest {
 
         assertNotNull(config.getFallbackTreatments());
         assertEquals("off", config.getFallbackTreatments().getGlobal().getTreatment());
+    }
+
+    /**
+     * Given a SplitClientConfig.Builder with a FiltersConfig,
+     * When flagSets is set via the Builder,
+     * Then the resulting config exposes the normalized flag sets.
+     */
+    @Test
+    public void filtersConfigBuilder() {
+        java.util.Set<String> flagSets = new java.util.HashSet<>(Arrays.asList("set_a", "set_b"));
+
+        SplitClientConfig config = new SplitClientConfig.Builder()
+                .filters(new SplitClientConfig.FiltersConfig.Builder()
+                        .flagSets(flagSets)
+                        .build())
+                .build();
+
+        assertNotNull(config.getFilters().getFlagSets());
+        assertTrue(config.getFilters().getFlagSets().contains("set_a"));
+        assertTrue(config.getFilters().getFlagSets().contains("set_b"));
     }
 }

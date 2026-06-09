@@ -16,15 +16,14 @@ internal val testDefaultTarget = EvaluationTarget(
     bucketingKey = null,
     attributes = mapOf("plan" to "premium"),
 )
-internal val testDefaultFilters = EvaluationFilters(
-    flagNames = setOf("flag-a", "flag-b"),
-    flagSets = null,
+internal val testDefaultRequest = EvaluationFilters(
+    sets = emptySet(),
+    configs = false,
 )
 
 internal fun makeClient(
     authProvider: FakeAuthProvider = FakeAuthProvider(),
     httpClient: FakeRetryableHttpClient = FakeRetryableHttpClient(),
-    impressionsMode: Int? = null,
     sdkVersion: String = "test-version",
     sdkKey: String = "test-sdk-key",
 ): Triple<DefaultSecureHttpClient, FakeAuthProvider, FakeRetryableHttpClient> = Triple(
@@ -35,7 +34,6 @@ internal fun makeClient(
         eventsUrl = testEventsUrl,
         telemetryUrl = testTelemetryUrl,
         sdkKey = sdkKey,
-        impressionsMode = impressionsMode,
         sdkVersion = sdkVersion,
     ),
     authProvider,

@@ -10,7 +10,6 @@ import io.split.client.thin.SplitEventListener
 import io.split.client.thin.SplitVoidCallback
 import io.split.client.thin.Target
 import io.split.client.thin.internal.evaluation.DefaultEvaluationFetchCoordinator
-import io.split.client.thin.internal.evaluation.EvaluationFetchCoordinator
 import io.split.client.thin.internal.evaluation.EvaluationChange
 import io.split.client.thin.internal.evaluation.EvaluationKey
 import io.split.client.thin.internal.evaluation.EvaluationProvider
@@ -58,7 +57,7 @@ class DefaultSplitFactoryTest {
             config = null,
             asyncBridge = fakeAsyncBridge,
             evaluationRepository = FakeEvaluationRepository(),
-            filters = null,
+            filters = EvaluationFilters(),
             fetchCoordinator = FakeEvaluationFetchCoordinator(),
             clientManager = fakeClientManager,
         )
@@ -118,7 +117,7 @@ class DefaultSplitFactoryTest {
             config = null,
             asyncBridge = fakeAsyncBridge,
             evaluationRepository = fakeRepository,
-            filters = null,
+            filters = EvaluationFilters(),
             fetchCoordinator = FakeEvaluationFetchCoordinator(),
                         clientManager = fakeClientManager,
         )
@@ -144,7 +143,7 @@ class DefaultSplitFactoryTest {
             config = null,
             asyncBridge = fakeAsyncBridge,
             evaluationRepository = FakeEvaluationRepository(),
-            filters = null,
+            filters = EvaluationFilters(),
             fetchCoordinator = FakeEvaluationFetchCoordinator(),
                         scope = testScope,
             clientManager = customManager,
@@ -171,7 +170,7 @@ class DefaultSplitFactoryTest {
             config = null,
             asyncBridge = fakeAsyncBridge,
             evaluationRepository = FakeEvaluationRepository(),
-            filters = null,
+            filters = EvaluationFilters(),
             fetchCoordinator = FakeEvaluationFetchCoordinator(),
                         scope = testScope,
             clientManager = customManager,
@@ -192,7 +191,7 @@ class DefaultSplitFactoryTest {
             config = null,
             asyncBridge = fakeAsyncBridge,
             evaluationRepository = FakeEvaluationRepository(),
-            filters = null,
+            filters = EvaluationFilters(),
             fetchCoordinator = FakeEvaluationFetchCoordinator(),
                         scope = testScope,
         )
@@ -245,7 +244,7 @@ class FetchReasonObserverMappingTest {
     private fun makeCoordinator(compositeObserver: DefaultCompositeObserver): DefaultEvaluationFetchCoordinator {
         return DefaultEvaluationFetchCoordinator(
             provider = object : EvaluationProvider {
-                override suspend fun fetch(evalKey: EvaluationKey, filters: EvaluationFilters?, changeNumber: Long): EvaluationChange =
+                override suspend fun fetch(evalKey: EvaluationKey, filters: EvaluationFilters, changeNumber: Long, targetChangeNumber: Long?): EvaluationChange =
                     EvaluationChange(evalKey, -1L, emptyList())
             },
             readStorage = FakeEvaluationReadStorage(),
@@ -273,7 +272,7 @@ class FetchReasonObserverMappingTest {
         val compositeObserver = DefaultCompositeObserver()
         compositeObserver.register(fakeObserver)
 
-        makeCoordinator(compositeObserver).fetchIfNeeded(evalKey, null, FetchReason.INITIALIZATION)
+        makeCoordinator(compositeObserver).fetchIfNeeded(evalKey, EvaluationFilters(), FetchReason.INITIALIZATION)
 
         assertEquals(listOf(ObservableEventType.EVAL_STORAGE_UPDATED), fakeObserver.receivedEventTypes)
     }
@@ -284,7 +283,7 @@ class FetchReasonObserverMappingTest {
         val compositeObserver = DefaultCompositeObserver()
         compositeObserver.register(fakeObserver)
 
-        makeCoordinator(compositeObserver).fetchIfNeeded(evalKey, null, FetchReason.TARGET_SWITCH)
+        makeCoordinator(compositeObserver).fetchIfNeeded(evalKey, EvaluationFilters(), FetchReason.TARGET_SWITCH)
 
         assertEquals(listOf(ObservableEventType.EVAL_STORAGE_UPDATED), fakeObserver.receivedEventTypes)
     }
@@ -295,7 +294,7 @@ class FetchReasonObserverMappingTest {
         val compositeObserver = DefaultCompositeObserver()
         compositeObserver.register(fakeObserver)
 
-        makeCoordinator(compositeObserver).fetchIfNeeded(evalKey, null, FetchReason.PERIODIC)
+        makeCoordinator(compositeObserver).fetchIfNeeded(evalKey, EvaluationFilters(), FetchReason.PERIODIC)
 
         assertEquals(listOf(ObservableEventType.EVALUATIONS_UPDATED), fakeObserver.receivedEventTypes)
     }
@@ -306,7 +305,7 @@ class FetchReasonObserverMappingTest {
         val compositeObserver = DefaultCompositeObserver()
         compositeObserver.register(fakeObserver)
 
-        makeCoordinator(compositeObserver).fetchIfNeeded(evalKey, null, FetchReason.PUSH)
+        makeCoordinator(compositeObserver).fetchIfNeeded(evalKey, EvaluationFilters(), FetchReason.PUSH)
 
         assertEquals(listOf(ObservableEventType.EVALUATIONS_UPDATED), fakeObserver.receivedEventTypes)
     }
@@ -324,7 +323,7 @@ class SdkReadyTimeoutTest {
         compositeObserver.register(fakeObserver)
 
         val config = SplitClientConfig.Builder()
-            .sync(SplitClientConfig.SyncConfig.Builder().timeout(1).build())
+            .sync(SplitClientConfig.SyncConfig.Builder().readyTimeout(1).build())
             .build()
 
         DefaultSplitFactory(
@@ -332,7 +331,7 @@ class SdkReadyTimeoutTest {
             config = config,
             asyncBridge = FakeAsyncBridge(),
             evaluationRepository = FakeEvaluationRepository(),
-            filters = null,
+            filters = EvaluationFilters(),
             fetchCoordinator = FakeEvaluationFetchCoordinator(),
                         scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
             compositeObserver = compositeObserver,
@@ -347,17 +346,21 @@ class SdkReadyTimeoutTest {
     }
 
     @Test
-    fun `does not emit SDK_READY_TIMEOUT_REACHED when timeout is -1`() = runTest {
+    fun `does not emit SDK_READY_TIMEOUT_REACHED when readyTimeout is -1`() = runTest {
         val fakeObserver = FakeObserver()
         val compositeObserver = DefaultCompositeObserver()
         compositeObserver.register(fakeObserver)
 
+        val config = SplitClientConfig.Builder()
+            .sync(SplitClientConfig.SyncConfig.Builder().readyTimeout(-1).build())
+            .build()
+
         DefaultSplitFactory(
             defaultTarget = defaultTarget,
-            config = null,   // default: no timeout (-1)
+            config = config,
             asyncBridge = FakeAsyncBridge(),
             evaluationRepository = FakeEvaluationRepository(),
-            filters = null,
+            filters = EvaluationFilters(),
             fetchCoordinator = FakeEvaluationFetchCoordinator(),
                         scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
             compositeObserver = compositeObserver,

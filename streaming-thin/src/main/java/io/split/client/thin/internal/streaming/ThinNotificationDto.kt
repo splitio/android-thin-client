@@ -24,7 +24,10 @@ internal data class EvaluationUpdateDataDto(
     @SerialName("changeNumber") val changeNumber: Long,
     @SerialName("i") val updateIntervalMs: Long? = null,
     @SerialName("s") val algorithmSeed: Int? = null,
-    @SerialName("h") val hashingAlgorithm: Int? = null
+    @SerialName("h") val hashingAlgorithm: Int? = null,
+    @SerialName("u") val updateStrategy: Int? = null,
+    @SerialName("d") val data: String? = null,
+    @SerialName("c") val compression: Int? = null,
 )
 
 @Serializable
@@ -49,4 +52,13 @@ internal data class ErrorDataDto(
     @SerialName("message") val message: String? = null,
     @SerialName("code") val code: Int? = null,
     @SerialName("statusCode") val statusCode: Int? = null
+)
+
+// Bare Ably error frame delivered as an `event: error` SSE message. Unlike ErrorDataDto it has
+// no envelope and no `type` field: {"code":40142,"statusCode":401,"message":"Token expired"}.
+@Serializable
+internal data class StreamingErrorFrameDto(
+    @SerialName("code") val code: Int? = null,
+    @SerialName("statusCode") val statusCode: Int? = null,
+    @SerialName("message") val message: String? = null,
 )

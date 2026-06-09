@@ -16,36 +16,66 @@ class ConfigChangeDetectorTest {
     private val dao: GeneralPropertiesDao = mock(GeneralPropertiesDao::class.java)
 
     @Test
-    fun `first run returns false and stores value`() {
-        `when`(dao.getByKey("dynamicConfig")).thenReturn(null)
+    fun `first run returns false and stores fingerprint`() {
+        `when`(dao.getByKey("configFingerprint")).thenReturn(null)
 
-        val result = ConfigChangeDetector(dao).detectAndUpdate(true)
+        val result = ConfigChangeDetector(dao).detectAndUpdate(dynamicConfig = true, flagSets = null)
 
         assertFalse(result)
-        verify(dao).insert(GeneralPropertiesEntity(key = "dynamicConfig", value = "true"))
+        verify(dao).insert(GeneralPropertiesEntity(key = "configFingerprint", value = "dc=true|sets="))
     }
 
     @Test
-    fun `same value stored returns false and does not write`() {
-        `when`(dao.getByKey("dynamicConfig")).thenReturn(
-            GeneralPropertiesEntity(key = "dynamicConfig", value = "false")
+    fun `same fingerprint stored returns false and does not write`() {
+        `when`(dao.getByKey("configFingerprint")).thenReturn(
+            GeneralPropertiesEntity(key = "configFingerprint", value = "dc=false|sets=")
         )
 
-        val result = ConfigChangeDetector(dao).detectAndUpdate(false)
+        val result = ConfigChangeDetector(dao).detectAndUpdate(dynamicConfig = false, flagSets = null)
 
         assertFalse(result)
         verify(dao, never()).insert(any())
     }
 
     @Test
-    fun `different value stored returns true and updates stored value`() {
-        `when`(dao.getByKey("dynamicConfig")).thenReturn(
-            GeneralPropertiesEntity(key = "dynamicConfig", value = "false")
+    fun `dynamicConfig change returns true and updates stored fingerprint`() {
+        `when`(dao.getByKey("configFingerprint")).thenReturn(
+            GeneralPropertiesEntity(key = "configFingerprint", value = "dc=false|sets=")
         )
 
-        val result = ConfigChangeDetector(dao).detectAndUpdate(true)
+        val result = ConfigChangeDetector(dao).detectAndUpdate(dynamicConfig = true, flagSets = null)
 
         assertTrue(result)
-        verify(dao).insert(GeneralPropertiesEntity(key = "dynamicConfig", value = "true"))
+        verify(dao).insert(GeneralPropertiesEntity(key = "configFingerprint", value = "dc=true|sets="))
+    }
+
+    @Test
+    fun `flagSets change returns true and updates stored fingerprint`() {
+        `when`(dao.getByKey("configFingerprint")).thenReturn(
+            GeneralPropertiesEntity(key = "configFingerprint", value = "dc=false|sets=set_a")
+        )
+
+        val result = ConfigChangeDetector(dao).detectAndUpdate(dynamicConfig = false, flagSets = setOf("set_b"))
+
+        assertTrue(result)
+        verify(dao).insert(GeneralPropertiesEntity(key = "configFingerprint", value = "dc=false|sets=set_b"))
+    }
+
+    @Test
+    fun `flagSets are sorted in fingerprint`() {
+        `when`(dao.getByKey("configFingerprint")).thenReturn(null)
+
+        ConfigChangeDetector(dao).detectAndUpdate(dynamicConfig = false, flagSets = setOf("zz", "aa"))
+
+        verify(dao).insert(GeneralPropertiesEntity(key = "configFingerprint", value = "dc=false|sets=aa,zz"))
+    }
+
+    @Test
+    fun `migration from old dynamicConfig key - no stored configFingerprint returns false`() {
+        `when`(dao.getByKey("configFingerprint")).thenReturn(null)
+
+        val result = ConfigChangeDetector(dao).detectAndUpdate(dynamicConfig = false, flagSets = null)
+
+        assertFalse(result)
     }
 }

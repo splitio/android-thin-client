@@ -16,9 +16,10 @@ class JsonEvaluationResponseDeserializer : EvaluationResponseDeserializer {
         val evaluations = dto.evaluations.map { evalDto ->
             StoredEvaluation(
                 result = EvaluationResult(
-                    flag = evalDto.featureName,
+                    flag = evalDto.flag,
                     treatment = evalDto.treatment,
                     config = evalDto.config,
+                    changeNumber = evalDto.changeNumber,
                 ),
                 flagSets = evalDto.sets.toSet(),
             )

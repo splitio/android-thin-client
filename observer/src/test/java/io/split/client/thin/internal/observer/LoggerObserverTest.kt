@@ -147,15 +147,20 @@ class LoggerObserverTest {
     }
 
     @Test
-    fun `interpolates pushEnabled in JWT fetch succeeded`() {
+    fun `interpolates pushEnabled and connDelaySeconds in JWT fetch succeeded`() {
         val event = ObservableEvent(
             type = "jwt_fetch_succeeded",
-            properties = mapOf("pushEnabled" to "true")
+            properties = mapOf(
+                "pushEnabled" to "true",
+                "connDelaySeconds" to "30"
+            )
         )
 
         observer.notifyEvent(event)
 
-        verify(logger).info(contains("JWT fetched (push enabled: true)"))
+        verify(logger).info(
+            contains("JWT fetched (push enabled: true, connDelaySeconds: 30)")
+        )
     }
 
     @Test
@@ -180,5 +185,21 @@ class LoggerObserverTest {
         observer.notifyEvent(event)
 
         verify(logger).info(contains("Evaluations fetch requested (reason: PERIODIC)"))
+    }
+
+    @Test
+    fun `logs runtime sync fallback using Logger warn`() {
+        val event = ObservableEvent(
+            type = "runtime_sync_mode_changed",
+            properties = mapOf(
+                "from" to "STREAMING",
+                "to" to "SINGLE_SYNC",
+                "reason" to "AUTH_UNAUTHORIZED"
+            )
+        )
+
+        observer.notifyEvent(event)
+
+        verify(logger).warn(contains("Runtime sync mode changed from STREAMING to SINGLE_SYNC (reason: AUTH_UNAUTHORIZED)"))
     }
 }

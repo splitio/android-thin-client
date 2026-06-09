@@ -32,7 +32,7 @@ internal class DefaultSplitFactory(
     private val config: SplitClientConfig?,
     private val asyncBridge: AsyncBridgeLike,
     private val evaluationRepository: EvaluationRepository,
-    private val filters: EvaluationFilters?,
+    private val filters: EvaluationFilters,
     private val fetchCoordinator: EvaluationFetchCoordinator,
     private val pollingScheduler: PollingScheduler? = null,
     private val eventsScheduler: EventsPeriodicScheduler? = null,
@@ -50,13 +50,13 @@ internal class DefaultSplitFactory(
             fallbackCalculator = buildFallbackCalculator(config),
         ),
     ),
-    private val splitManager: SplitManager = DefaultSplitManager(evaluationRepository, defaultTarget.toEvaluationKey()),
+    private val splitManager: SplitManager = DefaultSplitManager(evaluationRepository),
 ) : SplitFactory {
 
     init {
         clientManager.getOrCreate(defaultTarget)
 
-        val timeoutSecs = config?.sync?.timeout ?: -1
+        val timeoutSecs = config?.sync?.readyTimeout ?: 10
         if (timeoutSecs > 0) {
             scope.launch {
                 delay(timeoutSecs * 1_000L)
@@ -90,10 +90,11 @@ internal class DefaultSplitFactory(
         eventsScheduler?.stop()
         eventsCoordinator?.flush()
         lifecycleManager?.destroy()
-        compositeObserver.unregisterAll()
         clientManager.destroyAll()
         scope.cancel()
         asyncBridge.close()
+        compositeObserver.notifyEvent(ObservableEvent(ObservableEventType.DESTROY_COMPLETE))
+        compositeObserver.unregisterAll()
     }
 
     @Deprecated("Use suspend destroy()", level = DeprecationLevel.ERROR)

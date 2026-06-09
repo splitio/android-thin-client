@@ -10,8 +10,6 @@ data class EvaluationResult(
     val treatment: String,
     /** Configurations. **/
     val config: String? = null,
-    /** Label associated with the evaluation. */
-    val label: String? = null,
     /** Change number associated with this result. */
     val changeNumber: Long? = null,
 )

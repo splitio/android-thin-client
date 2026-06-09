@@ -208,6 +208,60 @@ class EventsPeriodicSchedulerTest {
     }
 
     @Test
+    fun `start triggers FLUSH after initialDelayMillis before first INTERVAL`() = runTest {
+        val reasons = mutableListOf<EventFlushReason>()
+        val coordinator = object : EventSubmissionCoordinator {
+            override fun triggerSubmission(reason: EventFlushReason) {
+                reasons.add(reason)
+            }
+            override suspend fun flush() {}
+        }
+
+        val scheduler = EventsPeriodicScheduler(
+            scope = this,
+            coordinator = coordinator,
+            pushRateMillis = 1000L,
+            initialDelayMillis = 500L,
+        )
+
+        scheduler.start()
+
+        advanceTimeBy(499)
+        assertEquals(emptyList<EventFlushReason>(), reasons.toList())
+
+        advanceTimeBy(2)
+        assertEquals(listOf(EventFlushReason.FLUSH), reasons.toList())
+
+        advanceTimeBy(1000)
+        assertEquals(listOf(EventFlushReason.FLUSH, EventFlushReason.INTERVAL), reasons.toList())
+
+        scheduler.stop()
+    }
+
+    @Test
+    fun `initialDelayMillis defaults to zero so existing behavior is preserved`() = runTest {
+        var triggerCount = 0
+        val coordinator = object : EventSubmissionCoordinator {
+            override fun triggerSubmission(reason: EventFlushReason) {
+                triggerCount++
+            }
+            override suspend fun flush() {}
+        }
+
+        val scheduler = EventsPeriodicScheduler(
+            scope = this,
+            coordinator = coordinator,
+            pushRateMillis = 1000L,
+        )
+
+        scheduler.start()
+        advanceTimeBy(1500)
+
+        assertEquals(1, triggerCount)
+        scheduler.stop()
+    }
+
+    @Test
     fun `multiple resume calls do not create duplicate jobs`() = runTest {
         var triggerCount = 0
         val coordinator = object : EventSubmissionCoordinator {

@@ -127,15 +127,26 @@ pipeline:
                         cd "/harness/<+codebase.repoName>"
                       fi
 
+                      # Build sonar.java.binaries from only the module dirs that actually exist after the build
+                      JAVA_BINARIES=""
+                      for module in api auth retryable-http-client secure-http-client evaluation events-tracking models observer persistence persistence-domain streaming-thin cdn-bypass; do
+                        for subdir in build/intermediates/javac build/intermediates/built_in_kotlinc; do
+                          if [ -d "$module/$subdir" ]; then
+                            JAVA_BINARIES="${JAVA_BINARIES:+$JAVA_BINARIES,}$module/$subdir"
+                          fi
+                        done
+                      done
+
                       COMMON_ARGS="
                         -Dsonar.host.url=https://sonar.harness.io
                         -Dsonar.projectKey=android-thin-client
                         -Dsonar.token=$SONAR_TOKEN
                         -Dsonar.scanner.skipJreProvisioning=true
                         -Dsonar.scanner.skipSystemTruststore=true
-                        -Dsonar.sources=api/src/main,auth/src/main,retryable-http-client/src/main,secure-http-client/src/main
-                        -Dsonar.tests=api/src/test,auth/src/test,retryable-http-client/src/test,secure-http-client/src/test
-                        -Dsonar.exclusions=**/build/**
+                        -Dsonar.sources=api/src/main,auth/src/main,retryable-http-client/src/main,secure-http-client/src/main,evaluation/src/main,events-tracking/src/main,models/src/main,observer/src/main,persistence/src/main,persistence-domain/src/main,streaming-thin/src/main,cdn-bypass/src/main
+                        -Dsonar.tests=api/src/test,auth/src/test,retryable-http-client/src/test,secure-http-client/src/test,evaluation/src/test,events-tracking/src/test,observer/src/test,persistence/src/test,persistence-domain/src/test,streaming-thin/src/test,cdn-bypass/src/test
+                        -Dsonar.exclusions=**/build/**,android-client/**
+                        -Dsonar.java.binaries=$JAVA_BINARIES
                         -Dsonar.coverage.exclusions=**/*Test.kt,**/*Test.java
                         -Dsonar.coverage.jacoco.xmlReportPaths=build/reports/jacoco/jacocoAggregateUnitTestReport/jacocoAggregateUnitTestReport.xml
                         -Dsonar.junit.reportPaths=**/build/test-results/**/*.xml

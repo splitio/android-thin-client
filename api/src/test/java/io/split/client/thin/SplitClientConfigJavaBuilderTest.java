@@ -17,13 +17,12 @@ public class SplitClientConfigJavaBuilderTest {
 
         assertNull(config.getFallbackTreatments());
         assertEquals(SplitClientConfig.LogLevel.NONE, config.getLogLevel());
-        assertEquals(SplitClientConfig.ImpressionsMode.DEFAULT, config.getImpressionsMode());
-        assertFalse(config.getDynamicConfig());
+        assertFalse(config.getConfigsEnabled());
         assertEquals(SplitClientConfig.SyncMode.STREAMING, config.getSync().getMode());
-        assertEquals(3600, config.getSync().getEvaluationRefreshRate());
+        assertEquals(3600, config.getSync().getPollingRate());
         assertEquals(1800, config.getSync().getPushRate());
         assertNull(config.getSync().getServiceEndpoints());
-        assertEquals(-1, config.getSync().getTimeout());
+        assertEquals(10, config.getSync().getReadyTimeout());
         assertNull(config.getStorage().getPrefix());
     }
 
@@ -37,21 +36,12 @@ public class SplitClientConfigJavaBuilderTest {
     }
 
     @Test
-    public void builderCanSetImpressionsMode() {
+    public void builderCanEnableConfigsEnabled() {
         SplitClientConfig config = new SplitClientConfig.Builder()
-                .impressionsMode(SplitClientConfig.ImpressionsMode.NONE)
+                .configsEnabled(true)
                 .build();
 
-        assertEquals(SplitClientConfig.ImpressionsMode.NONE, config.getImpressionsMode());
-    }
-
-    @Test
-    public void builderCanEnableDynamicConfig() {
-        SplitClientConfig config = new SplitClientConfig.Builder()
-                .dynamicConfig(true)
-                .build();
-
-        assertTrue(config.getDynamicConfig());
+        assertTrue(config.getConfigsEnabled());
     }
 
     @Test
@@ -79,14 +69,14 @@ public class SplitClientConfigJavaBuilderTest {
     }
 
     @Test
-    public void builderCanSetEvaluationRefreshRate() {
+    public void builderCanSetPollingRate() {
         SplitClientConfig config = new SplitClientConfig.Builder()
                 .sync(new SplitClientConfig.SyncConfig.Builder()
-                        .evaluationRefreshRate(300)
+                        .pollingRate(300)
                         .build())
                 .build();
 
-        assertEquals(300, config.getSync().getEvaluationRefreshRate());
+        assertEquals(300, config.getSync().getPollingRate());
     }
 
     @Test
@@ -103,13 +93,12 @@ public class SplitClientConfigJavaBuilderTest {
     @Test
     public void builderCanSetServiceEndpoints() {
         SplitClientConfig.ServiceEndpoints endpoints =
-                new SplitClientConfig.ServiceEndpoints(
-                        "https://auth.example.com",
-                        "https://evaluations.example.com",
-                        "https://events.example.com",
-                        "https://telemetry.example.com",
-                        "https://streaming.example.com"
-                );
+                new SplitClientConfig.ServiceEndpoints.Builder()
+                        .auth("https://auth.example.com")
+                        .evaluations("https://evaluations.example.com")
+                        .events("https://events.example.com")
+                        .streaming("https://streaming.example.com")
+                        .build();
 
         SplitClientConfig config = new SplitClientConfig.Builder()
                 .sync(new SplitClientConfig.SyncConfig.Builder()
@@ -132,44 +121,44 @@ public class SplitClientConfigJavaBuilderTest {
     }
 
     @Test
-    public void builderCanSetSyncTimeout() {
+    public void builderCanSetSyncReadyTimeout() {
         SplitClientConfig config = new SplitClientConfig.Builder()
                 .sync(new SplitClientConfig.SyncConfig.Builder()
-                        .timeout(30)
+                        .readyTimeout(30)
                         .build())
                 .build();
 
-        assertEquals(30, config.getSync().getTimeout());
+        assertEquals(30, config.getSync().getReadyTimeout());
     }
 
     @Test
-    public void builderFallsBackInvalidValuesToDefaults() {
+    public void builderClampsInvalidValuesToMinimum() {
         SplitClientConfig config = new SplitClientConfig.Builder()
                 .sync(new SplitClientConfig.SyncConfig.Builder()
-                        .evaluationRefreshRate(0)
+                        .pollingRate(0)
                         .pushRate(1)
-                        .timeout(-2)
+                        .readyTimeout(-2)
                         .build())
                 .storage(new SplitClientConfig.StorageConfig.Builder()
                         .prefix("!!!invalid!!!")
                         .build())
                 .build();
 
-        assertEquals(3600, config.getSync().getEvaluationRefreshRate());
-        assertEquals(1800, config.getSync().getPushRate());
+        assertEquals(1, config.getSync().getPollingRate());
+        assertEquals(30, config.getSync().getPushRate());
         assertNull(config.getStorage().getPrefix());
-        assertEquals(-1, config.getSync().getTimeout());
+        assertEquals(10, config.getSync().getReadyTimeout());
     }
 
     @Test
-    public void builderAcceptsEvaluationRefreshRateAtMinimumBoundary() {
+    public void builderAcceptsPollingRateAtMinimumBoundary() {
         SplitClientConfig config = new SplitClientConfig.Builder()
                 .sync(new SplitClientConfig.SyncConfig.Builder()
-                        .evaluationRefreshRate(1)
+                        .pollingRate(1)
                         .build())
                 .build();
 
-        assertEquals(1, config.getSync().getEvaluationRefreshRate());
+        assertEquals(1, config.getSync().getPollingRate());
     }
 
     @Test
@@ -184,14 +173,36 @@ public class SplitClientConfigJavaBuilderTest {
     }
 
     @Test
-    public void builderAcceptsSyncTimeoutOfZero() {
+    public void builderFallsBackSyncReadyTimeoutWhenZero() {
         SplitClientConfig config = new SplitClientConfig.Builder()
                 .sync(new SplitClientConfig.SyncConfig.Builder()
-                        .timeout(0)
+                        .readyTimeout(0)
                         .build())
                 .build();
 
-        assertEquals(0, config.getSync().getTimeout());
+        assertEquals(10, config.getSync().getReadyTimeout());
+    }
+
+    @Test
+    public void builderAcceptsSyncReadyTimeoutOfMinusOne() {
+        SplitClientConfig config = new SplitClientConfig.Builder()
+                .sync(new SplitClientConfig.SyncConfig.Builder()
+                        .readyTimeout(-1)
+                        .build())
+                .build();
+
+        assertEquals(-1, config.getSync().getReadyTimeout());
+    }
+
+    @Test
+    public void builderAcceptsSyncReadyTimeoutAtMinimumBoundary() {
+        SplitClientConfig config = new SplitClientConfig.Builder()
+                .sync(new SplitClientConfig.SyncConfig.Builder()
+                        .readyTimeout(1)
+                        .build())
+                .build();
+
+        assertEquals(1, config.getSync().getReadyTimeout());
     }
 
     @Test

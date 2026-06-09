@@ -23,6 +23,7 @@ class AuthProviderFactoryTest {
     private val fakeObserver = object : CompositeObserver {
         override fun notifyEvent(event: ObservableEvent) { capturedEvents.add(event) }
         override fun register(observer: Observer) {}
+        override fun unregister(observer: Observer) {}
         override fun unregisterAll() {}
     }
 
@@ -37,7 +38,6 @@ class AuthProviderFactoryTest {
             sdkKey = "test-sdk-key",
             authUrl = "https://auth.example.com",
             compositeObserver = fakeObserver,
-            compositeKeyBuilder = { targets -> targets.sorted().joinToString(",") },
         )
 
     @Test
@@ -84,6 +84,15 @@ class AuthProviderFactoryTest {
 
         val requestStarted = capturedEvents.first { it.type == ObservableEventType.JWT_REQUEST_STARTED }
         assertEquals("user-1", requestStarted.properties["matchingKey"])
+    }
+
+    @Test
+    fun `JWT_FETCH_SUCCEEDED includes connDelaySeconds from auth response`() = runTest {
+        makeProvider().credential(setOf("user-1"))
+
+        val succeeded = capturedEvents.first { it.type == ObservableEventType.JWT_FETCH_SUCCEEDED }
+        // FakeSuccessHttpClient omits connDelay; deserializer defaults to 60
+        assertEquals("60", succeeded.properties["connDelaySeconds"])
     }
 }
 

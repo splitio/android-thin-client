@@ -38,16 +38,12 @@ class DefaultAuthProviderTest {
     )
 
     private val target2 = "user-2"
-    private val compositeTarget = "user-1,user-2"
-    private val compositeKeyBuilder: (Set<String>) -> String = { targets ->
-        targets.sorted().joinToString(",")
-    }
 
     private lateinit var authProvider: DefaultAuthProvider
 
     @Before
     fun setUp() {
-        authProvider = DefaultAuthProvider(fetcher, storage, compositeKeyBuilder, defaultTarget = target)
+        authProvider = DefaultAuthProvider(fetcher, storage, defaultTarget = target)
     }
 
     @Test
@@ -57,43 +53,43 @@ class DefaultAuthProviderTest {
         val result = authProvider.credential(setOf(target, target2))
 
         assertSame(validCredential, result)
-        verify(fetcher, never()).fetchCredential(compositeTarget)
+        verify(fetcher, never()).fetchCredential(setOf(target, target2))
     }
 
     @Test
     fun `credential fetches and saves single JWT on cache miss`() = runTest {
         `when`(storage.getCredential()).thenReturn(null)
-        `when`(fetcher.fetchCredential(compositeTarget)).thenReturn(validCredential)
+        `when`(fetcher.fetchCredential(setOf(target, target2))).thenReturn(validCredential)
 
         val result = authProvider.credential(setOf(target, target2))
 
         assertEquals(validCredential, result)
-        verify(fetcher).fetchCredential(compositeTarget)
+        verify(fetcher).fetchCredential(setOf(target, target2))
         verify(storage).saveCredential(validCredential)
     }
 
     @Test
     fun `credential fetches when stored credential is expired`() = runTest {
         `when`(storage.getCredential()).thenReturn(expiredCredential)
-        `when`(fetcher.fetchCredential(compositeTarget)).thenReturn(validCredential)
+        `when`(fetcher.fetchCredential(setOf(target, target2))).thenReturn(validCredential)
 
         val result = authProvider.credential(setOf(target, target2))
 
         assertEquals(validCredential, result)
-        verify(fetcher).fetchCredential(compositeTarget)
+        verify(fetcher).fetchCredential(setOf(target, target2))
     }
 
     @Test
     fun `credential deduplicates concurrent fetch requests for same composite target`() = runTest {
         `when`(storage.getCredential()).thenReturn(null)
-        `when`(fetcher.fetchCredential(compositeTarget)).thenReturn(validCredential)
+        `when`(fetcher.fetchCredential(setOf(target, target2))).thenReturn(validCredential)
 
         val results = (1..5).map {
             async { authProvider.credential(setOf(target, target2)) }
         }.awaitAll()
 
         results.forEach { assertEquals(validCredential, it) }
-        verify(fetcher, times(1)).fetchCredential(compositeTarget)
+        verify(fetcher, times(1)).fetchCredential(setOf(target, target2))
     }
 
     @Test
@@ -109,7 +105,7 @@ class DefaultAuthProviderTest {
                 validCredential
             }
         }
-        authProvider = DefaultAuthProvider(cancelThenSucceedFetcher, storage, compositeKeyBuilder, defaultTarget = target)
+        authProvider = DefaultAuthProvider(cancelThenSucceedFetcher, storage, defaultTarget = target)
         `when`(storage.getCredential()).thenReturn(null)
 
         val first = launch(Job()) { authProvider.credential(setOf(target, target2)) }
@@ -125,7 +121,7 @@ class DefaultAuthProviderTest {
     @Test
     fun `credential fetches again after invalidateAll clears storage`() = runTest {
         `when`(storage.getCredential()).thenReturn(null)
-        `when`(fetcher.fetchCredential(compositeTarget)).thenReturn(validCredential)
+        `when`(fetcher.fetchCredential(setOf(target, target2))).thenReturn(validCredential)
 
         authProvider.credential(setOf(target, target2))
         authProvider.invalidateAll()
@@ -133,7 +129,7 @@ class DefaultAuthProviderTest {
         `when`(storage.getCredential()).thenReturn(null)
         authProvider.credential(setOf(target, target2))
 
-        verify(fetcher, times(2)).fetchCredential(compositeTarget)
+        verify(fetcher, times(2)).fetchCredential(setOf(target, target2))
     }
 
     @Test
@@ -160,11 +156,11 @@ class DefaultAuthProviderTest {
     @Test
     fun `credential no-arg uses defaultTarget seeded in activeTargets`() = runTest {
         `when`(storage.getCredential()).thenReturn(null)
-        `when`(fetcher.fetchCredential(target)).thenReturn(validCredential)
+        `when`(fetcher.fetchCredential(setOf(target))).thenReturn(validCredential)
 
         authProvider.credential()
 
-        verify(fetcher).fetchCredential(target)
+        verify(fetcher).fetchCredential(setOf(target))
     }
 
     @Test
@@ -178,7 +174,7 @@ class DefaultAuthProviderTest {
             fetchUnblocked.await()
             validCredential
         }
-        authProvider = DefaultAuthProvider(blockingFetcher, storage, compositeKeyBuilder, defaultTarget = target)
+        authProvider = DefaultAuthProvider(blockingFetcher, storage, defaultTarget = target)
         `when`(storage.getCredential()).thenReturn(null)
 
         val coroutineA = launch { authProvider.credential() }
@@ -197,14 +193,14 @@ class DefaultAuthProviderTest {
     }
 
     @Test
-    fun `composite key is sorted regardless of set iteration order`() = runTest {
+    fun `fetcher receives targets as a set regardless of input order`() = runTest {
         `when`(storage.getCredential()).thenReturn(null)
-        `when`(fetcher.fetchCredential("user-1,user-2")).thenReturn(validCredential)
+        `when`(fetcher.fetchCredential(setOf(target, target2))).thenReturn(validCredential)
 
-        // Pass targets in reverse order
+        // Pass targets in reverse order — fetcher should receive the same set
         authProvider.credential(setOf(target2, target))
 
-        verify(fetcher).fetchCredential("user-1,user-2")
+        verify(fetcher).fetchCredential(setOf(target, target2))
     }
 
     // ---- Ref-counting tests (fix #4) ----
@@ -212,7 +208,7 @@ class DefaultAuthProviderTest {
     @Test
     fun `removeTarget does not remove key when a second client shares the same matchingKey`() {
         // Two clients with the same matchingKey — removing one should leave it in the active set
-        authProvider = DefaultAuthProvider(fetcher, storage, compositeKeyBuilder)
+        authProvider = DefaultAuthProvider(fetcher, storage)
         authProvider.addTarget("shared-key") // ref=1
         authProvider.addTarget("shared-key") // ref=2
 
@@ -223,7 +219,7 @@ class DefaultAuthProviderTest {
 
     @Test
     fun `removeTarget returns true only when last ref for that key is removed`() {
-        authProvider = DefaultAuthProvider(fetcher, storage, compositeKeyBuilder)
+        authProvider = DefaultAuthProvider(fetcher, storage)
         authProvider.addTarget("shared-key") // ref=1
         authProvider.addTarget("shared-key") // ref=2
 
@@ -235,7 +231,7 @@ class DefaultAuthProviderTest {
 
     @Test
     fun `addTarget returns true only on first add of a new key`() {
-        authProvider = DefaultAuthProvider(fetcher, storage, compositeKeyBuilder)
+        authProvider = DefaultAuthProvider(fetcher, storage)
 
         val first = authProvider.addTarget("key-a")
         val second = authProvider.addTarget("key-a")
@@ -246,15 +242,15 @@ class DefaultAuthProviderTest {
 
     @Test
     fun `credential no-arg includes all uniquely-keyed active targets`() = runTest {
-        authProvider = DefaultAuthProvider(fetcher, storage, compositeKeyBuilder)
+        authProvider = DefaultAuthProvider(fetcher, storage)
         authProvider.addTarget("user-a")
         authProvider.addTarget("user-b")
         `when`(storage.getCredential()).thenReturn(null)
-        `when`(fetcher.fetchCredential("user-a,user-b")).thenReturn(validCredential)
+        `when`(fetcher.fetchCredential(setOf("user-a", "user-b"))).thenReturn(validCredential)
 
         authProvider.credential()
 
-        verify(fetcher).fetchCredential("user-a,user-b")
+        verify(fetcher).fetchCredential(setOf("user-a", "user-b"))
     }
 
     // ---- invalidateAll cancels in-flight Deferreds (fix #9) ----
@@ -272,7 +268,7 @@ class DefaultAuthProviderTest {
                 validCredential
             }
         }
-        authProvider = DefaultAuthProvider(blockingFetcher, storage, compositeKeyBuilder, defaultTarget = target)
+        authProvider = DefaultAuthProvider(blockingFetcher, storage, defaultTarget = target)
         `when`(storage.getCredential()).thenReturn(null)
 
         // Start a fetch that will block

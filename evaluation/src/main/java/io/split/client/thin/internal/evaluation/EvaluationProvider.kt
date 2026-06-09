@@ -5,7 +5,7 @@ import io.split.client.thin.internal.secure.EvaluationTarget
 import io.split.client.thin.internal.secure.SecureHttpClient
 
 interface EvaluationProvider {
-    suspend fun fetch(evalKey: EvaluationKey, filters: EvaluationFilters?, changeNumber: Long): EvaluationChange?
+    suspend fun fetch(evalKey: EvaluationKey, filters: EvaluationFilters, changeNumber: Long, targetChangeNumber: Long? = null): EvaluationChange?
 }
 
 fun EvaluationKey.toEvaluationTarget() = EvaluationTarget(
@@ -22,11 +22,12 @@ class DefaultEvaluationProvider(
     private val onEmptyResponseBody: (evalKey: EvaluationKey) -> Unit = {},
 ) : EvaluationProvider {
 
-    override suspend fun fetch(evalKey: EvaluationKey, filters: EvaluationFilters?, changeNumber: Long): EvaluationChange? {
+    override suspend fun fetch(evalKey: EvaluationKey, filters: EvaluationFilters, changeNumber: Long, targetChangeNumber: Long?): EvaluationChange? {
         onEvalFetchStarted(evalKey)
         val target = evalKey.toEvaluationTarget()
-        val response = secureHttpClient.fetchEvaluations(target, filters, changeNumber)
+        val response = secureHttpClient.fetchEvaluations(target, filters, changeNumber, targetChangeNumber)
         if (response.httpStatus == HTTP_NOT_MODIFIED) return null
+        if (response.httpStatus == HTTP_UNAUTHORIZED) throw EvaluationAuthException("Evaluations fetch returned 401")
         val body = response.getData()
         if (body.isNullOrEmpty()) {
             onEmptyResponseBody(evalKey)
@@ -42,5 +43,6 @@ class DefaultEvaluationProvider(
 
     private companion object {
         private const val HTTP_NOT_MODIFIED = 304
+        private const val HTTP_UNAUTHORIZED = 401
     }
 }

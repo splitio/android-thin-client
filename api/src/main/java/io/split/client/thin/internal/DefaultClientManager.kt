@@ -52,18 +52,18 @@ internal class DefaultClientManager(
     }
 
     override suspend fun destroy(key: Key) {
-        val (client, target) = synchronized(lock) {
+        val (client, target, becameEmpty) = synchronized(lock) {
             val t = lastTargets.remove(key)
             val c = clients.remove(key)
-            Pair(c, t)
+            Triple(c, t, clients.isEmpty())
         }
         client ?: return
-        client.destroy()
+        runCatching { (client as? InternalDestroyable)?.tearDownInternal() ?: client.destroy() }
         if (authProvider != null && target != null) {
-            val isEmpty = authProvider.removeTarget(target.toEvaluationKey().toEvaluationTarget().matchingKey)
-            if (isEmpty) {
-                onTargetsEmpty?.invoke()
-            }
+            authProvider.removeTarget(target.toEvaluationKey().toEvaluationTarget().matchingKey)
+        }
+        if (becameEmpty) {
+            onTargetsEmpty?.invoke()
         }
     }
 
@@ -75,11 +75,12 @@ internal class DefaultClientManager(
             lastTargets.clear()
             Pair(clients, targets)
         }
-        all.forEach { runCatching { it.destroy() } }
+        all.forEach { runCatching { (it as? InternalDestroyable)?.tearDownInternal() ?: it.destroy() } }
         if (authProvider != null) {
             for (target in targets) {
                 authProvider.removeTarget(target.toEvaluationKey().toEvaluationTarget().matchingKey)
             }
         }
+        onTargetsEmpty?.invoke()
     }
 }
