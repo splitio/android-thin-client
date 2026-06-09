@@ -11,8 +11,9 @@ data class EvaluationsResponseDto(
 
 @Serializable
 data class EvaluationDto(
-    val featureName: String,
+    val flag: String,
     val treatment: String,
     val sets: List<String> = emptyList(),
     val config: String? = null,
+    val changeNumber: Long? = null,
 )

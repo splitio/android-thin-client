@@ -78,25 +78,16 @@ class DefaultSecureHttpClientPostEventsTest {
 
         client.postEvents("payload")
 
-        assertEquals("android_thin-1.2.3", http.lastRequest?.headers?.get("SplitSDKVersion"))
+        assertEquals("android-thin-1.2.3", http.lastRequest?.headers?.get("SplitSDKVersion"))
     }
 
     @Test
-    fun `X-Harness-FME-SDK-Thin-Version header sent on events`() = runTest {
+    fun `X-Harness-FME-SDK-Version header sent on events`() = runTest {
         val (client, _, http) = makeClient(sdkVersion = "2.0.0")
 
         client.postEvents("payload")
 
-        assertEquals("android_thin-2.0.0", http.lastRequest?.headers?.get("X-Harness-FME-SDK-Thin-Version"))
-    }
-
-    @Test
-    fun `SDK version headers not sent on events`() = runTest {
-        val (client, _, http) = makeClient()
-
-        client.postEvents("payload")
-
-        assertNull(http.lastRequest?.headers?.get("X-Harness-FME-SDK-Thin-Spec"))
+        assertEquals("android-thin-2.0.0", http.lastRequest?.headers?.get("X-Harness-FME-SDK-Version"))
     }
 
 }

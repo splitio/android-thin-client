@@ -20,21 +20,39 @@ class DefaultEvaluationFetchCoordinator(
     private val inFlight: MutableSet<EvaluationKey> = Collections.newSetFromMap(ConcurrentHashMap())
     private val fetchedKeys: MutableSet<EvaluationKey> = Collections.newSetFromMap(ConcurrentHashMap())
 
-    override suspend fun fetchIfNeeded(evalKey: EvaluationKey, filters: EvaluationFilters?, reason: FetchReason, delayMs: Long): Boolean {
+    override fun fetchedKeys(): Set<EvaluationKey> = fetchedKeys.toSet()
+
+    override suspend fun fetchIfNeeded(evalKey: EvaluationKey, filters: EvaluationFilters, reason: FetchReason, delayMs: Long, targetChangeNumber: Long?): Boolean {
         onEvalFetchRequested(evalKey, reason, delayMs)
+
         if (!inFlight.add(evalKey)) {
             onEvalFetchDeduped(evalKey)
             return false
         }
+
+        val isFirstFetch = !fetchedKeys.contains(evalKey)
+        fetchedKeys.add(evalKey)
+
         try {
             val changeNumber = readStorage.lastChangeNumber(evalKey)
-            val change = provider.fetch(evalKey, filters, changeNumber)
-            val isFirstFetch = fetchedKeys.add(evalKey)
-            if (change != null) {
-                val upsertResult = writeStorage.upsert(change)
-                if (isFirstFetch || upsertResult.updated) onEvaluationsUpdated(evalKey, reason, upsertResult.changedFlagNames)
-            } else if (isFirstFetch) {
-                onEvaluationsUpdated(evalKey, reason, emptyList())
+            val change = provider.fetch(evalKey, filters, changeNumber, targetChangeNumber)
+
+            if (change == null) {
+                if (isFirstFetch) onEvaluationsUpdated(evalKey, reason, emptyList())
+                onEvalFetchSucceeded(evalKey)
+                return true
+            }
+
+            if (change.changeNumber == changeNumber && change.evaluations.isEmpty()) {
+                if (isFirstFetch) onEvaluationsUpdated(evalKey, reason, emptyList())
+                onEvalFetchSucceeded(evalKey)
+                return true
+            }
+
+            val upsertResult = writeStorage.upsert(change)
+            val shouldNotify = isFirstFetch || upsertResult.updated
+            if (shouldNotify) {
+                onEvaluationsUpdated(evalKey, reason, upsertResult.changedFlagNames)
             }
             onEvalFetchSucceeded(evalKey)
             return true
@@ -48,16 +66,27 @@ class DefaultEvaluationFetchCoordinator(
         }
     }
 
-    override suspend fun refetchAll(filters: EvaluationFilters?, reason: FetchReason, delayProvider: ((EvaluationKey) -> Long)?) {
+    override suspend fun refetchAll(
+        filters: EvaluationFilters,
+        reason: FetchReason,
+        delayProvider: ((EvaluationKey) -> Long)?,
+        keyFilter: (EvaluationKey) -> Boolean,
+    ) {
         val snapshot = fetchedKeys.toSet()
-        for (evalKey in snapshot) {
+        for (evalKey in snapshot.filter(keyFilter)) {
             try {
                 val delayMs = delayProvider?.invoke(evalKey) ?: 0L
                 if (delayMs > 0) delay(delayMs)
                 fetchIfNeeded(evalKey, filters, reason, delayMs)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Throwable) {
                 // Silently continue - errors don't stop the batch
             }
         }
+    }
+
+    override fun forget(evalKey: EvaluationKey) {
+        fetchedKeys.remove(evalKey)
     }
 }

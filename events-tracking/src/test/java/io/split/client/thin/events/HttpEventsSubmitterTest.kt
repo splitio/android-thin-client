@@ -2,6 +2,7 @@ package io.split.client.thin.events
 
 import io.split.android.client.submitter.RecorderException
 import io.split.client.thin.http.contracts.HttpResponse
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -51,6 +52,20 @@ class HttpEventsSubmitterTest {
         statusCode = 500
 
         submitter.execute("""[{"key":"test"}]""")
+    }
+
+    @Test(expected = RecorderException::class)
+    fun `execute wraps network exception as RecorderException`() {
+        val throwingSubmitter = HttpEventsSubmitter { throw RuntimeException("connection refused") }
+
+        throwingSubmitter.execute("""[{"key":"test"}]""")
+    }
+
+    @Test(expected = CancellationException::class)
+    fun `execute rethrows CancellationException`() {
+        val throwingSubmitter = HttpEventsSubmitter { throw CancellationException("cancelled") }
+
+        throwingSubmitter.execute("""[{"key":"test"}]""")
     }
 
     @Test

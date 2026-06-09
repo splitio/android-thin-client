@@ -72,6 +72,47 @@ class DefaultStreamingManagerTest {
     }
 
     @Test
+    fun `pause before start prevents connection until resume`() = runTest {
+        var connectCount = 0
+        val manager = createManager(eventSourceClientProvider = {
+            connectCount++
+            FakeEventSourceClient()
+        })
+
+        manager.pause()
+        advanceUntilIdle()
+        manager.start()
+        advanceUntilIdle()
+
+        assertEquals(0, connectCount)
+
+        manager.resume()
+        advanceUntilIdle()
+
+        assertEquals(1, connectCount)
+    }
+
+    @Test
+    fun `stopAll clears pending start`() = runTest {
+        var connectCount = 0
+        val manager = createManager(eventSourceClientProvider = {
+            connectCount++
+            FakeEventSourceClient()
+        })
+
+        manager.pause()
+        advanceUntilIdle()
+        manager.start()
+        advanceUntilIdle()
+        manager.stopAll()
+        advanceUntilIdle()
+        manager.resume()
+        advanceUntilIdle()
+
+        assertEquals(0, connectCount)
+    }
+
+    @Test
     fun `stopAll stops connection`() = runTest {
         val eventSourceClient = FakeEventSourceClient()
         val manager = createManager(eventSourceClientProvider = { eventSourceClient })
@@ -140,7 +181,6 @@ class DefaultStreamingManagerTest {
     private fun TestScope.createManager(
         tokenProvider: suspend () -> StreamingToken = { StreamingToken("test-token") },
         eventSourceClientProvider: () -> FakeEventSourceClient = { FakeEventSourceClient() },
-        onOccupancyZero: suspend () -> Unit = {},
         onEvaluationFetchNotification: suspend (EvaluationUpdateNotification?) -> Unit = {},
     ): DefaultStreamingManager = DefaultStreamingManager(
         streamingUrl = "https://streaming.test.io/sse",
@@ -149,7 +189,6 @@ class DefaultStreamingManagerTest {
         backoffCounterFactory = { FakeBackoffCounter() },
         scope = this,
         connectionDispatcher = UnconfinedTestDispatcher(testScheduler),
-        onOccupancyZero = onOccupancyZero,
         onEvaluationFetchNotification = onEvaluationFetchNotification,
         observer = FakeCompositeObserver(),
     )

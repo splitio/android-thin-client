@@ -63,6 +63,7 @@ class LoggerObserver(
             ObservableEventType.HTTP_REQUEST_FAILED_NON_RETRYABLE to Level.ERROR,
             ObservableEventType.HTTP_RETRY_EXHAUSTED to Level.ERROR,
             // Eval sync
+            ObservableEventType.RUNTIME_SYNC_MODE_CHANGED to Level.WARN,
             ObservableEventType.EVAL_FETCH_REQUESTED to Level.INFO,
             ObservableEventType.EVAL_FETCH_DEDUPED to Level.DEBUG,
             ObservableEventType.EVAL_FETCH_STARTED to Level.INFO,
@@ -111,7 +112,7 @@ class LoggerObserver(
             ObservableEventType.JWT_REQUEST_STARTED to "JWT requested",
             ObservableEventType.JWT_RETURNED_FROM_STORAGE to "JWT returned from cache",
             ObservableEventType.JWT_FETCH_STARTED to "Fetching JWT",
-            ObservableEventType.JWT_FETCH_SUCCEEDED to "JWT fetched (push enabled: [pushEnabled])",
+            ObservableEventType.JWT_FETCH_SUCCEEDED to "JWT fetched (push enabled: [pushEnabled], connDelaySeconds: [connDelaySeconds])",
             ObservableEventType.JWT_FETCH_FAILED_RETRYABLE to "JWT fetch failed, will retry",
             ObservableEventType.JWT_FETCH_FAILED_NON_RETRYABLE to "JWT fetch failed",
             ObservableEventType.JWT_STORED to "JWT stored",
@@ -123,6 +124,7 @@ class LoggerObserver(
             ObservableEventType.HTTP_REQUEST_FAILED_NON_RETRYABLE to "HTTP failed for [category] (status: [statusCode])",
             ObservableEventType.HTTP_RETRY_EXHAUSTED to "Retry attempts exhausted for [category]",
             // Eval sync
+            ObservableEventType.RUNTIME_SYNC_MODE_CHANGED to "Runtime sync mode changed from [from] to [to] (reason: [reason])",
             ObservableEventType.EVAL_FETCH_REQUESTED to "Evaluations fetch requested (reason: [reason])[delayMs]",
             ObservableEventType.EVAL_FETCH_DEDUPED to "Evaluations fetch deduped (awaiting fetch in progress)",
             ObservableEventType.EVAL_FETCH_STARTED to "Evaluations fetch started",

@@ -21,13 +21,16 @@ import io.split.client.thin.internal.persistence.ObserverEvaluationPersistenceCa
 import io.split.client.thin.internal.persistence.ObserverEventsPersistenceCallbacks
 import io.split.client.thin.internal.persistence.domain.PersistenceConfig
 import io.split.client.thin.internal.persistence.domain.createPersistenceDomainComponents
-import io.split.client.thin.http.RetryableHttpClient
 import io.split.client.thin.internal.createRetryableHttpClient
 import io.split.client.thin.internal.http.HttpClientAdapter
 import io.split.client.thin.internal.AsyncBridge
+import io.split.client.thin.internal.DefaultInputValidator
 import io.split.client.thin.internal.DefaultClientFactory
+import io.split.client.thin.internal.ClientManager
 import io.split.client.thin.internal.DefaultClientManager
 import io.split.client.thin.internal.DefaultSplitFactory
+import io.split.client.thin.internal.NoOpSplitFactory
+import io.split.client.thin.internal.RuntimeSyncModeController
 import io.split.client.thin.internal.auth.createAuthProvider
 import io.split.client.thin.internal.evaluation.DefaultPollingScheduler
 import io.split.client.thin.internal.evaluation.DefaultSyncDelayCalculator
@@ -46,18 +49,22 @@ import io.split.client.thin.internal.observer.LoggerObserver
 import io.split.client.thin.internal.observer.ObservableEvent
 import io.split.client.thin.internal.observer.ObservableEventType
 import io.split.client.thin.internal.secure.EvaluationFilters
-import io.split.client.thin.internal.secure.EvaluationTarget
+import io.split.android.client.streaming.support.CompressionUtilProvider
+import io.split.client.thin.internal.EvaluationUpdateNotificationHandler
+import io.split.client.thin.internal.evaluation.EvaluationKey
 import io.split.client.thin.internal.secure.createSecureHttpClient
+import io.split.client.thin.internal.streaming.EvaluationPayloadDecoder
 import io.split.client.thin.internal.streaming.EvaluationUpdateNotification
 import io.split.client.thin.internal.streaming.StreamingComponents
 import io.split.client.thin.internal.streaming.StreamingToken
 import io.split.client.thin.internal.streaming.createStreamingComponents
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import java.util.concurrent.atomic.AtomicLong
 
-// TODO: move these constants
 private const val EVENTS_MAX_QUEUE_SIZE = 5000
 private const val EVENTS_BATCH_SIZE = 500
 private const val EVENTS_MAX_QUEUE_SIZE_IN_BYTES = 5_242_880L
@@ -67,11 +74,21 @@ private const val EVENTS_MAX_QUEUE_SIZE_IN_BYTES = 5_242_880L
  */
 object SplitFactoryBuilder {
 
-    private const val DEFAULT_AUTH_URL = "https://auth.split.io/api"
-    private const val DEFAULT_EVALUATIONS_URL = "https://sdk.split.io/api/v2/evaluations"
-    private const val DEFAULT_EVENTS_URL = "https://events.split.io/api/v1/events/bulk"
-    private const val DEFAULT_TELEMETRY_URL = "https://telemetry.split.io/api/v1/metrics/config"
-    private const val DEFAULT_STREAMING_URL = "https://streaming.split.io/sse"
+    private const val DEFAULT_AUTH_HOST        = "https://auth.split.io"
+    private const val DEFAULT_EVALUATIONS_HOST = "https://evaluator.split.io"
+    private const val DEFAULT_EVENTS_HOST      = "https://events.split.io"
+    private const val DEFAULT_TELEMETRY_HOST   = "https://telemetry.split.io"
+    private const val DEFAULT_STREAMING_HOST   = "https://streaming.split.io"
+
+    private const val AUTH_PATH_BASE              = "/api/v3/auth?capabilities="
+    private const val CAPABILITY_EVALUATOR        = "evaluator"
+    private const val CAPABILITY_EVALUATOR_CONFIGS = "evaluatorWithConfigs"
+    private const val EVALUATIONS_PATH = "/api/evaluations"
+    private const val EVENTS_PATH      = "/api/events/bulk"
+    private const val TELEMETRY_PATH   = "/api/v1/metrics/config"
+    private const val STREAMING_PATH   = "/sse"
+
+    private fun buildUrl(host: String, path: String): String = host.trimEnd('/') + path
 
     /**
      * Creates a factory configured with the SDK key, default target and config.
@@ -85,6 +102,7 @@ object SplitFactoryBuilder {
         config: SplitClientConfig? = null,
     ): SplitFactory = buildInternal(context, sdkKey, defaultTarget, config)
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     internal fun buildInternal(
         context: Context,
         sdkKey: SdkKey,
@@ -93,6 +111,10 @@ object SplitFactoryBuilder {
         configChangeDetectorFactory: ((Boolean) -> Boolean)? = null,
         persistenceConfigCapture: ((PersistenceConfig) -> Unit)? = null,
     ): SplitFactory {
+        val inputValidator = DefaultInputValidator()
+        if (!inputValidator.validateSdkKey(sdkKey) || !inputValidator.validateKey(defaultTarget.key)) {
+            return NoOpSplitFactory
+        }
         val androidHttpClient = HttpClientImpl.Builder().build()
         val httpClient = HttpClientAdapter(androidHttpClient)
         val compositeObserver = DefaultCompositeObserver()
@@ -101,36 +123,46 @@ object SplitFactoryBuilder {
         val endpoints = config?.sync?.serviceEndpoints
 
         val defaultEvaluationTarget = defaultTarget.toEvaluationKey().toEvaluationTarget()
+        val factoryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val syncMode = config?.sync?.mode ?: SplitClientConfig.SyncMode.STREAMING
+        val runtimeSyncModeController = RuntimeSyncModeController(
+            scope = factoryScope,
+            initialSyncMode = syncMode.name,
+            onRuntimeSyncModeChanged = { type, properties ->
+                compositeObserver.notifyEvent(ObservableEvent(type = type, properties = properties))
+            },
+        )
 
+        val capability = if (config?.configsEnabled == true) {
+            CAPABILITY_EVALUATOR_CONFIGS
+        } else {
+            CAPABILITY_EVALUATOR
+        }
+        val authPath = AUTH_PATH_BASE + capability
         val authProvider = createAuthProvider(
             retryableHttpClient = retryableHttpClient,
             sdkKey = sdkKey.sdkKey,
-            authUrl = endpoints?.authUrl ?: DEFAULT_AUTH_URL,
+            authUrl = buildUrl(endpoints?.auth ?: DEFAULT_AUTH_HOST, authPath),
             compositeObserver = compositeObserver,
-            compositeKeyBuilder = { targets -> targets.sorted().joinToString(",") },
             defaultTarget = defaultEvaluationTarget.matchingKey,
+            onUnauthorized = { runtimeSyncModeController.switchToSingleSync() },
         )
-
-        val syncMode = config?.sync?.mode ?: SplitClientConfig.SyncMode.STREAMING
 
         var streamingComponents: StreamingComponents? = null
 
         val secureHttpClient = createSecureHttpClient(
             authProvider = authProvider,
             retryableHttpClient = retryableHttpClient,
-            evaluationsUrl = endpoints?.evaluationsUrl ?: DEFAULT_EVALUATIONS_URL,
-            eventsUrl = endpoints?.eventsUrl ?: DEFAULT_EVENTS_URL,
-            telemetryUrl = endpoints?.telemetryUrl ?: DEFAULT_TELEMETRY_URL,
+            evaluationsUrl = buildUrl(endpoints?.evaluations ?: DEFAULT_EVALUATIONS_HOST, EVALUATIONS_PATH),
+            eventsUrl = buildUrl(endpoints?.events ?: DEFAULT_EVENTS_HOST, EVENTS_PATH),
+            telemetryUrl = buildUrl(DEFAULT_TELEMETRY_HOST, TELEMETRY_PATH),
             sdkKey = sdkKey.sdkKey,
         )
 
-        val schedulerIntervalMillis = (config?.sync?.evaluationRefreshRate ?: 3600) * 1_000L
-
-        // Single factory-level scope for all async operations
-        val factoryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val schedulerIntervalMillis = (config?.sync?.pollingRate ?: 3600) * 1_000L
 
         // Persistence components
-        val persistenceConfig = PersistenceConfig(prefix = config?.storage?.prefix, sdkKey = sdkKey.sdkKey, dynamicConfig = config?.dynamicConfig ?: false)
+        val persistenceConfig = PersistenceConfig(prefix = config?.storage?.prefix, sdkKey = sdkKey.sdkKey, dynamicConfig = config?.configsEnabled ?: false, flagSets = config?.filters?.flagSets)
         persistenceConfigCapture?.invoke(persistenceConfig)
         val persistenceComponents = createPersistenceDomainComponents(
             context = context.applicationContext,
@@ -144,7 +176,7 @@ object SplitFactoryBuilder {
             scope = factoryScope
         )
 
-        val (fetchCoordinator, evaluationRepository) = createEvaluationComponents(
+        val (fetchCoordinator, evaluationRepository, evalReadStorage, evalWriteStorage) = createEvaluationComponents(
             secureHttpClient = secureHttpClient,
             compositeObserver = compositeObserver,
             cacheLoader = persistenceComponents.evaluationPersistenceManager,
@@ -186,7 +218,8 @@ object SplitFactoryBuilder {
         val eventsScheduler = EventsPeriodicScheduler(
             scope = factoryScope,
             coordinator = eventsCoordinator,
-            pushRateMillis = pushRateMillis
+            pushRateMillis = pushRateMillis,
+            initialDelayMillis = 5_000L,
         )
         val eventsPushHandler = EventsPushHandler(syncHelper, eventsCoordinator)
 
@@ -205,24 +238,8 @@ object SplitFactoryBuilder {
         )
 
         val evaluationFilters = EvaluationFilters(
-            flagNames = null,
-            flagSets = null,
-            withDynamicConfig = if (config?.dynamicConfig == true) true else null
-        )
-
-        val clientManager = DefaultClientManager(
-            scope = factoryScope,
-            clientFactory = DefaultClientFactory(
-                compositeObserver = compositeObserver,
-                scope = factoryScope,
-                evaluationRepository = evaluationRepository,
-                filters = evaluationFilters,
-                fallbackCalculator = DefaultSplitFactory.buildFallbackCalculator(config),
-                onEventPush = eventsPushHandler,
-                flushFn = { eventsCoordinator.flush() },
-            ),
-            authProvider = authProvider,
-            onTargetsEmpty = { streamingComponents?.manager?.stopAll() },
+            sets = config?.filters?.flagSets?.takeIf { it.isNotEmpty() } ?: emptySet(),
+            configs = config?.configsEnabled == true,
         )
 
         // Polling scheduler - created on-demand
@@ -234,6 +251,7 @@ object SplitFactoryBuilder {
             pollingScheduler ?: DefaultPollingScheduler(
                 fetchCoordinator = fetchCoordinator,
                 intervalMillis = schedulerIntervalMillis,
+                evaluationFilters = evaluationFilters,
                 scope = factoryScope,
                 onPollTrigger = { interval ->
                     compositeObserver.notifyEvent(
@@ -245,36 +263,95 @@ object SplitFactoryBuilder {
                 }
             ).also { scheduler ->
                 pollingScheduler = scheduler
+                runtimeSyncModeController.setPollingScheduler(scheduler)
                 // Register with lifecycle manager
                 lifecycleManager.register(object : LifecycleComponent {
                     override fun pause() = scheduler.pause()
-                    override fun resume() = scheduler.resume()
+                    override fun resume() = runtimeSyncModeController.resumePolling(scheduler)
                 })
             }
         }
 
+        // Shared across the streaming connection manager and the fetch handler so an in-flight
+        // (parked) eval fetch catches up to the latest change number from newer notifications.
+        val streamingTargetChangeNumber = AtomicLong(Long.MIN_VALUE)
+
         createAndRegisterStreaming(
             syncMode = syncMode,
-            streamingUrl = endpoints?.streamingUrl ?: DEFAULT_STREAMING_URL,
+            streamingUrl = buildUrl(endpoints?.streaming ?: DEFAULT_STREAMING_HOST, STREAMING_PATH),
             httpClient = androidHttpClient,
             parentScope = factoryScope,
             tokenProvider = {
                 val cred = authProvider.credential()
                 StreamingToken(cred.token, cred.connDelaySeconds, cred.pushEnabled)
             },
-            onEvaluationFetchNotification = { notification ->
-                fetchCoordinator.refetchAll(null, FetchReason.PUSH, buildDelayProvider(notification))
-            },
+            invalidateToken = { authProvider.invalidateAll() },
+            onEvaluationFetchNotification = EvaluationUpdateNotificationHandler(
+                decoder = EvaluationPayloadDecoder(CompressionUtilProvider()),
+                fetchCoordinator = fetchCoordinator,
+                evaluationFilters = evaluationFilters,
+                delayProvider = { notification -> buildDelayProvider(notification) },
+                onPushHandlingError = { t ->
+                    compositeObserver.notifyEvent(
+                        ObservableEvent(
+                            type = ObservableEventType.EVAL_FETCH_FAILED,
+                            properties = mapOf("error" to (t.message ?: "unknown"))
+                        )
+                    )
+                },
+                freshnessChecker = { evalKey -> evalReadStorage.lastChangeNumber(evalKey) },
+                cdnBypassBackoffBaseMs = BuildConfig.CDN_BYPASS_BACKOFF_BASE_MS,
+                targetChangeNumberProvider = { streamingTargetChangeNumber.get() },
+            )::handle,
             onPushDisabled = {
-                fetchCoordinator.refetchAll(null, FetchReason.PERIODIC)
-                getOrCreateScheduler().start()
+                fetchCoordinator.refetchAll(evaluationFilters, FetchReason.PERIODIC)
+                runtimeSyncModeController.startPollingIfAllowed { getOrCreateScheduler() }
+            },
+            onPushEnabled = {
+                // Push came back up: stop polling fallback and catch up over the live socket.
+                // stop() is idempotent and single-sync never starts streaming, so onPushEnabled
+                // cannot fire in single-sync — calling stop() directly is safe.
+                synchronized(schedulerLock) { pollingScheduler }?.stop()
+                fetchCoordinator.refetchAll(evaluationFilters, FetchReason.PERIODIC)
             },
             lifecycleManager = lifecycleManager,
-            onPollingMode = { getOrCreateScheduler().start() },
+            onPollingMode = { runtimeSyncModeController.startPollingIfAllowed { getOrCreateScheduler() } },
+            runtimeSyncModeController = runtimeSyncModeController,
             observer = compositeObserver,
+            evalChangeNumberHolder = streamingTargetChangeNumber,
         )?.also { components ->
             streamingComponents = components
         }
+
+        var clientManagerRef: ClientManager? = null
+        val clientManager = DefaultClientManager(
+            scope = factoryScope,
+            clientFactory = DefaultClientFactory(
+                compositeObserver = compositeObserver,
+                scope = factoryScope,
+                evaluationRepository = evaluationRepository,
+                filters = evaluationFilters,
+                fallbackCalculator = DefaultSplitFactory.buildFallbackCalculator(config),
+                onEventPush = eventsPushHandler,
+                flushFn = { eventsCoordinator.flush() },
+                onInitFetchComplete = streamingComponents?.let { components ->
+                    { runtimeSyncModeController.startStreamingIfAllowed(components.startTrigger) }
+                },
+                inputValidator = inputValidator,
+                authProvider = authProvider,
+                fetchCoordinator = fetchCoordinator,
+                evaluationStorage = evalWriteStorage,
+                deregister = { key -> clientManagerRef?.destroy(key) },
+            ),
+            authProvider = authProvider,
+            onTargetsEmpty = {
+                streamingComponents?.manager?.stopAll()
+                pollingScheduler?.stop()
+                eventsScheduler.stop()
+                lifecycleManager.destroy()
+            },
+        )
+        clientManagerRef = clientManager
 
         return DefaultSplitFactory(
             defaultTarget = defaultTarget,
@@ -299,11 +376,15 @@ object SplitFactoryBuilder {
         httpClient: HttpClient,
         parentScope: CoroutineScope,
         tokenProvider: suspend () -> StreamingToken,
+        invalidateToken: suspend () -> Unit,
         onEvaluationFetchNotification: suspend (EvaluationUpdateNotification?) -> Unit,
         onPushDisabled: suspend () -> Unit,
+        onPushEnabled: suspend () -> Unit,
         lifecycleManager: DefaultLifecycleManager,
         onPollingMode: () -> Unit,
+        runtimeSyncModeController: RuntimeSyncModeController,
         observer: CompositeObserver,
+        evalChangeNumberHolder: AtomicLong,
     ): StreamingComponents? {
         return if (syncMode == SplitClientConfig.SyncMode.STREAMING) {
             createStreamingComponents(
@@ -311,15 +392,19 @@ object SplitFactoryBuilder {
                 httpClient = httpClient,
                 parentScope = parentScope,
                 tokenProvider = tokenProvider,
+                invalidateToken = invalidateToken,
                 onEvaluationFetchNotification = onEvaluationFetchNotification,
                 onPushDisabled = onPushDisabled,
+                onPushEnabled = onPushEnabled,
                 observer = observer,
+                evalChangeNumberHolder = evalChangeNumberHolder,
             ).also { components ->
+                runtimeSyncModeController.setStreamingManager(components.manager)
                 lifecycleManager.register(object : LifecycleComponent {
                     override fun pause() = components.manager.pause()
-                    override fun resume() = components.manager.resume()
+                    override fun resume() = runtimeSyncModeController.resumeStreaming(components.manager)
                 })
-                components.startTrigger()
+                // startStreamingIfAllowed is called via onInitFetchComplete after the init fetch completes
             }
         } else if (syncMode == SplitClientConfig.SyncMode.POLLING) {
             onPollingMode()
@@ -347,7 +432,7 @@ internal fun buildEvaluationsUpdatedPayload(
 internal fun buildDelayProvider(
     notification: EvaluationUpdateNotification?,
     calculator: SyncDelayCalculator = DefaultSyncDelayCalculator(),
-): ((io.split.client.thin.internal.evaluation.EvaluationKey) -> Long)? {
+): ((EvaluationKey) -> Long)? {
     return notification?.let { n ->
         { key -> calculator.calculateDelay(key.key.matchingKey, n.updateIntervalMs, n.algorithmSeed, n.hashingAlgorithm) }
     }

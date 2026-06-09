@@ -19,7 +19,7 @@ class JsonEvaluationResponseDeserializerTest {
                 "till": 1772129027764,
                 "since": -1,
                 "evaluations": [
-                    {"featureName": "flag_name", "treatment": "on", "sets": ["set1"], "config": null}
+                    {"flag": "flag_name", "treatment": "on", "sets": ["set1"], "config": null}
                 ]
             }
         """.trimIndent()
@@ -31,35 +31,35 @@ class JsonEvaluationResponseDeserializerTest {
 
     @Test
     fun `maps featureName to flag`() {
-        val json = """{"till": 1, "since": -1, "evaluations": [{"featureName": "my-flag", "treatment": "on", "sets": []}]}"""
+        val json = """{"till": 1, "since": -1, "evaluations": [{"flag": "my-flag", "treatment": "on", "sets": []}]}"""
         val result = deserializer.deserialize(json, evalKey)
         assertEquals("my-flag", result.evaluations[0].result.flag)
     }
 
     @Test
     fun `maps treatment correctly`() {
-        val json = """{"till": 1, "since": -1, "evaluations": [{"featureName": "f", "treatment": "control", "sets": []}]}"""
+        val json = """{"till": 1, "since": -1, "evaluations": [{"flag": "f", "treatment": "control", "sets": []}]}"""
         val result = deserializer.deserialize(json, evalKey)
         assertEquals("control", result.evaluations[0].result.treatment)
     }
 
     @Test
     fun `maps config correctly`() {
-        val json = """{"till": 1, "since": -1, "evaluations": [{"featureName": "f", "treatment": "on", "sets": [], "config": "{\"key\":\"val\"}"}]}"""
+        val json = """{"till": 1, "since": -1, "evaluations": [{"flag": "f", "treatment": "on", "sets": [], "config": "{\"key\":\"val\"}"}]}"""
         val result = deserializer.deserialize(json, evalKey)
         assertEquals("{\"key\":\"val\"}", result.evaluations[0].result.config)
     }
 
     @Test
     fun `maps null config correctly`() {
-        val json = """{"till": 1, "since": -1, "evaluations": [{"featureName": "f", "treatment": "on", "sets": [], "config": null}]}"""
+        val json = """{"till": 1, "since": -1, "evaluations": [{"flag": "f", "treatment": "on", "sets": [], "config": null}]}"""
         val result = deserializer.deserialize(json, evalKey)
         assertNull(result.evaluations[0].result.config)
     }
 
     @Test
     fun `maps sets to flagSets`() {
-        val json = """{"till": 1, "since": -1, "evaluations": [{"featureName": "f", "treatment": "on", "sets": ["set1", "set2"]}]}"""
+        val json = """{"till": 1, "since": -1, "evaluations": [{"flag": "f", "treatment": "on", "sets": ["set1", "set2"]}]}"""
         val result = deserializer.deserialize(json, evalKey)
         assertEquals(setOf("set1", "set2"), result.evaluations[0].flagSets)
     }

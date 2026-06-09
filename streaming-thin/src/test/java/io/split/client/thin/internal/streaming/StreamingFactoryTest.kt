@@ -92,21 +92,18 @@ class StreamingFactoryTest {
     }
 
     @Test
-    fun `onOccupancyZero routes to onPushDisabled`() = runTest {
-        var pushDisabledCalled = false
-
+    fun `components accept push callbacks`() = runTest {
         val components = createStreamingComponents(
             streamingUrl = "https://streaming.example.com/sse",
             httpClient = FakeHttpClient(),
             parentScope = makeParentScope(),
             tokenProvider = { StreamingToken("jwt-token") },
             onEvaluationFetchNotification = { _ -> },
-            onPushDisabled = { pushDisabledCalled = true },
+            onPushDisabled = { },
+            onPushEnabled = { },
             observer = FakeCompositeObserver(),
         )
 
-        // Trigger occupancy zero via the manager's internal wiring: not easily testable here
-        // without a real SSE feed, but we can verify the components were created
         assertNotNull(components.manager)
     }
 }

@@ -10,7 +10,6 @@ import kotlinx.serialization.json.Json
 private data class EvaluationResultDto(
     val flag: String,
     val treatment: String,
-    val label: String? = null,
     val changeNumber: Long? = null,
     val config: String? = null
 )
@@ -30,7 +29,6 @@ internal class StoredEvaluationSerializer(private val cipher: Any? = null) {
             result = EvaluationResultDto(
                 flag = evaluation.result.flag,
                 treatment = evaluation.result.treatment,
-                label = evaluation.result.label,
                 changeNumber = evaluation.result.changeNumber,
                 config = evaluation.result.config
             ),
@@ -45,7 +43,6 @@ internal class StoredEvaluationSerializer(private val cipher: Any? = null) {
             result = EvaluationResult(
                 flag = dto.result.flag,
                 treatment = dto.result.treatment,
-                label = dto.result.label,
                 changeNumber = dto.result.changeNumber,
                 config = dto.result.config
             ),

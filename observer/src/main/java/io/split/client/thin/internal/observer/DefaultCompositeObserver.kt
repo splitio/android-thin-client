@@ -10,6 +10,12 @@ class DefaultCompositeObserver : CompositeObserver {
         }
     }
 
+    override fun unregister(observer: Observer) {
+        synchronized(observers) {
+            observers.remove(observer)
+        }
+    }
+
     override fun unregisterAll() {
         synchronized(observers) {
             observers.clear()

@@ -9,12 +9,17 @@ import kotlinx.coroutines.launch
 class EventsPeriodicScheduler(
     private val scope: CoroutineScope,
     private val coordinator: EventSubmissionCoordinator,
-    private val pushRateMillis: Long
+    private val pushRateMillis: Long,
+    private val initialDelayMillis: Long = 0L,
 ) {
     private var job: Job? = null
 
     fun start() {
         job = scope.launch {
+            if (initialDelayMillis > 0L) {
+                delay(initialDelayMillis)
+                coordinator.triggerSubmission(EventFlushReason.FLUSH)
+            }
             while (isActive) {
                 delay(pushRateMillis)
                 coordinator.triggerSubmission(EventFlushReason.INTERVAL)

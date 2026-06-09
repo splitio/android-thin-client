@@ -66,10 +66,9 @@ class ConsumerAndroidTest {
         sync {
             mode = SplitClientConfig.SyncMode.POLLING
             serviceEndpoints {
-                authUrl = server.url("/api")
-                evaluationsUrl = server.url("/api/v2/evaluations")
-                eventsUrl = server.url("/api/v1/events/bulk")
-                telemetryUrl = server.url("/api/v1/metrics/config")
+                auth = server.url()
+                evaluations = server.url()
+                events = server.url()
             }
         }
         storage { prefix = "consumer_test" }
@@ -139,12 +138,11 @@ class ConsumerAndroidTest {
             .logLevel(SplitClientConfig.LogLevel.VERBOSE)
             .sync(SplitClientConfig.SyncConfig.Builder()
                 .mode(SplitClientConfig.SyncMode.POLLING)
-                .serviceEndpoints(SplitClientConfig.ServiceEndpoints(
-                    authUrl = server.url("/api"),
-                    evaluationsUrl = server.url("/api/v2/evaluations"),
-                    eventsUrl = server.url("/api/v1/events/bulk"),
-                    telemetryUrl = server.url("/api/v1/metrics/config"),
-                ))
+                .serviceEndpoints(SplitClientConfig.ServiceEndpoints.Builder()
+                    .auth(server.url())
+                    .evaluations(server.url())
+                    .events(server.url())
+                    .build())
                 .build())
             .build()
         val factory = SplitFactoryBuilder.build(
@@ -206,13 +204,11 @@ class ConsumerAndroidTest {
             flag = "my-flag",
             treatment = "on",
             config = """{"color":"red"}""",
-            label = "default rule",
             changeNumber = 42L
         )
         assertEquals("my-flag", result.flag)
         assertEquals("on", result.treatment)
         assertEquals("""{"color":"red"}""", result.config)
-        assertEquals("default rule", result.label)
         assertEquals(42L, result.changeNumber)
     }
 
@@ -236,11 +232,10 @@ class ConsumerAndroidTest {
     fun splitClientConfigDsl() {
         val config: SplitClientConfig = splitClientConfig {
             logLevel = SplitClientConfig.LogLevel.DEBUG
-            impressionsMode = SplitClientConfig.ImpressionsMode.NONE
-            dynamicConfig = true
+            configsEnabled = true
             sync {
                 mode = SplitClientConfig.SyncMode.POLLING
-                evaluationRefreshRate = 120
+                pollingRate = 120
                 pushRate = 60
             }
             storage {
@@ -259,8 +254,7 @@ class ConsumerAndroidTest {
     fun splitClientConfigBuilder() {
         val config = SplitClientConfig.Builder()
             .logLevel(SplitClientConfig.LogLevel.WARN)
-            .impressionsMode(SplitClientConfig.ImpressionsMode.DEFAULT)
-            .dynamicConfig(false)
+            .configsEnabled(false)
             .sync(
                 SplitClientConfig.SyncConfig.Builder()
                     .mode(SplitClientConfig.SyncMode.STREAMING)
@@ -478,24 +472,46 @@ class ConsumerAndroidTest {
 
     /**
      * Given the ServiceEndpoints constructor,
-     * When instantiated with all five fields (including optional streamingUrl),
+     * When instantiated with all five fields (including optional streaming),
      * Then each field holds the provided value.
      */
     @Test
     fun serviceEndpointsFields() {
-        val endpoints = SplitClientConfig.ServiceEndpoints(
-            authUrl = "https://auth.example.com",
-            evaluationsUrl = "https://eval.example.com",
-            eventsUrl = "https://events.example.com",
-            telemetryUrl = "https://telemetry.example.com",
-            streamingUrl = "https://streaming.example.com",
-        )
+        val endpoints = SplitClientConfig.ServiceEndpoints.Builder()
+            .auth("https://auth.example.com")
+            .evaluations("https://eval.example.com")
+            .events("https://events.example.com")
+            .streaming("https://streaming.example.com")
+            .build()
 
-        assertEquals("https://auth.example.com", endpoints.authUrl)
-        assertEquals("https://eval.example.com", endpoints.evaluationsUrl)
-        assertEquals("https://events.example.com", endpoints.eventsUrl)
-        assertEquals("https://telemetry.example.com", endpoints.telemetryUrl)
-        assertEquals("https://streaming.example.com", endpoints.streamingUrl)
+        assertEquals("https://auth.example.com", endpoints.auth)
+        assertEquals("https://eval.example.com", endpoints.evaluations)
+        assertEquals("https://events.example.com", endpoints.events)
+        assertEquals("https://streaming.example.com", endpoints.streaming)
+    }
+
+    /**
+     * Given the ServiceEndpoints DSL,
+     * When all fields are set via the serviceEndpoints block,
+     * Then each field holds the provided value.
+     */
+    @Test
+    fun serviceEndpointsDsl() {
+        val config = splitClientConfig {
+            sync {
+                serviceEndpoints {
+                    auth = "https://auth.example.com"
+                    evaluations = "https://eval.example.com"
+                    events = "https://events.example.com"
+                    streaming = "https://streaming.example.com"
+                }
+            }
+        }
+        val endpoints = config.sync.serviceEndpoints!!
+        assertEquals("https://auth.example.com", endpoints.auth)
+        assertEquals("https://eval.example.com", endpoints.evaluations)
+        assertEquals("https://events.example.com", endpoints.events)
+        assertEquals("https://streaming.example.com", endpoints.streaming)
     }
 
     /**
@@ -577,4 +593,21 @@ class ConsumerAndroidTest {
         assertNotNull(config.fallbackTreatments)
         assertEquals("off", config.fallbackTreatments?.global?.treatment)
     }
+
+    /**
+     * Given a splitClientConfig DSL with a filters block,
+     * When flagSets is set,
+     * Then the resulting config exposes the normalized flag sets.
+     */
+    @Test
+    fun filtersConfigDsl() {
+        val config = splitClientConfig {
+            filters {
+                flagSets = setOf("set_a", "set_b")
+            }
+        }
+
+        assertEquals(setOf("set_a", "set_b"), config.filters.flagSets)
+    }
+
 }

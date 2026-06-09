@@ -2,13 +2,15 @@ package io.split.client.thin.internal.evaluation
 
 import io.split.client.thin.Target
 import io.split.client.thin.internal.secure.EvaluationFilters
+import kotlin.coroutines.cancellation.CancellationException
 
 interface EvaluationRepository {
     fun getTreatment(evalKey: EvaluationKey, flag: String): StoredEvaluation?
     fun getTreatments(evalKey: EvaluationKey, flags: Set<String>): Map<String, StoredEvaluation>
     fun getTreatmentsByFlagSets(evalKey: EvaluationKey, flagSets: Set<String>): Map<String, StoredEvaluation>
-    suspend fun setTarget(target: Target, filters: EvaluationFilters?, isInitialization: Boolean = false)
+    suspend fun setTarget(target: Target, filters: EvaluationFilters, isInitialization: Boolean = false)
     fun getFlagNames(evalKey: EvaluationKey): Set<String>
+    fun getFlagNames(): Set<String>
 }
 
 class DefaultEvaluationRepository(
@@ -29,11 +31,11 @@ class DefaultEvaluationRepository(
         return readStorage.getByFlagSets(flagSets, evalKey)
     }
 
-    override suspend fun setTarget(target: Target, filters: EvaluationFilters?, isInitialization: Boolean) {
+    override suspend fun setTarget(target: Target, filters: EvaluationFilters, isInitialization: Boolean) {
         val evalKey = target.toEvaluationKey()
         try {
             persistenceBackedStorage?.ensureCacheLoaded(evalKey)
-        } catch (e: kotlinx.coroutines.CancellationException) {
+        } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
             // observer already saw onLoadFailed
@@ -44,5 +46,9 @@ class DefaultEvaluationRepository(
 
     override fun getFlagNames(evalKey: EvaluationKey): Set<String> {
         return readStorage.getFlagNames(evalKey)
+    }
+
+    override fun getFlagNames(): Set<String> {
+        return readStorage.getFlagNames()
     }
 }

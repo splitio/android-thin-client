@@ -13,16 +13,21 @@ class FakeSecureHttpClient(
     private val responseBody: String? = "{}",
     private val statusCode: Int = 200,
     val throwOnFetch: Throwable? = null,
+    private val responseQueue: ArrayDeque<String?> = ArrayDeque(),
 ) : SecureHttpClient {
 
-    val fetchCalls = mutableListOf<Pair<EvaluationTarget, EvaluationFilters?>>()
-    val lastFetchTarget: EvaluationTarget? get() = fetchCalls.lastOrNull()?.first
-    val lastFetchFilters: EvaluationFilters? get() = fetchCalls.lastOrNull()?.second
+    data class FetchEvaluationsCall(val target: EvaluationTarget, val filters: EvaluationFilters, val targetChangeNumber: Long?)
 
-    override suspend fun fetchEvaluations(target: EvaluationTarget, filters: EvaluationFilters?, changeNumber: Long): HttpResponse {
-        fetchCalls.add(target to filters)
+    val fetchCalls = mutableListOf<FetchEvaluationsCall>()
+    val lastFetchTarget: EvaluationTarget? get() = fetchCalls.lastOrNull()?.target
+    val lastFetchFilters: EvaluationFilters get() = fetchCalls.lastOrNull()?.filters ?: EvaluationFilters()
+    val lastTargetChangeNumber: Long? get() = fetchCalls.lastOrNull()?.targetChangeNumber
+
+    override suspend fun fetchEvaluations(target: EvaluationTarget, filters: EvaluationFilters, changeNumber: Long, targetChangeNumber: Long?): HttpResponse {
+        fetchCalls.add(FetchEvaluationsCall(target, filters, targetChangeNumber))
         throwOnFetch?.let { throw it }
-        return FakeHttpResponse(statusCode, responseBody)
+        val body = if (responseQueue.isNotEmpty()) responseQueue.removeFirst() else responseBody
+        return FakeHttpResponse(statusCode, body)
     }
 
     override suspend fun postEvents(payload: String): HttpResponse = FakeHttpResponse(200, null)
@@ -43,21 +48,29 @@ class FakeHttpResponse(
  * [changeToReturn] — when non-null, returns the given change; when null, returns a default
  *   non-null change unless [returnNullChange] is true.
  * [returnNullChange] — when true, fetch() returns null (simulates 304 / empty-body responses).
+ * [responseQueue] — when non-empty, dequeues one response per call (may include nulls for 304);
+ *   once exhausted, falls back to [changeToReturn]/[returnNullChange] behaviour.
+ * [throwOnCallIndex] — throws [throwOnFetch] on the given 0-based call index (null = never).
  */
 class FakeEvaluationProvider(
     private val changeToReturn: EvaluationChange? = null,
     val throwOnFetch: Throwable? = null,
     private val returnNullChange: Boolean = false,
+    private val responseQueue: ArrayDeque<EvaluationChange?> = ArrayDeque(),
+    private val throwOnCallIndex: Int? = null,
 ) : EvaluationProvider {
 
-    data class FetchCall(val evalKey: EvaluationKey, val filters: EvaluationFilters?, val changeNumber: Long)
+    data class FetchCall(val evalKey: EvaluationKey, val filters: EvaluationFilters, val changeNumber: Long, val targetChangeNumber: Long? = null)
     val fetchCalls = mutableListOf<FetchCall>()
 
-    override suspend fun fetch(evalKey: EvaluationKey, filters: EvaluationFilters?, changeNumber: Long): EvaluationChange? {
-        fetchCalls.add(FetchCall(evalKey, filters, changeNumber))
-        throwOnFetch?.let { throw it }
+    override suspend fun fetch(evalKey: EvaluationKey, filters: EvaluationFilters, changeNumber: Long, targetChangeNumber: Long?): EvaluationChange? {
+        val callIndex = fetchCalls.size
+        fetchCalls.add(FetchCall(evalKey, filters, changeNumber, targetChangeNumber))
+        if (throwOnCallIndex != null && callIndex == throwOnCallIndex) throwOnFetch?.let { throw it }
+        if (throwOnCallIndex == null) throwOnFetch?.let { throw it }
+        if (responseQueue.isNotEmpty()) return responseQueue.removeFirst()
         if (returnNullChange) return null
-        return changeToReturn ?: EvaluationChange(evalKey, -1L, emptyList())
+        return changeToReturn ?: EvaluationChange(evalKey, changeNumber = -1L, evaluations = emptyList())
     }
 }
 
@@ -80,6 +93,9 @@ class FakeEvaluationReadStorage(
     override fun getFlagNames(evalKey: EvaluationKey): Set<String> =
         storedEvaluations.keys.filter { it.second == evalKey }.map { it.first }.toSet()
 
+    override fun getFlagNames(): Set<String> =
+        storedEvaluations.keys.map { it.first }.toSet()
+
     override fun lastChangeNumber(evalKey: EvaluationKey): Long =
         changeNumbers[evalKey] ?: -1L
 
@@ -95,13 +111,18 @@ class FakeEvaluationReadStorage(
 }
 
 // FakeEvaluationWriteStorage
-class FakeEvaluationWriteStorage(private val upsertUpdated: Boolean = true) : EvaluationWriteStorage {
+class FakeEvaluationWriteStorage(
+    private val upsertUpdated: Boolean = true,
+    private val changedFlagNamesPerCall: List<List<String>> = emptyList(),
+) : EvaluationWriteStorage {
     val upsertCalls = mutableListOf<EvaluationChange>()
     val clearCalls = mutableListOf<EvaluationKey>()
 
     override fun upsert(change: EvaluationChange): UpsertResult {
+        val idx = upsertCalls.size
         upsertCalls.add(change)
-        return UpsertResult(updated = upsertUpdated, emptyList())
+        val names = if (idx < changedFlagNamesPerCall.size) changedFlagNamesPerCall[idx] else emptyList()
+        return UpsertResult(updated = upsertUpdated, names)
     }
 
     override fun clear(evalKey: EvaluationKey) {
@@ -123,23 +144,37 @@ class FakeCompositeObserver : CompositeObserver {
     val capturedEvents = mutableListOf<ObservableEvent>()
     override fun notifyEvent(event: ObservableEvent) { capturedEvents.add(event) }
     override fun register(observer: Observer) = Unit
+    override fun unregister(observer: Observer) = Unit
     override fun unregisterAll() = Unit
 }
 
 // FakeEvaluationFetchCoordinator
 open class FakeEvaluationFetchCoordinator(
     private val fetchIfNeededResult: Boolean = true,
+    private val knownKeysResult: Set<EvaluationKey> = emptySet(),
 ) : EvaluationFetchCoordinator {
 
-    val fetchCalls = mutableListOf<Triple<EvaluationKey, EvaluationFilters?, FetchReason>>()
-    val refetchAllCalls = mutableListOf<Pair<EvaluationFilters?, FetchReason>>()
+    val fetchCalls = mutableListOf<Triple<EvaluationKey, EvaluationFilters, FetchReason>>()
+    val refetchAllCalls = mutableListOf<Pair<EvaluationFilters, FetchReason>>()
+    val forgetCalls = mutableListOf<EvaluationKey>()
 
-    override suspend fun fetchIfNeeded(evalKey: EvaluationKey, filters: EvaluationFilters?, reason: FetchReason, delayMs: Long): Boolean {
+    override fun fetchedKeys(): Set<EvaluationKey> = knownKeysResult
+
+    override suspend fun fetchIfNeeded(evalKey: EvaluationKey, filters: EvaluationFilters, reason: FetchReason, delayMs: Long, targetChangeNumber: Long?): Boolean {
         fetchCalls.add(Triple(evalKey, filters, reason))
         return fetchIfNeededResult
     }
 
-    override suspend fun refetchAll(filters: EvaluationFilters?, reason: FetchReason, delayProvider: ((EvaluationKey) -> Long)?) {
+    override suspend fun refetchAll(
+        filters: EvaluationFilters,
+        reason: FetchReason,
+        delayProvider: ((EvaluationKey) -> Long)?,
+        keyFilter: (EvaluationKey) -> Boolean,
+    ) {
         refetchAllCalls.add(filters to reason)
+    }
+
+    override fun forget(evalKey: EvaluationKey) {
+        forgetCalls.add(evalKey)
     }
 }

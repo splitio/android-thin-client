@@ -5,4 +5,5 @@ data class PersistenceConfig(
     val enabled: Boolean = true,
     val sdkKey: String? = null,
     val dynamicConfig: Boolean = false,
+    val flagSets: Set<String>? = null,
 )

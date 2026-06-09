@@ -23,7 +23,7 @@ plugins {
 
 subprojects {
     group = "io.split.client"
-    version = "0.1.0-rc3"
+    version = "1.0.0-rc1"
 
     plugins.withId("com.android.library") {
         extensions.configure<LibraryExtension>("android") {
@@ -60,9 +60,11 @@ tasks.register<JacocoReport>("jacocoAggregateUnitTestReport") {
         "**/Manifest*.*"
     )
 
+    val coverageModules = subprojects.filter { it.name != "e2e" }
+
     classDirectories.setFrom(
         files(
-            subprojects.map { module ->
+            coverageModules.map { module ->
                 fileTree(module.layout.buildDirectory.get().asFile) {
                     include(
                         "tmp/kotlin-classes/debug/**/*.class",
@@ -77,7 +79,7 @@ tasks.register<JacocoReport>("jacocoAggregateUnitTestReport") {
 
     sourceDirectories.setFrom(
         files(
-            subprojects.flatMap { module ->
+            coverageModules.flatMap { module ->
                 listOf(
                     module.file("src/main/java"),
                     module.file("src/main/kotlin")
@@ -106,6 +108,17 @@ tasks.register("publishAndroidThinClientToMavenLocal") {
     group = "publishing"
     description = "Publishes the fused artifact to mavenLocal for consumer androidTest module"
     dependsOn(":android-thin-client:publishToMavenLocal")
+}
+
+tasks.register<Exec>("publishToMavenLocalForE2e") {
+    group = "publishing"
+    description = "Publishes the fused AAR with MIN_EVALUATION_REFRESH_RATE=1 and near-zero CDN bypass backoff for e2e consumption"
+    commandLine(
+        "./gradlew",
+        ":android-thin-client:publishToMavenLocal",
+        "-PminEvaluationRefreshRate=1",
+        "-PcdnBypassBackoffBaseMs=1",
+    )
 }
 
 tasks.register("verifyAndroidTestConsumesMavenLocal") {

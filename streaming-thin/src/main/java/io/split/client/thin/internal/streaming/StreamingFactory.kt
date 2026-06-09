@@ -8,6 +8,7 @@ import io.split.client.thin.internal.observer.CompositeObserver
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicLong
 
 data class StreamingComponents(
     val manager: StreamingManager,
@@ -21,7 +22,10 @@ fun createStreamingComponents(
     tokenProvider: suspend () -> StreamingToken,
     onEvaluationFetchNotification: suspend (EvaluationUpdateNotification?) -> Unit,
     onPushDisabled: suspend () -> Unit = {},
+    onPushEnabled: suspend () -> Unit = {},
+    invalidateToken: suspend () -> Unit = {},
     observer: CompositeObserver,
+    evalChangeNumberHolder: AtomicLong = AtomicLong(Long.MIN_VALUE),
 ): StreamingComponents {
     val streamingScope = CoroutineScope(SupervisorJob(parentScope.coroutineContext[kotlinx.coroutines.Job]))
 
@@ -36,10 +40,12 @@ fun createStreamingComponents(
         },
         backoffCounterFactory = { ExponentialBackoffCounter(1, 60) },
         scope = streamingScope,
-        onOccupancyZero = { onPushDisabled() },
         onEvaluationFetchNotification = onEvaluationFetchNotification,
         onPushDisabled = onPushDisabled,
+        onPushEnabled = onPushEnabled,
+        invalidateToken = invalidateToken,
         observer = observer,
+        evalChangeNumberHolder = evalChangeNumberHolder,
     )
 
     return StreamingComponents(

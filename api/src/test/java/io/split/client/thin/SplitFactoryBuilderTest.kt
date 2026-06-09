@@ -2,6 +2,7 @@ package io.split.client.thin
 
 import android.content.Context
 import io.split.client.thin.internal.DefaultSplitFactory
+import io.split.client.thin.internal.NoOpSplitFactory
 import io.split.client.thin.internal.evaluation.EvaluationKey
 import io.split.client.thin.internal.evaluation.SyncDelayCalculator
 import io.split.client.thin.internal.streaming.EvaluationUpdateNotification
@@ -54,14 +55,37 @@ class SplitFactoryBuilderTest {
     }
 
     @Test
+    fun `build returns NoOpSplitFactory when sdkKey is blank`() {
+        val factory = SplitFactoryBuilder.buildInternal(
+            context = mockContext,
+            sdkKey = SdkKey(""),
+            defaultTarget = defaultTarget,
+            config = null,
+            configChangeDetectorFactory = { false },
+        )
+        assertTrue(factory === NoOpSplitFactory)
+    }
+
+    @Test
+    fun `build returns NoOpSplitFactory when matchingKey is blank`() {
+        val factory = SplitFactoryBuilder.buildInternal(
+            context = mockContext,
+            sdkKey = sdkKey,
+            defaultTarget = Target(Key(""), trafficType = "user"),
+            config = null,
+            configChangeDetectorFactory = { false },
+        )
+        assertTrue(factory === NoOpSplitFactory)
+    }
+
+    @Test
     fun `build returns a SplitFactory using configured endpoints`() {
         val config = splitClientConfig {
             sync {
                 serviceEndpoints {
-                    authUrl = "https://auth.example.com"
-                    evaluationsUrl = "https://evaluations.example.com"
-                    eventsUrl = "https://events.example.com"
-                    telemetryUrl = "https://telemetry.example.com"
+                    auth = "https://auth.example.com"
+                    evaluations = "https://evaluations.example.com"
+                    events = "https://events.example.com"
                 }
             }
         }

@@ -10,7 +10,6 @@ import java.util.concurrent.ConcurrentHashMap
 internal class DefaultAuthProvider(
     private val credentialFetcher: CredentialFetcher,
     private val credentialStorage: CredentialStorage,
-    private val compositeKeyBuilder: (Set<String>) -> String,
     private val defaultTarget: String? = null,
     private val onJwtRequestStarted: (target: String) -> Unit = {},
     private val onJwtReturnedFromStorage: (credential: JwtCredential, target: String) -> Unit = { _, _ -> },
@@ -56,7 +55,7 @@ internal class DefaultAuthProvider(
     }
 
     override suspend fun credential(targets: Set<String>): JwtCredential {
-        val compositeKey = compositeKeyBuilder(targets.sorted().toSet())
+        val compositeKey = targets.sorted().joinToString(",")
         onJwtRequestStarted(compositeKey)
         val stored = credentialStorage.getCredential()
         if (stored != null && !stored.isExpired()) {
@@ -66,7 +65,7 @@ internal class DefaultAuthProvider(
             onJwtExpiredOrInvalid(compositeKey)
         }
 
-        return fetchDeduplicated(compositeKey)
+        return fetchDeduplicated(targets, compositeKey)
     }
 
     override suspend fun invalidateAll() {
@@ -78,19 +77,19 @@ internal class DefaultAuthProvider(
         credentialStorage.removeCredential()
     }
 
-    private suspend fun fetchDeduplicated(target: String): JwtCredential = coroutineScope {
+    private suspend fun fetchDeduplicated(targets: Set<String>, cacheKey: String): JwtCredential = coroutineScope {
         val deferred = mutex.withLock {
-            inFlight.getOrPut(target) {
+            inFlight.getOrPut(cacheKey) {
                 async {
-                    val credential = credentialFetcher.fetchCredential(target)
+                    val credential = credentialFetcher.fetchCredential(targets)
                     credentialStorage.saveCredential(credential)
-                    onJwtStored(credential, target)
+                    onJwtStored(credential, cacheKey)
                     credential
                 }.also { newDeferred ->
                     // Always clear the entry when this deferred completes (success, failure, or cancellation).
                     newDeferred.invokeOnCompletion {
                         // Remove only if the same deferred is still registered for this target.
-                        inFlight.remove(target, newDeferred)
+                        inFlight.remove(cacheKey, newDeferred)
                     }
                 }
             }

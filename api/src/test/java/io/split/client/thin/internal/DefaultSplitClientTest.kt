@@ -52,7 +52,7 @@ class DefaultSplitClientTest {
             tracker = tracker,
             eventsManager = eventsManager,
             evaluationRepository = evaluationRepository,
-            filters = null,
+            filters = EvaluationFilters(),
             fallbackCalculator = null,
             scope = testScope,
         )
@@ -148,32 +148,12 @@ class DefaultSplitClientTest {
     }
 
     @Test
-    fun `setTarget delegates to evaluation repository`() = testScope.runTest {
-        val newTarget = Target(Key("user-2"), trafficType = "user")
-        client.setTarget(newTarget)
-        testScheduler.advanceUntilIdle()
-
-        assertEquals(1, evaluationRepository.setTargetCalls.size)
-        assertEquals(newTarget, evaluationRepository.setTargetCalls[0].first)
-    }
-
-    @Test
     fun `setTarget skips evaluationRepository when only trafficType changed`() = testScope.runTest {
         val newTarget = Target(Key("user-1"), trafficType = "account")
         client.setTarget(newTarget)
         testScheduler.advanceUntilIdle()
 
         assertTrue(evaluationRepository.setTargetCalls.isEmpty())
-    }
-
-    @Test
-    fun `setTarget calls evaluationRepository when key changes`() = testScope.runTest {
-        val newTarget = Target(Key("user-2"), trafficType = "user")
-        client.setTarget(newTarget)
-        testScheduler.advanceUntilIdle()
-
-        assertEquals(1, evaluationRepository.setTargetCalls.size)
-        assertEquals(newTarget, evaluationRepository.setTargetCalls[0].first)
     }
 
     @Test
@@ -230,41 +210,113 @@ class DefaultSplitClientTest {
     }
 
     @Test
+    fun `getTreatmentsByFlagSets with no configured filter passes through all sets`() {
+        val evalKey = EvaluationKey(target.key)
+        evaluationRepository.store(
+            "flag_a", evalKey,
+            StoredEvaluation(EvaluationResult("flag_a", "on"), flagSets = setOf("set_1"))
+        )
+
+        val results = client.getTreatmentsByFlagSets(listOf("set_1", "set_2"))
+
+        assertEquals(1, results.size)
+        assertEquals("flag_a", results[0].flag)
+    }
+
+    @Test
+    fun `getTreatmentsByFlagSets with configured filter intersects sets`() {
+        val evalKey = EvaluationKey(target.key)
+        evaluationRepository.store("flag_a", evalKey, StoredEvaluation(EvaluationResult("flag_a", "on"), flagSets = setOf("set_1")))
+        evaluationRepository.store("flag_b", evalKey, StoredEvaluation(EvaluationResult("flag_b", "off"), flagSets = setOf("set_2")))
+
+        val clientWithFilter = DefaultSplitClient(
+            initialTarget = target,
+            tracker = tracker,
+            eventsManager = eventsManager,
+            evaluationRepository = evaluationRepository,
+            filters = EvaluationFilters(sets = setOf("set_1")),
+            fallbackCalculator = null,
+            scope = testScope,
+        )
+
+        val results = clientWithFilter.getTreatmentsByFlagSets(listOf("set_1", "set_2"))
+
+        assertEquals(1, results.size)
+        assertEquals("flag_a", results[0].flag)
+    }
+
+    @Test
+    fun `getTreatmentsByFlagSets returns empty map when intersection is empty`() {
+        val clientWithFilter = DefaultSplitClient(
+            initialTarget = target,
+            tracker = tracker,
+            eventsManager = eventsManager,
+            evaluationRepository = evaluationRepository,
+            filters = EvaluationFilters(sets = setOf("set_1")),
+            fallbackCalculator = null,
+            scope = testScope,
+        )
+
+        val results = clientWithFilter.getTreatmentsByFlagSets(listOf("set_2", "set_3"))
+
+        assertTrue(results.isEmpty())
+    }
+
+    @Test
+    fun `getTreatmentsByFlagSets logs warning for sets not in configured filter`() {
+        val clientWithFilter = DefaultSplitClient(
+            initialTarget = target,
+            tracker = tracker,
+            eventsManager = eventsManager,
+            evaluationRepository = evaluationRepository,
+            filters = EvaluationFilters(sets = setOf("set_1")),
+            fallbackCalculator = null,
+            scope = testScope,
+        )
+
+        // Should not throw; set_2 is not in configured filter → warning logged, result empty
+        val results = clientWithFilter.getTreatmentsByFlagSets(listOf("set_2"))
+
+        assertTrue(results.isEmpty())
+    }
+
+    @Test
     fun `setTarget invokes onTargetChanged with new matchingKey`() = testScope.runTest {
-        val capturedKeys = mutableListOf<String>()
+        val capturedTargets = mutableListOf<Target>()
         val clientWithCallback = DefaultSplitClient(
             initialTarget = target,
             tracker = tracker,
             eventsManager = eventsManager,
             evaluationRepository = evaluationRepository,
-            filters = null,
+            filters = EvaluationFilters(),
             fallbackCalculator = null,
             scope = testScope,
-            onTargetChanged = { capturedKeys.add(it) },
+            onTargetChanged = { _, newTarget -> capturedTargets.add(newTarget) },
         )
 
-        clientWithCallback.setTarget(Target(Key("user-2"), trafficType = "user"))
+        val newTarget = Target(Key("user-2"), trafficType = "user")
+        clientWithCallback.setTarget(newTarget)
 
-        assertEquals(listOf("user-2"), capturedKeys)
+        assertEquals(listOf(newTarget), capturedTargets)
     }
 
     @Test
     fun `setTarget does not invoke onTargetChanged when evalKey unchanged`() = testScope.runTest {
-        val capturedKeys = mutableListOf<String>()
+        val capturedCalls = mutableListOf<Pair<EvaluationKey, Target>>()
         val clientWithCallback = DefaultSplitClient(
             initialTarget = target,
             tracker = tracker,
             eventsManager = eventsManager,
             evaluationRepository = evaluationRepository,
-            filters = null,
+            filters = EvaluationFilters(),
             fallbackCalculator = null,
             scope = testScope,
-            onTargetChanged = { capturedKeys.add(it) },
+            onTargetChanged = { oldEvalKey, newTarget -> capturedCalls.add(oldEvalKey to newTarget) },
         )
 
         clientWithCallback.setTarget(Target(Key("user-1"), trafficType = "account"))
 
-        assertTrue(capturedKeys.isEmpty())
+        assertTrue(capturedCalls.isEmpty())
     }
 
     @Test
@@ -285,6 +337,76 @@ class DefaultSplitClientTest {
     }
 
     @Test
+    fun `destroy invokes destroyOperation when provided`() = runTest {
+        var opCalled = false
+        val clientWithOp = DefaultSplitClient(
+            initialTarget = target,
+            tracker = tracker,
+            eventsManager = eventsManager,
+            evaluationRepository = evaluationRepository,
+            filters = EvaluationFilters(),
+            fallbackCalculator = null,
+            scope = testScope,
+            destroyOperation = { opCalled = true },
+        )
+
+        clientWithOp.destroy()
+
+        assertTrue(opCalled)
+        // internal teardown should NOT have run since destroyOperation was provided
+        verify(tracker, never()).enableTracking(false)
+        verify(eventsManager, never()).destroy()
+    }
+
+    @Test
+    fun `destroy falls back to internal teardown when destroyOperation is null`() = runTest {
+        // Default client has no destroyOperation, so internal teardown runs
+        client.destroy()
+        verify(tracker).enableTracking(false)
+        verify(eventsManager).destroy()
+    }
+
+    @Test
+    fun `tearDownInternal runs flush, disables tracking, destroys eventsManager, and calls releaseResources`() = runTest {
+        var releaseCalled = false
+        val clientWithRelease = DefaultSplitClient(
+            initialTarget = target,
+            tracker = tracker,
+            eventsManager = eventsManager,
+            evaluationRepository = evaluationRepository,
+            filters = EvaluationFilters(),
+            fallbackCalculator = null,
+            scope = testScope,
+            releaseResources = { releaseCalled = true },
+        )
+
+        (clientWithRelease as InternalDestroyable).tearDownInternal()
+
+        verify(tracker).enableTracking(false)
+        verify(eventsManager).destroy()
+        assertTrue(releaseCalled)
+    }
+
+    @Test
+    fun `setTarget with blank matchingKey is a no-op`() = testScope.runTest {
+        val blankTarget = Target(Key(""), trafficType = "user")
+        val clientWithRejectingValidator = DefaultSplitClient(
+            initialTarget = target,
+            tracker = tracker,
+            eventsManager = eventsManager,
+            evaluationRepository = evaluationRepository,
+            filters = EvaluationFilters(),
+            fallbackCalculator = null,
+            scope = testScope,
+            inputValidator = FakeInputValidator(valid = false),
+        )
+        clientWithRejectingValidator.setTarget(blankTarget)
+        testScheduler.advanceUntilIdle()
+
+        assertTrue(evaluationRepository.setTargetCalls.isEmpty())
+    }
+
+    @Test
     fun `track via SplitClient interface with only eventType uses target traffic type`() {
         val splitClient: SplitClient = client
         splitClient.track("purchase")
@@ -299,9 +421,141 @@ class DefaultSplitClientTest {
         )
     }
 
+    @Test
+    fun `setTarget with new eval key invokes onTargetChanged with oldEvalKey and newTarget`() = testScope.runTest {
+        val capturedCalls = mutableListOf<Pair<EvaluationKey, Target>>()
+        val clientWithCallback = DefaultSplitClient(
+            initialTarget = target,
+            tracker = tracker,
+            eventsManager = eventsManager,
+            evaluationRepository = evaluationRepository,
+            filters = EvaluationFilters(),
+            fallbackCalculator = null,
+            scope = testScope,
+            onTargetChanged = { oldEvalKey, newTarget -> capturedCalls.add(oldEvalKey to newTarget) },
+        )
+
+        val newTarget = Target(Key("user-2"), trafficType = "user")
+        clientWithCallback.setTarget(newTarget)
+
+        assertEquals(1, capturedCalls.size)
+        assertEquals(EvaluationKey(Key("user-1")), capturedCalls[0].first)
+        assertEquals(newTarget, capturedCalls[0].second)
+    }
+
+    @Test
+    fun `setTarget with same eval key does not invoke onTargetChanged`() = testScope.runTest {
+        val capturedCalls = mutableListOf<Pair<EvaluationKey, Target>>()
+        val clientWithCallback = DefaultSplitClient(
+            initialTarget = target,
+            tracker = tracker,
+            eventsManager = eventsManager,
+            evaluationRepository = evaluationRepository,
+            filters = EvaluationFilters(),
+            fallbackCalculator = null,
+            scope = testScope,
+            onTargetChanged = { oldEvalKey, newTarget -> capturedCalls.add(oldEvalKey to newTarget) },
+        )
+
+        clientWithCallback.setTarget(Target(Key("user-1"), trafficType = "account"))
+
+        assertTrue(capturedCalls.isEmpty())
+    }
+
+    @Test
+    fun `setTarget validation failure does not invoke onTargetChanged`() = testScope.runTest {
+        val capturedCalls = mutableListOf<Pair<EvaluationKey, Target>>()
+        val clientWithCallback = DefaultSplitClient(
+            initialTarget = target,
+            tracker = tracker,
+            eventsManager = eventsManager,
+            evaluationRepository = evaluationRepository,
+            filters = EvaluationFilters(),
+            fallbackCalculator = null,
+            scope = testScope,
+            onTargetChanged = { oldEvalKey, newTarget -> capturedCalls.add(oldEvalKey to newTarget) },
+            inputValidator = FakeInputValidator(valid = false),
+        )
+
+        clientWithCallback.setTarget(Target(Key("user-2"), trafficType = "user"))
+
+        assertTrue(capturedCalls.isEmpty())
+    }
+
+    @Test
+    fun `getTreatment after destroy returns control`() = runTest {
+        val evalKey = EvaluationKey(target.key)
+        evaluationRepository.store("my_flag", evalKey, StoredEvaluation(EvaluationResult("my_flag", "on")))
+
+        (client as InternalDestroyable).tearDownInternal()
+
+        assertEquals("control", client.getTreatment("my_flag").treatment)
+    }
+
+    @Test
+    fun `getTreatments after destroy returns control for all flags`() = runTest {
+        val evalKey = EvaluationKey(target.key)
+        evaluationRepository.store("flag_a", evalKey, StoredEvaluation(EvaluationResult("flag_a", "on")))
+
+        (client as InternalDestroyable).tearDownInternal()
+
+        val results = client.getTreatments(listOf("flag_a", "flag_b"))
+        assertEquals(2, results.size)
+        assertTrue(results.all { it.treatment == "control" })
+    }
+
+    @Test
+    fun `getTreatmentsByFlagSets after destroy returns empty`() = runTest {
+        val evalKey = EvaluationKey(target.key)
+        evaluationRepository.store(
+            "flag_a", evalKey,
+            StoredEvaluation(EvaluationResult("flag_a", "on"), flagSets = setOf("set_1"))
+        )
+
+        (client as InternalDestroyable).tearDownInternal()
+
+        assertTrue(client.getTreatmentsByFlagSets(listOf("set_1")).isEmpty())
+    }
+
+    @Test
+    fun `getTreatment after destroy returns configured fallback`() = runTest {
+        val fallbackCalculator = mock(io.split.android.client.fallback.FallbackTreatmentsCalculator::class.java)
+        `when`(fallbackCalculator.resolve("my_flag"))
+            .thenReturn(io.split.android.client.fallback.FallbackTreatment("fb", null))
+        val clientWithFallback = DefaultSplitClient(
+            initialTarget = target,
+            tracker = tracker,
+            eventsManager = eventsManager,
+            evaluationRepository = evaluationRepository,
+            filters = EvaluationFilters(),
+            fallbackCalculator = fallbackCalculator,
+            scope = testScope,
+        )
+
+        (clientWithFallback as InternalDestroyable).tearDownInternal()
+
+        assertEquals("fb", clientWithFallback.getTreatment("my_flag").treatment)
+    }
+
+    @Test
+    fun `setTarget does not call evaluationRepository dot setTarget directly`() = testScope.runTest {
+        val newTarget = Target(Key("user-2"), trafficType = "user")
+        client.setTarget(newTarget)
+        testScheduler.advanceUntilIdle()
+
+        assertTrue("evaluationRepository.setTarget should not be called directly from DefaultSplitClient",
+            evaluationRepository.setTargetCalls.isEmpty())
+    }
+
 }
 
 // Test fakes
+
+class FakeInputValidator(private val valid: Boolean) : InputValidator {
+    override fun validateSdkKey(sdkKey: io.split.client.thin.SdkKey): Boolean = valid
+    override fun validateKey(key: io.split.client.thin.Key): Boolean = valid
+    override fun validateFlagName(flagName: String): Boolean = valid
+}
 
 class FakeEvaluationReadStorage : EvaluationReadStorage {
     private val storedEvaluations = mutableMapOf<Pair<String, EvaluationKey>, StoredEvaluation>()
@@ -324,18 +578,23 @@ class FakeEvaluationReadStorage : EvaluationReadStorage {
     override fun getFlagNames(evalKey: EvaluationKey): Set<String> =
         storedEvaluations.keys.filter { it.second == evalKey }.map { it.first }.toSet()
 
+    override fun getFlagNames(): Set<String> =
+        storedEvaluations.keys.map { it.first }.toSet()
+
     override fun lastChangeNumber(evalKey: EvaluationKey): Long = -1L
     override fun lastUpdateTimestamp(evalKey: EvaluationKey): Long? = null
 }
 
 class FakeEvaluationFetchCoordinator : EvaluationFetchCoordinator {
-    override suspend fun fetchIfNeeded(evalKey: EvaluationKey, filters: EvaluationFilters?, reason: FetchReason, delayMs: Long): Boolean = false
-    override suspend fun refetchAll(filters: EvaluationFilters?, reason: FetchReason, delayProvider: ((EvaluationKey) -> Long)?) {}
+    override fun fetchedKeys(): Set<EvaluationKey> = emptySet()
+    override suspend fun fetchIfNeeded(evalKey: EvaluationKey, filters: EvaluationFilters, reason: FetchReason, delayMs: Long, targetChangeNumber: Long?): Boolean = false
+    override suspend fun refetchAll(filters: EvaluationFilters, reason: FetchReason, delayProvider: ((EvaluationKey) -> Long)?, keyFilter: (EvaluationKey) -> Boolean) {}
+    override fun forget(evalKey: EvaluationKey) {}
 }
 
 class FakeEvaluationRepository : EvaluationRepository {
     private val storedEvaluations = mutableMapOf<Pair<String, EvaluationKey>, StoredEvaluation>()
-    val setTargetCalls = mutableListOf<Pair<Target, EvaluationFilters?>>()
+    val setTargetCalls = mutableListOf<Pair<Target, EvaluationFilters>>()
 
     fun store(flag: String, evalKey: EvaluationKey, stored: StoredEvaluation) {
         storedEvaluations[flag to evalKey] = stored
@@ -352,10 +611,13 @@ class FakeEvaluationRepository : EvaluationRepository {
             .filter { (key, stored) -> key.second == evalKey && stored.flagSets.any { it in flagSets } }
             .mapKeys { it.key.first }
 
-    override suspend fun setTarget(target: Target, filters: EvaluationFilters?, isInitialization: Boolean) {
+    override suspend fun setTarget(target: Target, filters: EvaluationFilters, isInitialization: Boolean) {
         setTargetCalls.add(target to filters)
     }
 
     override fun getFlagNames(evalKey: EvaluationKey): Set<String> =
         storedEvaluations.keys.filter { it.second == evalKey }.map { it.first }.toSet()
+
+    override fun getFlagNames(): Set<String> =
+        storedEvaluations.keys.map { it.first }.toSet()
 }

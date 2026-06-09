@@ -37,6 +37,8 @@ dependencies {
 
     // android-client submodule dependencies
     implementation(project(":streaming"))  // EventSourceClient, EventStreamParser
+    implementation(project(":streaming-support"))  // CompressionType, CompressionUtilProvider
+    implementation("com.goncalossilva:murmurhash:0.4.0")
     implementation(project(":logger"))
     implementation(project(":http-api"))
     implementation(project(":backoff"))

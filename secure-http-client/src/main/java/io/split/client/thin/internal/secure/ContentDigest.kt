@@ -1,40 +1,16 @@
 package io.split.client.thin.internal.secure
 
-import com.goncalossilva.murmurhash.MurmurHash3
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonArray
-import kotlinx.serialization.json.buildJsonObject
 import android.util.Base64
-import java.nio.ByteBuffer
+import java.security.MessageDigest
 
 internal object ContentDigest {
+    private const val SHA_512 = "SHA-512"
+    private const val DIGEST_BYTE_COUNT = 8
 
-    fun compute(target: EvaluationTarget): String {
-        val attrsJson = serializeAttributes(target.attributes)
-        val input = "${target.matchingKey}:${target.bucketingKey ?: ""}:$attrsJson"
-        val inputBytes = input.toByteArray(Charsets.UTF_8)
-        val hash = MurmurHash3().hash128x86(inputBytes)
-        val first8Bytes = ByteBuffer.allocate(8).putInt(hash[0].toInt()).putInt(hash[1].toInt()).array()
-        return Base64.encodeToString(first8Bytes, Base64.NO_PADDING or Base64.NO_WRAP)
-    }
-
-    internal fun serializeAttributes(attributes: Map<String, Any?>?): String {
-        val nonNull = attributes?.filterValues { it != null } ?: emptyMap()
-        if (nonNull.isEmpty()) return "{}"
-        val jsonObject = buildJsonObject {
-            nonNull.keys.sorted().forEach { key ->
-                put(key, toJsonElement(nonNull[key]!!))
-            }
-        }
-        return Json.encodeToString(kotlinx.serialization.json.JsonObject.serializer(), jsonObject)
-    }
-
-    private fun toJsonElement(value: Any): JsonElement = when (value) {
-        is Boolean -> JsonPrimitive(value)
-        is Number -> JsonPrimitive(value)
-        is List<*> -> buildJsonArray { value.filterNotNull().forEach { add(toJsonElement(it)) } }
-        else -> JsonPrimitive(value.toString())
+    fun compute(body: String): String {
+        val digest = MessageDigest.getInstance(SHA_512)
+            .digest(body.toByteArray(Charsets.UTF_8))
+            .copyOf(DIGEST_BYTE_COUNT)
+        return Base64.encodeToString(digest, Base64.NO_PADDING or Base64.NO_WRAP)
     }
 }

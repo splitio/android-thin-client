@@ -17,7 +17,7 @@ import io.split.client.thin.internal.persistence.domain.events.PersistentEventsS
 import io.split.client.thin.internal.persistence.domain.events.TrackerEventSerializer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
 
 data class PersistenceDomainComponents(
     val evaluationPersistenceManager: EvaluationPersistenceManager?,
@@ -44,9 +44,9 @@ fun createPersistenceDomainComponents(
     val roomEvalPersistence = RoomEvaluationPersistence(database = database)
 
     val detectChange = configChangeDetectorFactory
-        ?: { dynamicConfig -> ConfigChangeDetector(database.generalPropertiesDao()).detectAndUpdate(dynamicConfig) }
+        ?: { dynamicConfig -> ConfigChangeDetector(database.generalPropertiesDao()).detectAndUpdate(dynamicConfig, config.flagSets) }
 
-    scope.launch {
+    val pendingClear = scope.async {
         val changed = detectChange(config.dynamicConfig)
         if (changed) roomEvalPersistence.clearAll()
     }
@@ -60,7 +60,8 @@ fun createPersistenceDomainComponents(
         callbacks = evaluationCallbacks,
         targetHasher = targetHasher,
         evalSerializer = evalSerializer,
-        scope = scope
+        scope = scope,
+        pendingClearDeferred = pendingClear,
     )
 
     val eventsStorage = PersistentEventsStorage(

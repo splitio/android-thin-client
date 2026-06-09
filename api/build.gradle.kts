@@ -22,9 +22,13 @@ android {
         debug {
             enableUnitTestCoverage = true
             buildConfigField("int", "MIN_EVALUATION_REFRESH_RATE", "1")
+            buildConfigField("long", "CDN_BYPASS_BACKOFF_BASE_MS", "0L")
         }
         release {
-            buildConfigField("int", "MIN_EVALUATION_REFRESH_RATE", "60")
+            val minRate = (findProperty("minEvaluationRefreshRate") as String?)?.toInt() ?: 60
+            buildConfigField("int", "MIN_EVALUATION_REFRESH_RATE", "$minRate")
+            val cdnBackoff = (findProperty("cdnBypassBackoffBaseMs") as? String) ?: "1000"
+            buildConfigField("long", "CDN_BYPASS_BACKOFF_BASE_MS", "${cdnBackoff}L")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -54,8 +58,10 @@ dependencies {
     implementation(project(":logger"))
     implementation(project(":events-tracking"))
     implementation(project(":evaluation"))
+    implementation(project(":cdn-bypass"))
     implementation(project(":secure-http-client"))
     implementation(project(":streaming-thin"))
+    implementation(project(":streaming-support"))
     implementation(project(":streaming"))
     implementation(project(":backoff"))
     implementation(project(":http"))

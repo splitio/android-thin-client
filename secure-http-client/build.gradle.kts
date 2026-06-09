@@ -6,8 +6,13 @@ plugins {
 android {
     namespace = "io.split.client.thin.secure"
 
+    buildFeatures {
+        buildConfig = true
+    }
+
     defaultConfig {
         minSdk = 21
+        buildConfigField("String", "SDK_VERSION", "\"${project.version}\"")
         consumerProguardFiles("consumer-rules.pro")
     }
 
@@ -32,7 +37,6 @@ dependencies {
     implementation(project(":auth"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.5.1")
-    implementation("com.goncalossilva:murmurhash:0.4.0")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")

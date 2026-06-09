@@ -17,8 +17,8 @@ internal class JsonTokenDeserializer(
         return JwtCredential(
             token = token,
             expiresAt = if (token.isNotEmpty()) decodeJwtExp(token) else 0L,
-            pushEnabled = dto.pushEnabled ?: false,
-            connDelaySeconds = dto.connDelay ?: 60,
+            pushEnabled = dto.config?.streaming?.enabled ?: false,
+            connDelaySeconds = dto.config?.streaming?.delay ?: 60,
         )
     }
 
@@ -26,7 +26,7 @@ internal class JsonTokenDeserializer(
         return try {
             val payload = token.split(".").getOrNull(1) ?: return Long.MAX_VALUE
             val decoded = String(base64Decoder(payload), Charsets.UTF_8)
-            Regex("\"exp\":(\\d+)").find(decoded)?.groupValues?.get(1)?.toLongOrNull() ?: Long.MAX_VALUE
+            format.decodeFromString<JwtPayload>(decoded).exp
         } catch (e: Exception) {
             Long.MAX_VALUE
         }
@@ -38,8 +38,23 @@ internal class JsonTokenDeserializer(
 }
 
 @Serializable
+private data class JwtPayload(
+    val exp: Long = Long.MAX_VALUE,
+)
+
+@Serializable
 private data class AuthResponse(
     @SerialName("token") val token: String? = null,
-    @SerialName("pushEnabled") val pushEnabled: Boolean? = null,
-    @SerialName("connDelay") val connDelay: Long? = null,
+    @SerialName("config") val config: AuthConfig? = null,
+)
+
+@Serializable
+private class AuthConfig(
+    @SerialName("streaming") val streaming: StreamingConfig? = null,
+)
+
+@Serializable
+private class StreamingConfig(
+    @SerialName("enabled") val enabled: Boolean? = null,
+    @SerialName("delay") val delay: Long? = null,
 )

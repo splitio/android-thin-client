@@ -24,11 +24,13 @@ class FakeEventSourceClient : EventSourceClient {
     var lastHandler: EventSourceClient.EventHandler? = null
     var shouldFailConnect = false
     var shouldFailOnOpen = false
+    var disconnectCalled = false
     private var currentStatus = EventSourceClient.DISCONNECTED
 
     override fun status(): Int = currentStatus
 
     override fun disconnect() {
+        disconnectCalled = true
         currentStatus = EventSourceClient.DISCONNECTED
     }
 
@@ -63,6 +65,7 @@ class FakeCompositeObserver : CompositeObserver {
     val events = mutableListOf<ObservableEvent>()
     override fun notifyEvent(event: ObservableEvent) { events.add(event) }
     override fun register(observer: Observer) {}
+    override fun unregister(observer: Observer) {}
     override fun unregisterAll() {}
 }
 

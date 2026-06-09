@@ -1,5 +1,6 @@
 package io.split.client.thin.internal.streaming
 
+import io.split.android.client.streaming.support.CompressionType
 import io.split.android.client.utils.logger.Logger
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
@@ -44,13 +45,21 @@ internal class ThinNotificationParser(
     private fun parseEvaluationUpdate(raw: RawThinNotification): EvaluationUpdateNotification? {
         return try {
             val dto = json.decodeFromString<EvaluationUpdateDataDto>(raw.data)
+            val compression = when (dto.compression) {
+                1 -> CompressionType.GZIP
+                2 -> CompressionType.ZLIB
+                else -> CompressionType.NONE
+            }
             EvaluationUpdateNotification(
                 changeNumber = dto.changeNumber,
                 channelName = raw.channel,
                 eventTimestamp = raw.timestamp,
                 updateIntervalMs = dto.updateIntervalMs,
                 algorithmSeed = dto.algorithmSeed,
-                hashingAlgorithm = dto.hashingAlgorithm
+                hashingAlgorithm = dto.hashingAlgorithm,
+                updateStrategy = EvaluationUpdateStrategy.from(dto.updateStrategy),
+                data = dto.data,
+                compression = compression,
             )
         } catch (e: SerializationException) {
             Logger.e("Failed to parse EVALUATION_UPDATE: ${e.message}")
@@ -84,6 +93,28 @@ internal class ThinNotificationParser(
             ThinOccupancyNotification(dto.metrics.publishers, raw.channel, raw.timestamp)
         } catch (e: SerializationException) {
             Logger.e("Failed to parse OCCUPANCY: ${e.message}")
+            null
+        }
+    }
+
+    /**
+     * Parses a bare Ably error frame delivered as an `event: error` SSE message (no envelope,
+     * no inner `type`), e.g. {"code":40142,"statusCode":401,"message":"Token expired"}.
+     */
+    fun parseErrorFrame(jsonData: String?): ThinStreamingError? {
+        if (jsonData == null) {
+            return null
+        }
+        return try {
+            val dto = json.decodeFromString<StreamingErrorFrameDto>(jsonData)
+            ThinStreamingError(
+                message = dto.message ?: "Unknown error",
+                code = dto.code ?: -1,
+                statusCode = dto.statusCode,
+                eventTimestamp = 0L,
+            )
+        } catch (e: SerializationException) {
+            Logger.e("Failed to parse error frame: ${e.message}")
             null
         }
     }

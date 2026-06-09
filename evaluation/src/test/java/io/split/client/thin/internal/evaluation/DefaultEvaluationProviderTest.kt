@@ -28,7 +28,7 @@ class DefaultEvaluationProviderTest {
         val (provider, httpClient) = makeProvider()
         val evalKey = EvaluationKey(Key("user-1", "bucket-1"), mapOf("plan" to "premium"))
 
-        provider.fetch(evalKey, null, -1L)
+        provider.fetch(evalKey, EvaluationFilters(), -1L)
 
         val target = httpClient.lastFetchTarget!!
         assertEquals("user-1", target.matchingKey)
@@ -41,7 +41,7 @@ class DefaultEvaluationProviderTest {
         val (provider, httpClient) = makeProvider()
         val evalKey = EvaluationKey(Key("user-1"))
 
-        provider.fetch(evalKey, null, -1L)
+        provider.fetch(evalKey, EvaluationFilters(), -1L)
 
         val target = httpClient.lastFetchTarget!!
         assertEquals(null, target.attributes)
@@ -51,7 +51,7 @@ class DefaultEvaluationProviderTest {
     fun `passes filters through to SecureHttpClient`() = runTest {
         val (provider, httpClient) = makeProvider()
         val evalKey = EvaluationKey(Key("user-1"))
-        val filters = EvaluationFilters(flagNames = setOf("flag-a"), flagSets = null)
+        val filters = EvaluationFilters()
 
         provider.fetch(evalKey, filters, -1L)
 
@@ -62,13 +62,13 @@ class DefaultEvaluationProviderTest {
     fun `deserializes response via deserializer`() = runTest {
         val json = """
             {"till": 42, "since": -1, "evaluations": [
-                {"featureName": "my-flag", "treatment": "on", "sets": []}
+                {"flag": "my-flag", "treatment": "on", "sets": []}
             ]}
         """.trimIndent()
         val (provider, _) = makeProvider(responseBody = json)
         val evalKey = EvaluationKey(Key("user-1"))
 
-        val result = provider.fetch(evalKey, null, -1L)
+        val result = provider.fetch(evalKey, EvaluationFilters(), -1L)
 
         assertEquals(42L, result!!.changeNumber)
         assertEquals(1, result.evaluations.size)
@@ -79,21 +79,21 @@ class DefaultEvaluationProviderTest {
     @Test
     fun `returns null on 304 not modified`() = runTest {
         val (provider, _) = makeProvider(statusCode = 304)
-        val result = provider.fetch(EvaluationKey(Key("user-1")), null, -1L)
+        val result = provider.fetch(EvaluationKey(Key("user-1")), EvaluationFilters(), -1L)
         assertEquals(null, result)
     }
 
     @Test
     fun `returns null on null body without throwing`() = runTest {
         val (provider, _) = makeProvider(responseBody = null)
-        val result = provider.fetch(EvaluationKey(Key("user-1")), null, -1L)
+        val result = provider.fetch(EvaluationKey(Key("user-1")), EvaluationFilters(), -1L)
         assertEquals(null, result)
     }
 
     @Test
     fun `returns null on empty body without throwing`() = runTest {
         val (provider, _) = makeProvider(responseBody = "")
-        val result = provider.fetch(EvaluationKey(Key("user-1")), null, -1L)
+        val result = provider.fetch(EvaluationKey(Key("user-1")), EvaluationFilters(), -1L)
         assertEquals(null, result)
     }
 
@@ -108,7 +108,7 @@ class DefaultEvaluationProviderTest {
         )
         val evalKey = EvaluationKey(Key("user-1"))
 
-        provider.fetch(evalKey, null, -1L)
+        provider.fetch(evalKey, EvaluationFilters(), -1L)
 
         assertEquals(listOf(evalKey), callbackKeys)
     }
@@ -124,7 +124,7 @@ class DefaultEvaluationProviderTest {
         )
         val evalKey = EvaluationKey(Key("user-1"))
 
-        provider.fetch(evalKey, null, -1L)
+        provider.fetch(evalKey, EvaluationFilters(), -1L)
 
         assertEquals(listOf(evalKey), callbackKeys)
     }
@@ -161,5 +161,36 @@ class TargetMappingTest {
         val evalKey = target.toEvaluationKey()
         assertEquals(Key("user-1"), evalKey.key)
         assertEquals(mapOf("a" to "b"), evalKey.attributes)
+    }
+}
+
+class TargetChangeNumberForwardingTest {
+
+    @Test
+    fun `targetChangeNumber is forwarded to SecureHttpClient when provided`() = runTest {
+        val httpClient = FakeSecureHttpClient(responseBody = """{"till": -1, "since": -1, "evaluations": []}""")
+        val provider = DefaultEvaluationProvider(
+            secureHttpClient = httpClient,
+            deserializer = JsonEvaluationResponseDeserializer(),
+        )
+        val evalKey = EvaluationKey(Key("user-1"))
+
+        provider.fetch(evalKey, EvaluationFilters(), -1L, targetChangeNumber = 99L)
+
+        assertEquals(99L, httpClient.lastTargetChangeNumber)
+    }
+
+    @Test
+    fun `targetChangeNumber defaults to null when not provided`() = runTest {
+        val httpClient = FakeSecureHttpClient(responseBody = """{"till": -1, "since": -1, "evaluations": []}""")
+        val provider = DefaultEvaluationProvider(
+            secureHttpClient = httpClient,
+            deserializer = JsonEvaluationResponseDeserializer(),
+        )
+        val evalKey = EvaluationKey(Key("user-1"))
+
+        provider.fetch(evalKey, EvaluationFilters(), -1L)
+
+        assertEquals(null, httpClient.lastTargetChangeNumber)
     }
 }
