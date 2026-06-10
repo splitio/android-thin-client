@@ -24,13 +24,13 @@ internal class DefaultLifecycleManager(
 
     override fun onStop(owner: LifecycleOwner) {
         if (destroyed) return
-        components.forEach { runCatching { it.pause() } }
+        components.toList().forEach { runCatching { it.pause() } }
         compositeObserver.notifyEvent(ObservableEvent(ObservableEventType.SYNC_PAUSED))
     }
 
     override fun onStart(owner: LifecycleOwner) {
         if (destroyed) return
-        components.forEach { runCatching { it.resume() } }
+        components.toList().forEach { runCatching { it.resume() } }
         compositeObserver.notifyEvent(ObservableEvent(ObservableEventType.SYNC_RESUMED))
     }
 
