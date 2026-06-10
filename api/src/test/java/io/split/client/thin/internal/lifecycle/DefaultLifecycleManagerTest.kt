@@ -133,6 +133,34 @@ class DefaultLifecycleManagerTest {
 
         assertEquals(1, normal.resumeCount)
     }
+
+    @Test
+    fun `registeringComponentDuringResumeShouldNotThrowConcurrentModificationException`() {
+        val observer = FakeCompositeObserver()
+        val manager = DefaultLifecycleManager(observer)
+        val late = FakeLifecycleComponent()
+        val registrar = object : LifecycleComponent {
+            override fun pause() {}
+            override fun resume() { manager.register(late) }
+        }
+        manager.register(registrar)
+
+        manager.onStart(fakeOwner)
+    }
+
+    @Test
+    fun `registeringComponentDuringPauseShouldNotThrowConcurrentModificationException`() {
+        val observer = FakeCompositeObserver()
+        val manager = DefaultLifecycleManager(observer)
+        val late = FakeLifecycleComponent()
+        val registrar = object : LifecycleComponent {
+            override fun pause() { manager.register(late) }
+            override fun resume() {}
+        }
+        manager.register(registrar)
+
+        manager.onStop(fakeOwner)
+    }
 }
 
 private class ThrowingLifecycleComponent : LifecycleComponent {
