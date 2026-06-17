@@ -2243,6 +2243,101 @@ class SdkBehaviorAndroidTest {
     }
 
     // -------------------------------------------------------------------------
+    // Test DB Naming — Verify global prefix + version in database filenames
+    // -------------------------------------------------------------------------
+
+    /**
+     * Given the SDK is configured without a storage prefix
+     * When a factory is built and reaches onReady
+     * Then the database file is created with the global prefix and version
+     * And the filename is `io.harness.thin.v3.{first4sdkKey}{last4sdkKey}.db`
+     */
+    @Test
+    fun factoryWithoutPrefixCreatesDbWithGlobalPrefix() {
+        val server = MockSplitServer()
+        server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_DISABLED))
+        server.enqueueEvaluations(MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1))
+
+        val config = splitClientConfig {
+            sync {
+                mode = SplitClientConfig.SyncMode.POLLING
+                pollingRate = 3600
+                serviceEndpoints {
+                    auth = server.url()
+                    evaluations = server.url()
+                    events = server.url()
+                }
+            }
+            logLevel = SplitClientConfig.LogLevel.VERBOSE
+        }
+        val factory = SplitFactoryBuilder.build(
+            context = context,
+            sdkKey = SdkKey("e2e-test-key"),
+            defaultTarget = Target(key = Key("user_a"), trafficType = "user"),
+            config = config,
+        )
+        val client = factory.getClient()
+        val listener = TestEventListener()
+        client.addEventListener(listener.asSplitEventListener)
+
+        try {
+            assertTrue("onReady did not fire", listener.awaitReady())
+            // e2e-test-key: first 4 = "e2e-", last 4 = "-key"
+            val dbFile = context.getDatabasePath("io.harness.thin.v3.e2e--key.db")
+            assertTrue("Database file should exist with global prefix and version", dbFile.exists())
+        } finally {
+            runBlocking { factory.destroy() }
+            server.shutdown()
+        }
+    }
+
+    /**
+     * Given the SDK is configured with a storage prefix "myapp"
+     * When a factory is built and reaches onReady
+     * Then the database file is created with the global prefix, version, and user prefix
+     * And the filename is `io.harness.thin.v3.myapp.{first4sdkKey}{last4sdkKey}.db`
+     */
+    @Test
+    fun factoryWithPrefixCreatesDbWithGlobalAndUserPrefix() {
+        val server = MockSplitServer()
+        server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_DISABLED))
+        server.enqueueEvaluations(MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1))
+
+        val config = splitClientConfig {
+            sync {
+                mode = SplitClientConfig.SyncMode.POLLING
+                pollingRate = 3600
+                serviceEndpoints {
+                    auth = server.url()
+                    evaluations = server.url()
+                    events = server.url()
+                }
+            }
+            logLevel = SplitClientConfig.LogLevel.VERBOSE
+            storage { prefix = "myapp" }
+        }
+        val factory = SplitFactoryBuilder.build(
+            context = context,
+            sdkKey = SdkKey("e2e-test-key"),
+            defaultTarget = Target(key = Key("user_a"), trafficType = "user"),
+            config = config,
+        )
+        val client = factory.getClient()
+        val listener = TestEventListener()
+        client.addEventListener(listener.asSplitEventListener)
+
+        try {
+            assertTrue("onReady did not fire", listener.awaitReady())
+            // e2e-test-key: first 4 = "e2e-", last 4 = "-key"
+            val dbFile = context.getDatabasePath("io.harness.thin.v3.myapp.e2e--key.db")
+            assertTrue("Database file should exist with global prefix, version, and user prefix", dbFile.exists())
+        } finally {
+            runBlocking { factory.destroy() }
+            server.shutdown()
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
 
