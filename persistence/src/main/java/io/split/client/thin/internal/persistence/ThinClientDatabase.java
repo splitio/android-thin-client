@@ -12,6 +12,9 @@ import java.util.Map;
 @Database(entities = {EvaluationEntity.class, EventEntity.class, AttributesEntity.class, GeneralPropertiesEntity.class}, version = 3, exportSchema = false)
 public abstract class ThinClientDatabase extends RoomDatabase {
 
+    static final int DB_VERSION = 3;
+    private static final String DB_GLOBAL_PREFIX = "io.harness.thin.v" + DB_VERSION + ".";
+
     public abstract EvaluationDao evaluationDao();
     public abstract EventDao eventDao();
     public abstract AttributesDao attributesDao();
@@ -20,13 +23,13 @@ public abstract class ThinClientDatabase extends RoomDatabase {
     private static final Map<String, ThinClientDatabase> INSTANCES = new ConcurrentHashMap<>();
 
     static String buildDatabaseName(String prefix, String sdkKey) {
-        String prefixPart = (prefix != null && !prefix.isEmpty()) ? prefix : "";
+        String prefixPart = (prefix != null && !prefix.isEmpty()) ? prefix + "." : "";
         if (sdkKey == null || sdkKey.length() < 4) {
-            return prefixPart + "split_thin.db";
+            return DB_GLOBAL_PREFIX + prefixPart + "split_thin.db";
         }
         String begin = sdkKey.substring(0, 4);
         String end = sdkKey.substring(sdkKey.length() - 4);
-        return prefixPart + begin + end + ".db";
+        return DB_GLOBAL_PREFIX + prefixPart + begin + end + ".db";
     }
 
     public static ThinClientDatabase build(Context context, String prefix, String sdkKey) {
