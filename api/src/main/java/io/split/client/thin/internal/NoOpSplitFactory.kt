@@ -1,6 +1,5 @@
 package io.split.client.thin.internal
 
-import io.split.client.thin.EvaluationOptions
 import io.split.client.thin.EvaluationResult
 import io.split.client.thin.SplitClient
 import io.split.client.thin.SplitEventListener
@@ -23,13 +22,13 @@ internal object NoOpSplitFactory : SplitFactory {
 internal object NoOpSplitClient : SplitClient {
     private const val CONTROL = "control"
 
-    override fun getTreatment(flag: String, evaluationOptions: EvaluationOptions?): EvaluationResult =
+    override fun getTreatment(flag: String): EvaluationResult =
         EvaluationResult(flag, CONTROL)
 
-    override fun getTreatments(flags: List<String>, evaluationOptions: EvaluationOptions?): List<EvaluationResult> =
+    override fun getTreatments(flags: List<String>): List<EvaluationResult> =
         flags.map { EvaluationResult(it, CONTROL) }
 
-    override fun getTreatmentsByFlagSets(flagSets: List<String>, evaluationOptions: EvaluationOptions?): List<EvaluationResult> =
+    override fun getTreatmentsByFlagSets(flagSets: List<String>): List<EvaluationResult> =
         emptyList()
 
     override fun setTarget(target: Target) {}

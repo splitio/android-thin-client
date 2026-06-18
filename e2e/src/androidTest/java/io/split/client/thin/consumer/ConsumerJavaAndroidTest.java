@@ -163,16 +163,16 @@ public class ConsumerJavaAndroidTest {
         SplitFactory factory = buildFactory("key", "user");
         SplitClient client = factory.getClient(null);
 
-        EvaluationResult result = client.getTreatment("my-flag", null);
+        EvaluationResult result = client.getTreatment("my-flag");
         assertNotNull(result);
 
         List<EvaluationResult> results = client.getTreatments(
-                Arrays.asList("flag-1", "flag-2"), null
+                Arrays.asList("flag-1", "flag-2")
         );
         assertNotNull(results);
 
         List<EvaluationResult> resultsByFlagSets = client.getTreatmentsByFlagSets(
-                Collections.singletonList("set-a"), null
+                Collections.singletonList("set-a")
         );
         assertNotNull(resultsByFlagSets);
     }
