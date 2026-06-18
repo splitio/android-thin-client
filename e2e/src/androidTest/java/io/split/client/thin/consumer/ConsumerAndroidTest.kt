@@ -2,7 +2,6 @@ package io.split.client.thin.consumer
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import io.split.client.thin.EvaluationOptions
 import io.split.client.thin.EvaluationResult
 import io.split.client.thin.FallbackTreatment
 import io.split.client.thin.FallbackTreatmentsConfiguration
@@ -167,10 +166,6 @@ class ConsumerAndroidTest {
         val result: EvaluationResult = client.getTreatment("my-flag")
         assertNotNull(result)
 
-        val resultWithOptions: EvaluationResult =
-            client.getTreatment("my-flag", EvaluationOptions())
-        assertNotNull(resultWithOptions)
-
         val results: List<EvaluationResult> =
             client.getTreatments(listOf("flag-1", "flag-2"))
         assertNotNull(results)
@@ -212,16 +207,6 @@ class ConsumerAndroidTest {
         assertEquals(42L, result.changeNumber)
     }
 
-    /**
-     * Given the EvaluationOptions class,
-     * When instantiated with default arguments,
-     * Then the result is non-null.
-     */
-    @Test
-    fun evaluationOptions() {
-        val options = EvaluationOptions()
-        assertNotNull(options)
-    }
 
     /**
      * Given the splitClientConfig DSL,

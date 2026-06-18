@@ -4,7 +4,6 @@ import io.split.android.client.fallback.FallbackTreatmentsCalculator
 import io.harness.events.EventsManager
 import io.split.android.client.tracker.Tracker
 import io.split.android.client.utils.logger.Logger
-import io.split.client.thin.EvaluationOptions
 import io.split.client.thin.EvaluationResult
 import io.split.client.thin.SplitClient
 import io.split.client.thin.SplitEvent
@@ -44,10 +43,7 @@ internal class DefaultSplitClient(
     @Volatile
     private var destroyed = false
 
-    override fun getTreatment(
-        flag: String,
-        evaluationOptions: EvaluationOptions?
-    ): EvaluationResult {
+    override fun getTreatment(flag: String): EvaluationResult {
         if (destroyed) return resolveResult(flag, null)
         if (!inputValidator.validateFlagName(flag)) return resolveResult(flag, null)
         val trimmedFlag = flag.trim()
@@ -56,10 +52,7 @@ internal class DefaultSplitClient(
         return resolveResult(trimmedFlag, stored)
     }
 
-    override fun getTreatments(
-        flags: List<String>,
-        evaluationOptions: EvaluationOptions?
-    ): List<EvaluationResult> {
+    override fun getTreatments(flags: List<String>): List<EvaluationResult> {
         if (destroyed) return flags.map { resolveResult(it, null) }
         val evalKey = target.toEvaluationKey()
         val validationResults = flags.associateWith { inputValidator.validateFlagName(it) }
@@ -75,10 +68,7 @@ internal class DefaultSplitClient(
         }
     }
 
-    override fun getTreatmentsByFlagSets(
-        flagSets: List<String>,
-        evaluationOptions: EvaluationOptions?
-    ): List<EvaluationResult> {
+    override fun getTreatmentsByFlagSets(flagSets: List<String>): List<EvaluationResult> {
         if (destroyed) return emptyList()
         val configuredSets = filters?.sets
         val effectiveSets = if (configuredSets != null && configuredSets.isNotEmpty()) {

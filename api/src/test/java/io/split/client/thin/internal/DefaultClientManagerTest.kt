@@ -1,6 +1,5 @@
 package io.split.client.thin.internal
 
-import io.split.client.thin.EvaluationOptions
 import io.split.client.thin.EvaluationResult
 import io.split.client.thin.Key
 import io.split.client.thin.SplitClient
@@ -337,18 +336,14 @@ private class FakeSplitClient(
     var tearDownCallCount = 0
         private set
 
-    override fun getTreatment(flag: String, evaluationOptions: EvaluationOptions?): EvaluationResult =
+    override fun getTreatment(flag: String): EvaluationResult =
         throw UnsupportedOperationException()
 
-    override fun getTreatments(
-        flags: List<String>,
-        evaluationOptions: EvaluationOptions?,
-    ): List<EvaluationResult> = throw UnsupportedOperationException()
+    override fun getTreatments(flags: List<String>): List<EvaluationResult> =
+        throw UnsupportedOperationException()
 
-    override fun getTreatmentsByFlagSets(
-        flagSets: List<String>,
-        evaluationOptions: EvaluationOptions?,
-    ): List<EvaluationResult> = throw UnsupportedOperationException()
+    override fun getTreatmentsByFlagSets(flagSets: List<String>): List<EvaluationResult> =
+        throw UnsupportedOperationException()
 
     override fun setTarget(target: Target) {
         setTargetCallCount++

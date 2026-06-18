@@ -8,26 +8,17 @@ interface SplitClient {
     /**
      * Returns the evaluation result for a single flag.
      */
-    fun getTreatment(
-        flag: String,
-        evaluationOptions: EvaluationOptions? = null,
-    ): EvaluationResult
+    fun getTreatment(flag: String): EvaluationResult
 
     /**
      * Returns evaluation results for the provided flag names.
      */
-    fun getTreatments(
-        flags: List<String>,
-        evaluationOptions: EvaluationOptions? = null,
-    ): List<EvaluationResult>
+    fun getTreatments(flags: List<String>): List<EvaluationResult>
 
     /**
      * Returns evaluation results for flags in the provided flag sets.
      */
-    fun getTreatmentsByFlagSets(
-        flagSets: List<String>,
-        evaluationOptions: EvaluationOptions? = null,
-    ): List<EvaluationResult>
+    fun getTreatmentsByFlagSets(flagSets: List<String>): List<EvaluationResult>
 
     /**
      * Switches the client target used for subsequent evaluations.

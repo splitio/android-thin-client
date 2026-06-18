@@ -6,16 +6,14 @@ import org.junit.Test
 class SplitEventListenerTest {
 
     private val noOpClient = object : SplitClient {
-        override fun getTreatment(flag: String, evaluationOptions: EvaluationOptions?) =
+        override fun getTreatment(flag: String) =
             EvaluationResult(flag, "control")
 
-        override fun getTreatments(flags: List<String>, evaluationOptions: EvaluationOptions?) =
+        override fun getTreatments(flags: List<String>) =
             flags.map { EvaluationResult(it, "control") }
 
-        override fun getTreatmentsByFlagSets(
-            flagSets: List<String>,
-            evaluationOptions: EvaluationOptions?,
-        ) = emptyList<EvaluationResult>()
+        override fun getTreatmentsByFlagSets(flagSets: List<String>) =
+            emptyList<EvaluationResult>()
 
         override fun setTarget(target: Target) = Unit
 

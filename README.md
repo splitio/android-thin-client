@@ -94,7 +94,7 @@ SplitClient splitClient = splitFactory.getClient(null);
 splitClient.addEventListener(new SplitEventListener() {
     @Override
     public void onReady(SplitClient client, SdkReadyMetadata metadata) {
-        EvaluationResult result = client.getTreatment("FEATURE_FLAG_NAME", null);
+        EvaluationResult result = client.getTreatment("FEATURE_FLAG_NAME");
 
         if (result.getTreatment().equals("on")) {
             Log.i("TAG", "I'm ON");
@@ -113,7 +113,7 @@ splitClient.addEventListener(new SplitEventListener() {
     @Override
     public void onUpdate(SplitClient client, SdkUpdateMetadata metadata) {
         if (metadata == null || metadata.getNames() == null) return;
-        List<EvaluationResult> results = client.getTreatments(metadata.getNames(), null);
+        List<EvaluationResult> results = client.getTreatments(metadata.getNames());
         for (EvaluationResult result : results) {
             Log.i("TAG", "Flag " + result.getFlag() + " updated, new treatment: " + result.getTreatment());
         }
