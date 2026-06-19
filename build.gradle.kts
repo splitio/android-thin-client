@@ -23,7 +23,7 @@ plugins {
 
 subprojects {
     group = "io.split.client"
-    version = "1.0.0-rc2"
+    version = "1.0.0-rc3"
 
     plugins.withId("com.android.library") {
         extensions.configure<LibraryExtension>("android") {

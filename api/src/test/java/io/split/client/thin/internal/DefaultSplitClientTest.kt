@@ -19,10 +19,13 @@ import io.split.client.thin.internal.sdkevents.SdkInternalEvent
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.mockito.ArgumentMatchers.any
+import org.mockito.ArgumentMatchers.anyBoolean
+import org.mockito.ArgumentMatchers.anyDouble
 import org.mockito.ArgumentMatchers.eq
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.never
@@ -114,6 +117,33 @@ class DefaultSplitClientTest {
             eq(null),
             eq(false),
         )
+    }
+
+    @Test
+    fun `track returns true when tracker accepts the event`() {
+        `when`(tracker.track(any(), any(), any(), anyDouble(), any(), anyBoolean())).thenReturn(true)
+
+        val result = client.track("purchase")
+
+        assertTrue(result)
+    }
+
+    @Test
+    fun `track returns false when tracker rejects the event`() {
+        `when`(tracker.track(any(), any(), any(), anyDouble(), any(), anyBoolean())).thenReturn(false)
+
+        val result = client.track("purchase")
+
+        assertFalse(result)
+    }
+
+    @Test
+    fun `track returns false when client is destroyed`() = runTest {
+        client.destroy()
+
+        val result = client.track("purchase")
+
+        assertFalse(result)
     }
 
     @Test

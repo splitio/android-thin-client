@@ -357,7 +357,7 @@ private class FakeSplitClient(
         eventType: String,
         value: Double?,
         properties: Map<String, Any?>?,
-    ): Unit = throw UnsupportedOperationException()
+    ): Boolean = throw UnsupportedOperationException()
 
     override suspend fun destroy() {
         destroyCallCount++

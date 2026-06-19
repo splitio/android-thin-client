@@ -107,11 +107,12 @@ internal class DefaultSplitClient(
         eventType: String,
         value: Double?,
         properties: Map<String, Any?>?
-    ) {
+    ): Boolean {
+        if (destroyed) return false
         @Suppress("UNCHECKED_CAST")
         val javaProperties = properties as? Map<String, Any>
         val isSdkReady = eventsManager.eventAlreadyTriggered(SplitEvent.SDK_READY)
-        tracker.track(
+        return tracker.track(
             target.key.matchingKey,
             target.trafficType,
             eventType,

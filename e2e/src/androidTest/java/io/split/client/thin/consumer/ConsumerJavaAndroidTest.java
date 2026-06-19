@@ -384,12 +384,12 @@ public class ConsumerJavaAndroidTest {
     public void trackMethodVariants() {
         SplitClient client = buildFactory("key", "user").getClient(null);
 
-        client.track("purchase", null, null);
-        client.track("purchase", 9.99, null);
+        assertTrue(client.track("purchase", null, null));
+        assertTrue(client.track("purchase", 9.99, null));
 
         Map<String, Object> props = new HashMap<>();
         props.put("plan", "premium");
-        client.track("purchase", 9.99, props);
+        assertTrue(client.track("purchase", 9.99, props));
     }
 
     /**

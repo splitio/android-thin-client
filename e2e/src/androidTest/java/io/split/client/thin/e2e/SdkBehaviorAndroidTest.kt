@@ -1344,7 +1344,7 @@ class SdkBehaviorAndroidTest {
         try {
             assertTrue("onReady did not fire", listener.awaitReady())
 
-            client.track("purchase", 99.0, mapOf("item" to "book"))
+            assertTrue(client.track("purchase", 99.0, mapOf("item" to "book")))
             runBlocking { client.flush() }
 
             // Allow a brief moment for the HTTP POST to arrive
@@ -1393,7 +1393,7 @@ class SdkBehaviorAndroidTest {
 
         assertTrue("onReady did not fire", listener.awaitReady())
 
-        client.track("checkout")
+        assertTrue(client.track("checkout"))
 
         try {
             // destroy() flushes the events coordinator before cancelling the scope
@@ -1726,7 +1726,7 @@ class SdkBehaviorAndroidTest {
         try {
             assertTrue("onReady did not fire", listener.awaitReady())
 
-            client.track("lifecycle_event")
+            assertTrue(client.track("lifecycle_event"))
 
             // Background — events scheduler should stop; no periodic flush should occur.
             uiDevice.pressHome()
@@ -2867,8 +2867,8 @@ class SdkBehaviorAndroidTest {
             assertTrue("client2 onReady did not fire", listener2.awaitReady())
 
             // Phase 1: both clients track — expect both events
-            client1.track("phase1_event")
-            client2.track("phase1_event")
+            assertTrue(client1.track("phase1_event"))
+            assertTrue(client2.track("phase1_event"))
             runBlocking {
                 client1.flush()
                 client2.flush()
@@ -2889,8 +2889,8 @@ class SdkBehaviorAndroidTest {
             // Phase 2: destroy client1 — only client2 should track
             runBlocking { client1.destroy() }
 
-            client1.track("phase2_event")
-            client2.track("phase2_event")
+            assertFalse(client1.track("phase2_event"))
+            assertTrue(client2.track("phase2_event"))
             runBlocking { client2.flush() }
 
             val deadline2 = System.currentTimeMillis() + 5_000L
@@ -2907,7 +2907,7 @@ class SdkBehaviorAndroidTest {
             runBlocking { client2.destroy() }
             val countBeforePhase3 = server.capturedEventBodies.size
 
-            client2.track("phase3_event")
+            assertFalse(client2.track("phase3_event"))
 
             Thread.sleep(2_000)
 
