@@ -33,7 +33,7 @@ internal object NoOpSplitClient : SplitClient {
 
     override fun setTarget(target: Target) {}
     override fun addEventListener(listener: SplitEventListener) {}
-    override fun track(eventType: String, value: Double?, properties: Map<String, Any?>?) {}
+    override fun track(eventType: String, value: Double?, properties: Map<String, Any?>?): Boolean = false
     override suspend fun destroy() {}
     override suspend fun flush() {}
 

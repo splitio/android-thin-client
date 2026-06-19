@@ -37,7 +37,7 @@ interface SplitClient {
         eventType: String,
         value: Double? = null,
         properties: Map<String, Any?>? = null,
-    )
+    ): Boolean
 
     /**
      * Flushes pending data and destroys this client instance.

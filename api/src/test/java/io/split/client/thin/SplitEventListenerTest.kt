@@ -23,7 +23,7 @@ class SplitEventListenerTest {
             eventType: String,
             value: Double?,
             properties: Map<String, Any?>?,
-        ) = Unit
+        ): Boolean = false
 
         override suspend fun destroy() = Unit
 

@@ -396,9 +396,9 @@ class ConsumerAndroidTest {
     fun trackMethodVariants() {
         val client = buildFactory().getClient()
 
-        client.track("purchase")
-        client.track("purchase", 9.99)
-        client.track("purchase", 9.99, mapOf("plan" to "premium"))
+        assertTrue(client.track("purchase"))
+        assertTrue(client.track("purchase", 9.99))
+        assertTrue(client.track("purchase", 9.99, mapOf("plan" to "premium")))
     }
 
     /**
