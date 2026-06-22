@@ -21,9 +21,11 @@ import io.split.client.thin.internal.evaluation.DefaultSyncDelayCalculator
 import io.split.client.thin.splitClientConfig
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.MockResponse
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -87,8 +89,10 @@ class SdkBehaviorAndroidTest {
             assertTrue("onReady did not fire", listener.awaitReady())
             assertEquals("on", client.getTreatment("flag_a").treatment)
             assertEquals("off", client.getTreatment("flag_b").treatment)
-            assertTrue("expected isInitialCacheLoad == true on fresh init",
-                listener.lastReadyMetadata?.isInitialCacheLoad == true)
+            assertTrue(
+                "expected isInitialCacheLoad == true on fresh init",
+                listener.lastReadyMetadata?.isInitialCacheLoad == true
+            )
         } finally {
             runBlocking { factory.destroy() }
             server.shutdown()
@@ -125,7 +129,8 @@ class SdkBehaviorAndroidTest {
             ),
             trafficType = "user",
         )
-        val factory = buildPollingFactory(server, prefix = "e2e_digest_$RUN_ID", defaultTarget = target)
+        val factory =
+            buildPollingFactory(server, prefix = "e2e_digest_$RUN_ID", defaultTarget = target)
         val client = factory.getClient()
         val listener = TestEventListener()
         client.addEventListener(listener.asSplitEventListener)
@@ -164,8 +169,10 @@ class SdkBehaviorAndroidTest {
         // --- Part B: create a new factory with the same prefix; evaluations are slow ---
         val server = MockSplitServer()
         server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_DISABLED))
-        server.enqueueEvaluations(MockResponse().setBodyDelay(60, TimeUnit.SECONDS)
-            .setBody(E2EFixtures.EVALUATIONS_RESPONSE_1))
+        server.enqueueEvaluations(
+            MockResponse().setBodyDelay(60, TimeUnit.SECONDS)
+                .setBody(E2EFixtures.EVALUATIONS_RESPONSE_1)
+        )
 
         val factory = buildPollingFactory(server, prefix = cachePrefix)
         val client = factory.getClient()
@@ -234,8 +241,10 @@ class SdkBehaviorAndroidTest {
             assertEquals("off", client2.getTreatment("flag_a").treatment)
 
             assertTrue("client2 onUpdate did not fire", listener2.awaitUpdate())
-            assertTrue("client1 received spurious onUpdate (event isolation failure)",
-                listener1.noUpdate())
+            assertTrue(
+                "client1 received spurious onUpdate (event isolation failure)",
+                listener1.noUpdate()
+            )
         } finally {
             runBlocking { factory.destroy() }
             server.shutdown()
@@ -268,7 +277,8 @@ class SdkBehaviorAndroidTest {
             else MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_2)
         }
 
-        val factory = buildPollingFactory(server, prefix = "e2e_update_polling_$RUN_ID", refreshRate = 1)
+        val factory =
+            buildPollingFactory(server, prefix = "e2e_update_polling_$RUN_ID", refreshRate = 1)
         val client = factory.getClient()
         val listener = TestEventListener()
         client.addEventListener(listener.asSplitEventListener)
@@ -277,12 +287,20 @@ class SdkBehaviorAndroidTest {
             assertTrue("onReady did not fire", listener.awaitReady())
             assertEquals("on", client.getTreatment("flag_a").treatment)
 
-            assertTrue("onUpdate did not fire within ${UPDATE_TIMEOUT_SECONDS}s", listener.awaitUpdate())
+            assertTrue(
+                "onUpdate did not fire within ${UPDATE_TIMEOUT_SECONDS}s",
+                listener.awaitUpdate()
+            )
             assertEquals("off", client.getTreatment("flag_a").treatment)
-            assertNotNull("SDK_UPDATE metadata should be present when flags change", listener.lastUpdateMetadata)
+            assertNotNull(
+                "SDK_UPDATE metadata should be present when flags change",
+                listener.lastUpdateMetadata
+            )
             assertEquals(SdkUpdateMetadata.Type.FLAGS_UPDATE, listener.lastUpdateMetadata?.type)
-            assertTrue("changed flags should include flag_a",
-                listener.lastUpdateMetadata?.names?.contains("flag_a") == true)
+            assertTrue(
+                "changed flags should include flag_a",
+                listener.lastUpdateMetadata?.names?.contains("flag_a") == true
+            )
         } finally {
             runBlocking { factory.destroy() }
             server.shutdown()
@@ -366,7 +384,8 @@ class SdkBehaviorAndroidTest {
             server.buildTimedSseResponse(listOf(2L to E2EFixtures.sseControlPaused(1_000)))
         )
 
-        val factory = buildStreamingFactory(server, prefix = "e2e_ctrl_paused_$RUN_ID", pollingRate = 1)
+        val factory =
+            buildStreamingFactory(server, prefix = "e2e_ctrl_paused_$RUN_ID", pollingRate = 1)
         val client = factory.getClient()
         val listener = TestEventListener()
         client.addEventListener(listener.asSplitEventListener)
@@ -391,7 +410,11 @@ class SdkBehaviorAndroidTest {
             assertEquals("off", client.getTreatment("flag_a").treatment)
 
             // Control pause must not have re-opened the socket.
-            assertEquals("control pause must keep the same SSE socket", 1, server.sseConnectionCount.get())
+            assertEquals(
+                "control pause must keep the same SSE socket",
+                1,
+                server.sseConnectionCount.get()
+            )
 
             // Polling is live: requests keep growing across a poll window.
             val before = server.evaluationRequestCount.get()
@@ -432,7 +455,8 @@ class SdkBehaviorAndroidTest {
         // default long-lived SSE response -> onOpen -> recovery.
         repeat(3) { server.enqueueSse(MockResponse().setResponseCode(500)) }
 
-        val factory = buildStreamingFactory(server, prefix = "e2e_conn_fail_$RUN_ID", pollingRate = 1)
+        val factory =
+            buildStreamingFactory(server, prefix = "e2e_conn_fail_$RUN_ID", pollingRate = 1)
         val client = factory.getClient()
         val listener = TestEventListener()
         client.addEventListener(listener.asSplitEventListener)
@@ -467,7 +491,10 @@ class SdkBehaviorAndroidTest {
             val afterRecovery = server.evaluationRequestCount.get()
             Thread.sleep(3_000) // >= 3 poll cycles
             val delta = server.evaluationRequestCount.get() - afterRecovery
-            assertTrue("fallback polling should stop after streaming recovers (delta=$delta)", delta <= 1)
+            assertTrue(
+                "fallback polling should stop after streaming recovers (delta=$delta)",
+                delta <= 1
+            )
         } finally {
             runBlocking { factory.destroy() }
             server.shutdown()
@@ -514,7 +541,8 @@ class SdkBehaviorAndroidTest {
             server.buildTimedSseResponse(listOf(3L to E2EFixtures.SSE_EVALUATION_UPDATE))
         )
 
-        val factory = buildStreamingFactory(server, prefix = "e2e_token_expired_$RUN_ID", pollingRate = 1)
+        val factory =
+            buildStreamingFactory(server, prefix = "e2e_token_expired_$RUN_ID", pollingRate = 1)
         val client = factory.getClient()
         val listener = TestEventListener()
         client.addEventListener(listener.asSplitEventListener)
@@ -586,7 +614,8 @@ class SdkBehaviorAndroidTest {
             )
         )
 
-        val factory = buildStreamingFactory(server, prefix = "e2e_ctrl_resumed_$RUN_ID", pollingRate = 1)
+        val factory =
+            buildStreamingFactory(server, prefix = "e2e_ctrl_resumed_$RUN_ID", pollingRate = 1)
         val client = factory.getClient()
         val listener = TestEventListener()
         client.addEventListener(listener.asSplitEventListener)
@@ -604,15 +633,20 @@ class SdkBehaviorAndroidTest {
             Thread.sleep(5_000)
             val duringPause = server.evaluationRequestCount.get()
             Thread.sleep(2_000)
-            assertTrue("polling should be live during control pause",
-                server.evaluationRequestCount.get() > duringPause)
+            assertTrue(
+                "polling should be live during control pause",
+                server.evaluationRequestCount.get() > duringPause
+            )
 
             // RESUMED arrives ~9s. Give it time to stop polling (+ one catch-up refetch).
             Thread.sleep(4_000)
             val afterResume = server.evaluationRequestCount.get()
             Thread.sleep(3_000) // >= 3 poll cycles
             val delta = server.evaluationRequestCount.get() - afterResume
-            assertTrue("polling should have stopped after control resume (delta=$delta)", delta <= 1)
+            assertTrue(
+                "polling should have stopped after control resume (delta=$delta)",
+                delta <= 1
+            )
 
             // Push is live again: the SSE eval (~15s) drives onUpdate.
             returnUpdated.set(true)
@@ -620,7 +654,11 @@ class SdkBehaviorAndroidTest {
             assertEquals("off", client.getTreatment("flag_a").treatment)
 
             // Everything happened over the same socket — no reconnect.
-            assertEquals("resume must reuse the same SSE socket", 1, server.sseConnectionCount.get())
+            assertEquals(
+                "resume must reuse the same SSE socket",
+                1,
+                server.sseConnectionCount.get()
+            )
         } finally {
             runBlocking { factory.destroy() }
             server.shutdown()
@@ -651,7 +689,8 @@ class SdkBehaviorAndroidTest {
         )
 
         val scenario = launchActivity()
-        val factory = buildStreamingFactory(server, prefix = "e2e_ctrl_bgfg_$RUN_ID", pollingRate = 1)
+        val factory =
+            buildStreamingFactory(server, prefix = "e2e_ctrl_bgfg_$RUN_ID", pollingRate = 1)
         val client = factory.getClient()
         val listener = TestEventListener()
         client.addEventListener(listener.asSplitEventListener)
@@ -670,15 +709,19 @@ class SdkBehaviorAndroidTest {
             Thread.sleep(3_500)
             val beforeBg = server.evaluationRequestCount.get()
             Thread.sleep(2_000)
-            assertTrue("polling should be live while paused + foreground",
-                server.evaluationRequestCount.get() > beforeBg)
+            assertTrue(
+                "polling should be live while paused + foreground",
+                server.evaluationRequestCount.get() > beforeBg
+            )
 
             // Background: polling pauses, socket closes — no reconnect during pause.
             backgroundApp(uiDevice)
             val countAtBackground = server.evaluationRequestCount.get()
             Thread.sleep(2_500)
-            assertEquals("polling must pause in background",
-                countAtBackground, server.evaluationRequestCount.get())
+            assertEquals(
+                "polling must pause in background",
+                countAtBackground, server.evaluationRequestCount.get()
+            )
 
             // Enqueue the reconnect SSE that delivers RESUMED ~4s after foreground.
             server.enqueueSse(
@@ -687,7 +730,10 @@ class SdkBehaviorAndroidTest {
 
             // Foreground: socket reconnects, polling resumes (still control-paused).
             InstrumentationRegistry.getInstrumentation().targetContext.startActivity(
-                Intent(InstrumentationRegistry.getInstrumentation().targetContext, TestActivity::class.java)
+                Intent(
+                    InstrumentationRegistry.getInstrumentation().targetContext,
+                    TestActivity::class.java
+                )
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
             uiDevice.waitForIdle(2_000)
@@ -695,17 +741,22 @@ class SdkBehaviorAndroidTest {
             // SSE reconnects (a new connection) since lifecycle closed the socket.
             val reconnectDeadline = System.currentTimeMillis() + 6_000
             while (server.sseConnectionCount.get() <= connectionsAfterPause &&
-                System.currentTimeMillis() < reconnectDeadline) {
+                System.currentTimeMillis() < reconnectDeadline
+            ) {
                 Thread.sleep(100)
             }
-            assertTrue("SSE should reconnect on foreground",
-                server.sseConnectionCount.get() > connectionsAfterPause)
+            assertTrue(
+                "SSE should reconnect on foreground",
+                server.sseConnectionCount.get() > connectionsAfterPause
+            )
 
             // Polling resumes while still control-paused.
             val beforeFgPoll = server.evaluationRequestCount.get()
             Thread.sleep(2_500)
-            assertTrue("polling should resume on foreground while still control-paused",
-                server.evaluationRequestCount.get() > beforeFgPoll)
+            assertTrue(
+                "polling should resume on foreground while still control-paused",
+                server.evaluationRequestCount.get() > beforeFgPoll
+            )
 
             // RESUMED (~4s after reconnect) stops polling.
             Thread.sleep(4_000)
@@ -786,8 +837,10 @@ class SdkBehaviorAndroidTest {
     fun sdkEmitsTimeoutWhenReadyConditionsNotMet() {
         val server = MockSplitServer()
         server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_DISABLED))
-        server.enqueueEvaluations(MockResponse().setBodyDelay(60, TimeUnit.SECONDS)
-            .setBody(E2EFixtures.EVALUATIONS_RESPONSE_1))
+        server.enqueueEvaluations(
+            MockResponse().setBodyDelay(60, TimeUnit.SECONDS)
+                .setBody(E2EFixtures.EVALUATIONS_RESPONSE_1)
+        )
 
         val config = splitClientConfig {
             sync {
@@ -904,8 +957,10 @@ class SdkBehaviorAndroidTest {
             }
         }
 
-        val factory = buildPollingFactory(server, prefix = "e2e_set_target_$RUN_ID",
-            defaultTarget = targetUser1)
+        val factory = buildPollingFactory(
+            server, prefix = "e2e_set_target_$RUN_ID",
+            defaultTarget = targetUser1
+        )
         val client = factory.getClient()
         val listener = TestEventListener()
         client.addEventListener(listener.asSplitEventListener)
@@ -918,8 +973,10 @@ class SdkBehaviorAndroidTest {
 
             assertTrue("onUpdate did not fire after setTarget", listener.awaitUpdate())
             assertEquals("off", client.getTreatment("flag_a").treatment)
-            assertTrue("evaluations request for user_2 not observed",
-                requestedUsers.contains("user_2"))
+            assertTrue(
+                "evaluations request for user_2 not observed",
+                requestedUsers.contains("user_2")
+            )
         } finally {
             runBlocking { factory.destroy() }
             server.shutdown()
@@ -954,16 +1011,20 @@ class SdkBehaviorAndroidTest {
                     user1Count.incrementAndGet()
                     MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1)
                 }
+
                 "user_2" -> {
                     user2Count.incrementAndGet()
                     MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_2)
                 }
+
                 else -> MockResponse().setBody("""{"till":-1,"since":-1,"evaluations":[]}""")
             }
         }
 
-        val factory = buildPollingFactory(server, prefix = "e2e_evict_orphan_$RUN_ID",
-            defaultTarget = targetUser1, refreshRate = 1)
+        val factory = buildPollingFactory(
+            server, prefix = "e2e_evict_orphan_$RUN_ID",
+            defaultTarget = targetUser1, refreshRate = 1
+        )
         val client = factory.getClient()
         val listener = TestEventListener()
         client.addEventListener(listener.asSplitEventListener)
@@ -987,10 +1048,14 @@ class SdkBehaviorAndroidTest {
             val user1AfterSwitch = user1Count.get() - baselineUser1
             val user2AfterSwitch = user2Count.get() - baselineUser2
 
-            assertEquals("user_1 should not be refetched after setTarget (orphan evicted)",
-                0, user1AfterSwitch)
-            assertTrue("user_2 should continue polling (at least 2 cycles observed), got $user2AfterSwitch",
-                user2AfterSwitch >= 2)
+            assertEquals(
+                "user_1 should not be refetched after setTarget (orphan evicted)",
+                0, user1AfterSwitch
+            )
+            assertTrue(
+                "user_2 should continue polling (at least 2 cycles observed), got $user2AfterSwitch",
+                user2AfterSwitch >= 2
+            )
         } finally {
             runBlocking { factory.destroy() }
             server.shutdown()
@@ -1024,8 +1089,10 @@ class SdkBehaviorAndroidTest {
             }
         }
 
-        val factory = buildPollingFactory(server, prefix = "e2e_jwt_refresh_$RUN_ID",
-            defaultTarget = targetUser1, refreshRate = 3600)
+        val factory = buildPollingFactory(
+            server, prefix = "e2e_jwt_refresh_$RUN_ID",
+            defaultTarget = targetUser1, refreshRate = 3600
+        )
         val client = factory.getClient()
         val listener = TestEventListener()
         client.addEventListener(listener.asSplitEventListener)
@@ -1083,15 +1150,20 @@ class SdkBehaviorAndroidTest {
             }
         }
 
-        val factory = buildPollingFactory(server, prefix = "e2e_manager_flags_$RUN_ID",
-            defaultTarget = targetUser1, refreshRate = 3600)
+        val factory = buildPollingFactory(
+            server, prefix = "e2e_manager_flags_$RUN_ID",
+            defaultTarget = targetUser1, refreshRate = 3600
+        )
         val client = factory.getClient()
         val listener = TestEventListener()
         client.addEventListener(listener.asSplitEventListener)
 
         try {
             assertTrue("onReady did not fire", listener.awaitReady())
-            assertTrue("flagNames should be non-empty after ready", factory.getManager().flagNames.isNotEmpty())
+            assertTrue(
+                "flagNames should be non-empty after ready",
+                factory.getManager().flagNames.isNotEmpty()
+            )
 
             client.setTarget(targetUser2)
             assertTrue("onUpdate did not fire after setTarget", listener.awaitUpdate())
@@ -1142,12 +1214,15 @@ class SdkBehaviorAndroidTest {
                     MockResponse().setBodyDelay(2, TimeUnit.SECONDS)
                         .setBody(E2EFixtures.EVALUATIONS_RESPONSE_2)
                 }
+
                 else -> MockResponse().setBody("""{"till":-1,"since":-1,"evaluations":[]}""")
             }
         }
 
-        val factory = buildPollingFactory(server, prefix = "e2e_dedup_$RUN_ID",
-            defaultTarget = targetUser1)
+        val factory = buildPollingFactory(
+            server, prefix = "e2e_dedup_$RUN_ID",
+            defaultTarget = targetUser1
+        )
         val client = factory.getClient()
         val listener = TestEventListener()
         client.addEventListener(listener.asSplitEventListener)
@@ -1157,13 +1232,210 @@ class SdkBehaviorAndroidTest {
             assertEquals("on", client.getTreatment("flag_a").treatment)
 
             // Fire 5 concurrent setTarget calls while the first fetch is still in-flight
-            val threads = (1..5).map { Thread { client.setTarget(targetUser2) }.also { it.start() } }
+            val threads =
+                (1..5).map { Thread { client.setTarget(targetUser2) }.also { it.start() } }
             threads.forEach { it.join(10_000) }
 
             assertTrue("onUpdate did not fire", listener.awaitUpdate())
             assertEquals("off", client.getTreatment("flag_a").treatment)
-            assertEquals("expected exactly 1 evaluations request for user_2 (dedup)",
-                1, user2RequestCount.get())
+            assertEquals(
+                "expected exactly 1 evaluations request for user_2 (dedup)",
+                1, user2RequestCount.get()
+            )
+        } finally {
+            runBlocking { factory.destroy() }
+            server.shutdown()
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Test 6b — getClient with same key but different target reuses the client and re-targets it
+    // -------------------------------------------------------------------------
+
+    /**
+     * Given a client is created and ready for a target (key user_1, no attributes)
+     * When getClient is called again with the SAME key but a different target
+     * (only the attributes differ — same matchingKey and trafficType)
+     * Then the SAME client instance is returned (clients are keyed by Key)
+     * And setTarget is invoked internally on that client, triggering a re-evaluation
+     * whose POST body carries the new attributes (same matchingKey/trafficType)
+     * And whose request carries a new attribute content-digest (different from the first one)
+     * And the attributed request returns a different payload (RESPONSE_2), so SDK_UPDATE fires
+     * And getTreatment("flag_a") flips from "on" to "off"
+     */
+    @Test
+    fun getClientWithSameKeyDifferentTargetReusesClientAndRetargets() {
+        val targetNoAttrs = Target(key = Key("user_1"), trafficType = "user")
+        val targetWithAttrs = Target(
+            key = Key("user_1"),
+            trafficType = "user",
+            attributes = mapOf("plan" to "premium"),
+        )
+
+        val server = MockSplitServer()
+        server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_DISABLED))
+
+        // Capture the POST body and content-digest header of every evaluations request. Both
+        // targets share the same matchingKey, so the only thing that changes is the attribute
+        // payload.
+        data class EvalRequest(val body: String, val digest: String?)
+
+        val requests = java.util.concurrent.CopyOnWriteArrayList<EvalRequest>()
+        server.evaluationsHandler = { request ->
+            val body = request.body.readUtf8()
+            requests.add(
+                EvalRequest(
+                    body = body,
+                    digest = request.getHeader("X-Harness-FME-Content-Digest"),
+                ),
+            )
+            // Distinct payload per target: the attributed request (plan=premium) returns RESPONSE_2
+            // (flag_a=off) so the retarget produces a real change and fires SDK_UPDATE.
+            val hasAttributes = (JSONObject(body).optJSONObject("attributes")?.length() ?: 0) > 0
+            MockResponse().setBody(
+                if (hasAttributes) E2EFixtures.EVALUATIONS_RESPONSE_2
+                else E2EFixtures.EVALUATIONS_RESPONSE_1,
+            )
+        }
+
+        // refreshRate disabled (3600) so the only post-ready fetch is the one setTarget triggers.
+        val (factory, client1, listener) = buildReadyClient(server, "e2e_getclient_same_key_$RUN_ID", targetNoAttrs)
+
+        try {
+            val requestBeforeSwitch = requests.lastOrNull()
+            assertNotNull("expected an evaluations request before the switch", requestBeforeSwitch)
+            // The initial request targets user_1 with no attributes.
+            val bodyBeforeSwitch = JSONObject(requestBeforeSwitch!!.body)
+            assertEquals("user_1", bodyBeforeSwitch.optString("key"))
+            assertEquals(
+                "initial evaluations request should carry no attributes",
+                0,
+                bodyBeforeSwitch.optJSONObject("attributes")?.length() ?: 0,
+            )
+            val digestBeforeSwitch = requestBeforeSwitch.digest
+            assertNotNull(
+                "expected an evaluations content-digest before the switch",
+                digestBeforeSwitch
+            )
+
+            // The initial evaluations (no attributes) returned RESPONSE_1 → flag_a == "on".
+            assertEquals("on", client1.getTreatment("flag_a").treatment)
+
+            // Same key, only different attributes → must return the SAME client instance.
+            val client2 = factory.getClient(targetWithAttrs)
+            assertSame(
+                "getClient with the same key (only different attributes) must return the same client instance",
+                client1,
+                client2,
+            )
+
+            // And must internally call setTarget on it, triggering a re-evaluation whose POST body
+            // now carries the new attributes. The attributed request returns a different payload
+            // (RESPONSE_2), so the change propagates and SDK_UPDATE fires.
+            assertTrue("onUpdate did not fire after retarget", listener.awaitUpdate())
+            assertEquals("off", client1.getTreatment("flag_a").treatment)
+
+            val retargetRequest =
+                requests.lastOrNull { it.digest != null && it.digest != digestBeforeSwitch }
+            assertNotNull(
+                "setTarget should have been invoked internally on the reused client: expected a new " +
+                        "evaluations request with a content-digest different from $digestBeforeSwitch, saw $requests",
+                retargetRequest,
+            )
+
+            // Assert the re-evaluation POST body: same matchingKey, now carrying the attributes.
+            val retargetBody = JSONObject(retargetRequest!!.body)
+            assertEquals(
+                "re-evaluation must keep the same matchingKey",
+                "user_1",
+                retargetBody.optString("key"),
+            )
+            val attributes = retargetBody.optJSONObject("attributes")
+            assertNotNull("re-evaluation POST body must include the new attributes", attributes)
+            assertEquals(
+                "re-evaluation POST body must carry the updated attribute value",
+                "premium",
+                attributes!!.optString("plan"),
+            )
+        } finally {
+            runBlocking { factory.destroy() }
+            server.shutdown()
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Test 6c — getClient with same key but different trafficType retargets tracked events
+    // -------------------------------------------------------------------------
+
+    /**
+     * Given a client is created and ready for a target (key user_1, trafficType "user")
+     * When getClient is called again with the SAME key but a different target
+     * (only the trafficType differs — same matchingKey and attributes)
+     * Then the SAME client instance is returned (clients are keyed by Key)
+     * And events tracked BEFORE the switch are posted with trafficTypeName "user"
+     * And events tracked AFTER the internal setTarget are posted with trafficTypeName "account"
+     */
+    @Test
+    fun getClientWithSameKeyDifferentTrafficTypeReusesClientAndRetargets() {
+        val targetUser = Target(key = Key("user_1"), trafficType = "user")
+        val targetAccount = Target(key = Key("user_1"), trafficType = "account")
+
+        val server = MockSplitServer()
+        server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_DISABLED))
+        // A trafficType-only change does not re-fetch evaluations, so a static handler suffices.
+        server.evaluationsHandler = { MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1) }
+
+        val (factory, client) = buildReadyClient(server, "e2e_getclient_tt_$RUN_ID", targetUser)
+
+        try {
+            // Events tracked before the switch carry the original trafficType ("user").
+            assertTrue("track(before_event) should be accepted", client.track("before_event"))
+            runBlocking { client.flush() }
+            val beforeBody = awaitEventBody(server) {
+                it.contains("\"eventTypeId\":\"before_event\"")
+            }
+            assertNotNull("before_event was not posted to the events endpoint", beforeBody)
+            assertTrue(
+                "event tracked before setTarget must carry trafficTypeName \"user\", body=$beforeBody",
+                beforeBody!!.contains("\"trafficTypeName\":\"user\""),
+            )
+
+            // Same key, only different trafficType → must return the SAME client instance.
+            val client2 = factory.getClient(targetAccount)
+            assertSame(
+                "getClient with the same key (only different trafficType) must return the same client instance",
+                client,
+                client2,
+            )
+
+            // And must internally call setTarget on it, so subsequently tracked events carry the
+            // new trafficType. setTarget is applied asynchronously, so retry track+flush until the
+            // new trafficType takes effect.
+            val deadline = System.currentTimeMillis() + 5_000L
+            var afterBody: String? = null
+            while (afterBody == null && System.currentTimeMillis() < deadline) {
+                assertTrue("track(after_event) should be accepted", client.track("after_event"))
+                runBlocking { client.flush() }
+                afterBody = server.capturedEventBodies.lastOrNull {
+                    it.contains("\"eventTypeId\":\"after_event\"") &&
+                        it.contains("\"trafficTypeName\":\"account\"")
+                }
+                if (afterBody == null) Thread.sleep(100)
+            }
+            assertNotNull(
+                "setTarget should have updated the trafficType: expected an after_event posted with " +
+                    "trafficTypeName \"account\", saw ${server.capturedEventBodies}",
+                afterBody,
+            )
+
+            // The pre-switch event must never have been posted with the new trafficType.
+            assertTrue(
+                "before_event must not appear with the new trafficType \"account\"",
+                server.capturedEventBodies.none {
+                    it.contains("\"eventTypeId\":\"before_event\"") &&
+                        it.contains("\"trafficTypeName\":\"account\"")
+                },
+            )
         } finally {
             runBlocking { factory.destroy() }
             server.shutdown()
@@ -1202,8 +1474,10 @@ class SdkBehaviorAndroidTest {
             }
         }
 
-        val factory = buildPollingFactory(server, prefix = "e2e_auth_refresh_$RUN_ID",
-            refreshRate = 1)
+        val factory = buildPollingFactory(
+            server, prefix = "e2e_auth_refresh_$RUN_ID",
+            refreshRate = 1
+        )
         val client = factory.getClient()
         val listener = TestEventListener()
         client.addEventListener(listener.asSplitEventListener)
@@ -1215,8 +1489,10 @@ class SdkBehaviorAndroidTest {
             // The 401 on the second poll triggers re-auth + immediate retry
             assertTrue("onUpdate did not fire after 401 re-auth cycle", listener.awaitUpdate())
             assertEquals("off", client.getTreatment("flag_a").treatment)
-            assertEquals("auth endpoint should have been called twice (init + refresh)",
-                2, server.authRequestCount.get())
+            assertEquals(
+                "auth endpoint should have been called twice (init + refresh)",
+                2, server.authRequestCount.get()
+            )
         } finally {
             runBlocking { factory.destroy() }
             server.shutdown()
@@ -1269,7 +1545,10 @@ class SdkBehaviorAndroidTest {
             while (server.sseConnectionCount.get() == 0 && System.currentTimeMillis() < initialSseDeadline) {
                 Thread.sleep(50)
             }
-            assertTrue("initial SSE connection was not established", server.sseConnectionCount.get() > 0)
+            assertTrue(
+                "initial SSE connection was not established",
+                server.sseConnectionCount.get() > 0
+            )
 
             val deadline = System.currentTimeMillis() + 10_000L
             while (server.authRequestCount.get() < 2 && System.currentTimeMillis() < deadline) {
@@ -1295,7 +1574,10 @@ class SdkBehaviorAndroidTest {
             Thread.sleep(1_000) // ProcessLifecycleOwner 700ms debounce + margin
 
             InstrumentationRegistry.getInstrumentation().targetContext.startActivity(
-                Intent(InstrumentationRegistry.getInstrumentation().targetContext, TestActivity::class.java)
+                Intent(
+                    InstrumentationRegistry.getInstrumentation().targetContext,
+                    TestActivity::class.java
+                )
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
             uiDevice.waitForIdle(2_000)
@@ -1355,8 +1637,10 @@ class SdkBehaviorAndroidTest {
 
             assertTrue("no events POST received", server.capturedEventBodies.isNotEmpty())
             val eventsBody = server.capturedEventBodies.last()
-            assertTrue("eventTypeId not found in events body",
-                eventsBody.contains("\"eventTypeId\":\"purchase\""))
+            assertTrue(
+                "eventTypeId not found in events body",
+                eventsBody.contains("\"eventTypeId\":\"purchase\"")
+            )
             assertTrue("value not found in events body", eventsBody.contains("99.0"))
             assertTrue("key not found in events body", eventsBody.contains("\"key\":\"user_a\""))
             assertTrue("property not found in events body", eventsBody.contains("\"item\""))
@@ -1399,7 +1683,8 @@ class SdkBehaviorAndroidTest {
             // destroy() flushes the events coordinator before cancelling the scope
             runBlocking { factory.destroy() }
 
-            assertTrue("events not flushed before destroy completed",
+            assertTrue(
+                "events not flushed before destroy completed",
                 server.capturedEventBodies.any { it.contains("\"eventTypeId\":\"checkout\"") })
         } finally {
             server.shutdown()
@@ -1464,7 +1749,10 @@ class SdkBehaviorAndroidTest {
 
             // Index 0 = init, 1 = onOpen PUSH, 2 = SSE event delayed fetch
             val delayedFetchTs = server.evaluationRequestTimestampsMs.getOrNull(2)
-            assertFalse("expected a third evaluations fetch (SSE event delayed)", delayedFetchTs == null)
+            assertFalse(
+                "expected a third evaluations fetch (SSE event delayed)",
+                delayedFetchTs == null
+            )
             assertTrue(
                 "delayed fetch arrived too early: expected >= sseTs+${expectedDelayMs}ms, got offset ${delayedFetchTs!! - sseApproxTs}ms",
                 delayedFetchTs >= sseApproxTs + expectedDelayMs - 500,
@@ -1520,7 +1808,10 @@ class SdkBehaviorAndroidTest {
             while (server.sseConnectionCount.get() == 0 && System.currentTimeMillis() < sseDeadline) {
                 Thread.sleep(50)
             }
-            assertTrue("streaming did not connect after returning to foreground", server.sseConnectionCount.get() > 0)
+            assertTrue(
+                "streaming did not connect after returning to foreground",
+                server.sseConnectionCount.get() > 0
+            )
         } finally {
             runBlocking { factory.destroy() }
             server.shutdown()
@@ -1581,7 +1872,11 @@ class SdkBehaviorAndroidTest {
             // Verify no new SSE connections during the pause window
             val countDuringPause = server.sseConnectionCount.get()
             Thread.sleep(1_000)
-            assertEquals("SSE reconnected during pause", countDuringPause, server.sseConnectionCount.get())
+            assertEquals(
+                "SSE reconnected during pause",
+                countDuringPause,
+                server.sseConnectionCount.get()
+            )
 
             // Enqueue fresh SSE event + switch evaluations to RESPONSE_2 for reconnect
             returnUpdatedResponse.set(true);
@@ -1591,14 +1886,19 @@ class SdkBehaviorAndroidTest {
 
             // Foreground — bring TestActivity back so ProcessLifecycleOwner fires ON_START
             InstrumentationRegistry.getInstrumentation().targetContext.startActivity(
-                Intent(InstrumentationRegistry.getInstrumentation().targetContext, TestActivity::class.java)
+                Intent(
+                    InstrumentationRegistry.getInstrumentation().targetContext,
+                    TestActivity::class.java
+                )
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
             uiDevice.waitForIdle(2_000)
 
             assertTrue("onUpdate did not fire after SSE reconnect", listener.awaitUpdate(15))
-            assertTrue("SSE should have reconnected after resume",
-                server.sseConnectionCount.get() > countDuringPause)
+            assertTrue(
+                "SSE should have reconnected after resume",
+                server.sseConnectionCount.get() > countDuringPause
+            )
             assertEquals("off", client.getTreatment("flag_a").treatment)
         } finally {
             scenario.close()
@@ -1685,7 +1985,10 @@ class SdkBehaviorAndroidTest {
 
             // Foreground — bring TestActivity back so ProcessLifecycleOwner fires ON_START
             InstrumentationRegistry.getInstrumentation().targetContext.startActivity(
-                Intent(InstrumentationRegistry.getInstrumentation().targetContext, TestActivity::class.java)
+                Intent(
+                    InstrumentationRegistry.getInstrumentation().targetContext,
+                    TestActivity::class.java
+                )
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
             uiDevice.waitForIdle(2_000)
@@ -1743,7 +2046,10 @@ class SdkBehaviorAndroidTest {
             // Foreground — bring TestActivity back, then explicitly flush to confirm events
             // are still buffered and can be posted after lifecycle resumes.
             InstrumentationRegistry.getInstrumentation().targetContext.startActivity(
-                Intent(InstrumentationRegistry.getInstrumentation().targetContext, TestActivity::class.java)
+                Intent(
+                    InstrumentationRegistry.getInstrumentation().targetContext,
+                    TestActivity::class.java
+                )
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
             uiDevice.waitForIdle(2_000)
@@ -1815,7 +2121,10 @@ class SdkBehaviorAndroidTest {
             Thread.sleep(500) // ProcessLifecycleOwner 700ms debounce + margin
 
             InstrumentationRegistry.getInstrumentation().targetContext.startActivity(
-                Intent(InstrumentationRegistry.getInstrumentation().targetContext, TestActivity::class.java)
+                Intent(
+                    InstrumentationRegistry.getInstrumentation().targetContext,
+                    TestActivity::class.java
+                )
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
             uiDevice.waitForIdle(2_000)
@@ -1917,7 +2226,10 @@ class SdkBehaviorAndroidTest {
             )
 
             InstrumentationRegistry.getInstrumentation().targetContext.startActivity(
-                Intent(InstrumentationRegistry.getInstrumentation().targetContext, TestActivity::class.java)
+                Intent(
+                    InstrumentationRegistry.getInstrumentation().targetContext,
+                    TestActivity::class.java
+                )
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
             uiDevice.waitForIdle(2_000)
@@ -1944,8 +2256,14 @@ class SdkBehaviorAndroidTest {
      */
     @Test
     fun configsEnabledTrueSendsEvaluatorWithConfigsCapabilityOnAuthRequest() {
-        val captured = captureRequestsAfterReady(configsEnabled = true, prefix = "e2e_dyn_cfg_auth_true_$RUN_ID")
-        assertTrue("auth request should contain capabilities=evaluatorWithConfigs", captured.authQuery.contains("capabilities=evaluatorWithConfigs"))
+        val captured = captureRequestsAfterReady(
+            configsEnabled = true,
+            prefix = "e2e_dyn_cfg_auth_true_$RUN_ID"
+        )
+        assertTrue(
+            "auth request should contain capabilities=evaluatorWithConfigs",
+            captured.authQuery.contains("capabilities=evaluatorWithConfigs")
+        )
     }
 
     /**
@@ -1955,8 +2273,14 @@ class SdkBehaviorAndroidTest {
      */
     @Test
     fun configsEnabledTrueSendsConfigsParamOnEvaluationsRequest() {
-        val captured = captureRequestsAfterReady(configsEnabled = true, prefix = "e2e_dyn_cfg_eval_true_$RUN_ID")
-        assertTrue("evaluations request body should contain \"configs\":true", captured.evalBody.contains("\"configs\":true"))
+        val captured = captureRequestsAfterReady(
+            configsEnabled = true,
+            prefix = "e2e_dyn_cfg_eval_true_$RUN_ID"
+        )
+        assertTrue(
+            "evaluations request body should contain \"configs\":true",
+            captured.evalBody.contains("\"configs\":true")
+        )
     }
 
     /**
@@ -1967,9 +2291,18 @@ class SdkBehaviorAndroidTest {
      */
     @Test
     fun configsEnabledFalseSendsEvaluatorCapabilityOnAuthRequest() {
-        val captured = captureRequestsAfterReady(configsEnabled = false, prefix = "e2e_dyn_cfg_auth_false_$RUN_ID")
-        assertTrue("auth request should contain capabilities=evaluator", captured.authQuery.contains("capabilities=evaluator"))
-        assertFalse("auth request should not contain evaluatorWithConfigs", captured.authQuery.contains("evaluatorWithConfigs"))
+        val captured = captureRequestsAfterReady(
+            configsEnabled = false,
+            prefix = "e2e_dyn_cfg_auth_false_$RUN_ID"
+        )
+        assertTrue(
+            "auth request should contain capabilities=evaluator",
+            captured.authQuery.contains("capabilities=evaluator")
+        )
+        assertFalse(
+            "auth request should not contain evaluatorWithConfigs",
+            captured.authQuery.contains("evaluatorWithConfigs")
+        )
     }
 
     /**
@@ -1979,8 +2312,14 @@ class SdkBehaviorAndroidTest {
      */
     @Test
     fun configsEnabledFalseDoesNotSendConfigsParamOnEvaluationsRequest() {
-        val captured = captureRequestsAfterReady(configsEnabled = false, prefix = "e2e_dyn_cfg_eval_false_$RUN_ID")
-        assertTrue("evaluations request body should contain \"configs\":false", captured.evalBody.contains("\"configs\":false"))
+        val captured = captureRequestsAfterReady(
+            configsEnabled = false,
+            prefix = "e2e_dyn_cfg_eval_false_$RUN_ID"
+        )
+        assertTrue(
+            "evaluations request body should contain \"configs\":false",
+            captured.evalBody.contains("\"configs\":false")
+        )
     }
 
     // Test 17 — configsEnabled change across restarts clears cached evaluations
@@ -2001,20 +2340,26 @@ class SdkBehaviorAndroidTest {
             server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_DISABLED))
             server.enqueueEvaluations(MockResponse().setBody(E2EFixtures.EVALUATIONS_WITHOUT_CONFIG))
 
-            val factory1 = buildPollingFactoryWithDynamicConfig(server, prefix, configsEnabled = false)
+            val factory1 =
+                buildPollingFactoryWithDynamicConfig(server, prefix, configsEnabled = false)
             val client1 = factory1.getClient()
             val listener1 = TestEventListener()
             client1.addEventListener(listener1.asSplitEventListener)
 
             assertTrue("Phase 1: onReady did not fire", listener1.awaitReady())
-            assertEquals("Phase 1: my_feature treatment", "on", client1.getTreatment("my_feature").treatment)
+            assertEquals(
+                "Phase 1: my_feature treatment",
+                "on",
+                client1.getTreatment("my_feature").treatment
+            )
             runBlocking { factory1.destroy() }
 
             // Phase 2: restart with configsEnabled=true — cache must be cleared and re-fetched
             server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_DISABLED))
             server.enqueueEvaluations(MockResponse().setBody(E2EFixtures.EVALUATIONS_WITH_CONFIG))
 
-            val factory2 = buildPollingFactoryWithDynamicConfig(server, prefix, configsEnabled = true)
+            val factory2 =
+                buildPollingFactoryWithDynamicConfig(server, prefix, configsEnabled = true)
             val client2 = factory2.getClient()
             val listener2 = TestEventListener()
             client2.addEventListener(listener2.asSplitEventListener)
@@ -2034,7 +2379,10 @@ class SdkBehaviorAndroidTest {
 
             val treatment2 = client2.getTreatment("my_feature")
             assertEquals("Phase 2: my_feature treatment", "on", treatment2.treatment)
-            assertNotNull("Phase 2: config should be present with configsEnabled=true", treatment2.config)
+            assertNotNull(
+                "Phase 2: config should be present with configsEnabled=true",
+                treatment2.config
+            )
 
             runBlocking { factory2.destroy() }
         } finally {
@@ -2055,7 +2403,10 @@ class SdkBehaviorAndroidTest {
             prefix = "e2e_flag_sets_param_$RUN_ID",
             flagSets = setOf("set_b", "set_a"),
         )
-        assertTrue("evaluations request body should contain \"sets\":[\"set_a\",\"set_b\"], got: ${captured.evalBody}", captured.evalBody.contains("\"sets\":[\"set_a\",\"set_b\"]"))
+        assertTrue(
+            "evaluations request body should contain \"sets\":[\"set_a\",\"set_b\"], got: ${captured.evalBody}",
+            captured.evalBody.contains("\"sets\":[\"set_a\",\"set_b\"]")
+        )
     }
 
     /**
@@ -2070,7 +2421,10 @@ class SdkBehaviorAndroidTest {
             prefix = "e2e_no_flag_sets_$RUN_ID",
             flagSets = null,
         )
-        assertTrue("evaluations request body should contain \"sets\":[], got: ${captured.evalBody}", captured.evalBody.contains("\"sets\":[]"))
+        assertTrue(
+            "evaluations request body should contain \"sets\":[], got: ${captured.evalBody}",
+            captured.evalBody.contains("\"sets\":[]")
+        )
     }
 
     // -------------------------------------------------------------------------
@@ -2125,8 +2479,10 @@ class SdkBehaviorAndroidTest {
         val targetA = Target(key = Key("user_a"), trafficType = "user")
         val targetB = Target(key = Key("user_b"), trafficType = "user")
 
-        val factory = buildPollingFactory(server, prefix = "e2e_auth_repeated_users_$RUN_ID",
-            defaultTarget = targetA)
+        val factory = buildPollingFactory(
+            server, prefix = "e2e_auth_repeated_users_$RUN_ID",
+            defaultTarget = targetA
+        )
         val client1 = factory.getClient(targetA)
         val client2 = factory.getClient(targetB)
 
@@ -2153,7 +2509,7 @@ class SdkBehaviorAndroidTest {
 
             assertNotNull(
                 "No auth request with both key= params found. Captured queries: " +
-                    server.capturedAuthRequests.map { it.requestUrl?.query },
+                        server.capturedAuthRequests.map { it.requestUrl?.query },
                 multiUserAuthQuery,
             )
 
@@ -2190,12 +2546,21 @@ class SdkBehaviorAndroidTest {
      * Builds a factory with [configsEnabled], waits for onReady, then returns the query strings
      * and body from the first auth and evaluations requests.
      */
-    private fun captureRequestsAfterReady(configsEnabled: Boolean, prefix: String, flagSets: Set<String>? = null): CapturedRequests {
+    private fun captureRequestsAfterReady(
+        configsEnabled: Boolean,
+        prefix: String,
+        flagSets: Set<String>? = null
+    ): CapturedRequests {
         val server = MockSplitServer()
         server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_DISABLED))
         server.enqueueEvaluations(MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1))
 
-        val factory = buildPollingFactoryWithDynamicConfig(server, prefix = prefix, configsEnabled = configsEnabled, flagSets = flagSets)
+        val factory = buildPollingFactoryWithDynamicConfig(
+            server,
+            prefix = prefix,
+            configsEnabled = configsEnabled,
+            flagSets = flagSets
+        )
         val client = factory.getClient()
         val listener = TestEventListener()
         client.addEventListener(listener.asSplitEventListener)
@@ -2244,6 +2609,7 @@ class SdkBehaviorAndroidTest {
             when (request.evaluationsKey()) {
                 "user_a" -> MockResponse().setBodyDelay(60, TimeUnit.SECONDS)
                     .setBody(E2EFixtures.EVALUATIONS_RESPONSE_1)
+
                 "user_b" -> MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_2)
                 else -> MockResponse().setBody("""{"till":-1,"since":-1,"evaluations":[]}""")
             }
@@ -2262,10 +2628,14 @@ class SdkBehaviorAndroidTest {
         client.addEventListener(listener.asSplitEventListener)
 
         try {
-            assertTrue("SDK_READY did not fire after setTarget in onReadyFromCache",
-                listener.awaitReady())
-            assertTrue("SDK_UPDATE should not fire (SDK_READY had not fired when setTarget was called)",
-                listener.noUpdate())
+            assertTrue(
+                "SDK_READY did not fire after setTarget in onReadyFromCache",
+                listener.awaitReady()
+            )
+            assertTrue(
+                "SDK_UPDATE should not fire (SDK_READY had not fired when setTarget was called)",
+                listener.noUpdate()
+            )
         } finally {
             runBlocking { factory.destroy() }
             server.shutdown()
@@ -2360,7 +2730,10 @@ class SdkBehaviorAndroidTest {
             assertTrue("onReady did not fire", listener.awaitReady())
             // e2e-test-key: first 4 = "e2e-", last 4 = "-key"
             val dbFile = context.getDatabasePath("io.harness.thin.v3.myapp.e2e--key.db")
-            assertTrue("Database file should exist with global prefix, version, and user prefix", dbFile.exists())
+            assertTrue(
+                "Database file should exist with global prefix, version, and user prefix",
+                dbFile.exists()
+            )
         } finally {
             runBlocking { factory.destroy() }
             server.shutdown()
@@ -2372,7 +2745,45 @@ class SdkBehaviorAndroidTest {
     // -------------------------------------------------------------------------
 
     private fun okhttp3.mockwebserver.RecordedRequest.evaluationsKey(): String =
-        org.json.JSONObject(body.readUtf8()).optString("key", "")
+        JSONObject(body.readUtf8()).optString("key", "")
+
+    /**
+     * Builds a POLLING factory for [defaultTarget], registers a listener, and blocks until the
+     * client reaches onReady. Returns the factory and the ready client so the caller can drive
+     * target-specific assertions. The caller owns teardown (factory.destroy / server.shutdown).
+     */
+    private fun buildReadyClient(
+        server: MockSplitServer,
+        prefix: String,
+        defaultTarget: Target,
+        refreshRate: Int = 3600,
+    ): Triple<SplitFactory, SplitClient, TestEventListener> {
+        val factory = buildPollingFactory(
+            server,
+            prefix = prefix,
+            defaultTarget = defaultTarget,
+            refreshRate = refreshRate,
+        )
+        val client = factory.getClient(defaultTarget)
+        val listener = TestEventListener()
+        client.addEventListener(listener.asSplitEventListener)
+        assertTrue("onReady did not fire", listener.awaitReady())
+        return Triple(factory, client, listener)
+    }
+
+    /** Polls [MockSplitServer.capturedEventBodies] until one matches [predicate] or the timeout elapses. */
+    private fun awaitEventBody(
+        server: MockSplitServer,
+        timeoutMs: Long = 5_000L,
+        predicate: (String) -> Boolean,
+    ): String? {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            server.capturedEventBodies.firstOrNull(predicate)?.let { return it }
+            Thread.sleep(50)
+        }
+        return null
+    }
 
     /** Launches [TestActivity] so [ProcessLifecycleOwner] can be driven in lifecycle tests. */
     private fun launchActivity(): ActivityScenario<TestActivity> =
@@ -2408,8 +2819,10 @@ class SdkBehaviorAndroidTest {
 
         try {
             assertTrue("populateCache: onReady did not fire", listener.awaitReady())
-            assertEquals("populateCache: flag_a treatment", "on",
-                client.getTreatment("flag_a").treatment)
+            assertEquals(
+                "populateCache: flag_a treatment", "on",
+                client.getTreatment("flag_a").treatment
+            )
         } finally {
             runBlocking { factory.destroy() }
             server.shutdown()
@@ -2547,10 +2960,14 @@ class SdkBehaviorAndroidTest {
 
         try {
             Thread.sleep(2_000)
-            assertEquals("no auth requests expected for blank SDK key",
-                0, server.authRequestCount.get())
-            assertEquals("no evaluation requests expected for blank SDK key",
-                0, server.evaluationRequestCount.get())
+            assertEquals(
+                "no auth requests expected for blank SDK key",
+                0, server.authRequestCount.get()
+            )
+            assertEquals(
+                "no evaluation requests expected for blank SDK key",
+                0, server.evaluationRequestCount.get()
+            )
             assertFalse("SDK_READY should not fire for blank SDK key", listener.isReadyFired)
         } finally {
             runBlocking { factory.destroy() }
@@ -2585,8 +3002,10 @@ class SdkBehaviorAndroidTest {
             client.setTarget(Target(key = Key(""), trafficType = "user"))
 
             Thread.sleep(2_000)
-            assertEquals("no new evaluation requests expected for blank matchingKey",
-                countAfterReady, server.evaluationRequestCount.get())
+            assertEquals(
+                "no new evaluation requests expected for blank matchingKey",
+                countAfterReady, server.evaluationRequestCount.get()
+            )
         } finally {
             runBlocking { factory.destroy() }
             server.shutdown()
@@ -2721,11 +3140,13 @@ class SdkBehaviorAndroidTest {
                     userACallCount.incrementAndGet()
                     MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1)
                 }
+
                 "user_b" -> {
                     val count = userBCallCount.incrementAndGet()
                     if (count == 1) MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_2)
                     else MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_2_UPDATED)
                 }
+
                 else -> MockResponse().setBody("""{"till":-1,"since":-1,"evaluations":[]}""")
             }
         }
@@ -2750,7 +3171,10 @@ class SdkBehaviorAndroidTest {
             runBlocking { clientA.destroy() }
             val userACountAfterDestroy = userACallCount.get()
 
-            assertTrue("clientB onUpdate did not fire after clientA destroy", listenerB.awaitUpdate())
+            assertTrue(
+                "clientB onUpdate did not fire after clientA destroy",
+                listenerB.awaitUpdate()
+            )
             assertTrue("clientA received spurious onUpdate after destroy", listenerA.noUpdate())
             assertEquals(
                 "user_a evaluations should not be fetched after clientA destroy",
@@ -2808,7 +3232,7 @@ class SdkBehaviorAndroidTest {
 
             assertEquals(
                 "SSE event delivered after destroy must NOT trigger an evaluations fetch " +
-                    "(streaming should have been stopped on destroy)",
+                        "(streaming should have been stopped on destroy)",
                 evalCountBeforeDestroy,
                 server.evaluationRequestCount.get(),
             )
@@ -2911,9 +3335,11 @@ class SdkBehaviorAndroidTest {
                     bodies.any { it.contains("\"key\":\"user_b\"") && it.contains("\"eventTypeId\":\"phase1_event\"") }) break
                 Thread.sleep(50)
             }
-            assertTrue("client1 phase1_event not received",
+            assertTrue(
+                "client1 phase1_event not received",
                 server.capturedEventBodies.any { it.contains("\"key\":\"user_a\"") && it.contains("\"eventTypeId\":\"phase1_event\"") })
-            assertTrue("client2 phase1_event not received",
+            assertTrue(
+                "client2 phase1_event not received",
                 server.capturedEventBodies.any { it.contains("\"key\":\"user_b\"") && it.contains("\"eventTypeId\":\"phase1_event\"") })
 
             // Phase 2: destroy client1 — only client2 should track
@@ -2924,13 +3350,19 @@ class SdkBehaviorAndroidTest {
             runBlocking { client2.flush() }
 
             val deadline2 = System.currentTimeMillis() + 5_000L
-            while (!server.capturedEventBodies.any { it.contains("\"key\":\"user_b\"") && it.contains("\"eventTypeId\":\"phase2_event\"") }
+            while (!server.capturedEventBodies.any {
+                    it.contains("\"key\":\"user_b\"") && it.contains(
+                        "\"eventTypeId\":\"phase2_event\""
+                    )
+                }
                 && System.currentTimeMillis() < deadline2) {
                 Thread.sleep(50)
             }
-            assertTrue("client2 phase2_event not received after client1 destroyed",
+            assertTrue(
+                "client2 phase2_event not received after client1 destroyed",
                 server.capturedEventBodies.any { it.contains("\"key\":\"user_b\"") && it.contains("\"eventTypeId\":\"phase2_event\"") })
-            assertFalse("client1 phase2_event must not be tracked after destroy",
+            assertFalse(
+                "client1 phase2_event must not be tracked after destroy",
                 server.capturedEventBodies.any { it.contains("\"key\":\"user_a\"") && it.contains("\"eventTypeId\":\"phase2_event\"") })
 
             // Phase 3: destroy client2 — no events should be tracked
@@ -2941,8 +3373,10 @@ class SdkBehaviorAndroidTest {
 
             Thread.sleep(2_000)
 
-            assertEquals("no new events expected after both clients destroyed",
-                countBeforePhase3, server.capturedEventBodies.size)
+            assertEquals(
+                "no new events expected after both clients destroyed",
+                countBeforePhase3, server.capturedEventBodies.size
+            )
         } finally {
             runBlocking { runCatching { factory.destroy() } }
             server.shutdown()
