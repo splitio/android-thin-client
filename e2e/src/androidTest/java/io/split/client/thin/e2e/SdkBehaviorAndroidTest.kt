@@ -2074,6 +2074,36 @@ class SdkBehaviorAndroidTest {
     }
 
     // -------------------------------------------------------------------------
+    // Test — flagSets are propagated to EvaluationResult
+    // -------------------------------------------------------------------------
+
+    /**
+     * Given the SDK is configured in POLLING mode and the evaluations response includes sets
+     * When a client reaches onReady
+     * Then getTreatment("flag_a").flagSets contains the sets from the server response
+     */
+    @Test
+    fun getTreatment_returnsFlagSets() {
+        val server = MockSplitServer()
+        server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_DISABLED))
+        server.enqueueEvaluations(MockResponse().setBody(E2EFixtures.EVALUATIONS_WITH_FLAG_SETS))
+
+        val factory = buildPollingFactory(server, prefix = "e2e_flag_sets_result_$RUN_ID")
+        val client = factory.getClient()
+        val listener = TestEventListener()
+        client.addEventListener(listener.asSplitEventListener)
+
+        try {
+            assertTrue("onReady did not fire", listener.awaitReady())
+            val result = client.getTreatment("flag_a")
+            assertEquals(setOf("set_1", "set_2"), result.flagSets)
+        } finally {
+            runBlocking { factory.destroy() }
+            server.shutdown()
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // Test — auth request uses repeated key= params for multiple clients
     // -------------------------------------------------------------------------
 

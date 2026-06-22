@@ -107,6 +107,12 @@ object E2EFixtures {
     const val EVALUATIONS_WITH_CONFIG: String = """{"till":2000,"since":2000,"evaluations":[""" +
         """{"flag":"my_feature","treatment":"on","sets":[],"config":"{\"color\":\"blue\"}"}]}"""
 
+    /**
+     * Evaluations payload with sets populated — for verifying flagSets propagation.
+     */
+    const val EVALUATIONS_WITH_FLAG_SETS: String = """{"till":1000,"since":1000,"evaluations":[""" +
+        """{"flag":"flag_a","treatment":"on","sets":["set_1","set_2"],"config":null}]}"""
+
     // -------------------------------------------------------------------------
     // SSE / streaming events
     // -------------------------------------------------------------------------

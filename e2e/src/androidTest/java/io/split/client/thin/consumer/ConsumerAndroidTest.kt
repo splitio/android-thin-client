@@ -199,12 +199,14 @@ class ConsumerAndroidTest {
             flag = "my-flag",
             treatment = "on",
             config = """{"color":"red"}""",
-            changeNumber = 42L
+            changeNumber = 42L,
+            flagSets = setOf("set_a", "set_b")
         )
         assertEquals("my-flag", result.flag)
         assertEquals("on", result.treatment)
         assertEquals("""{"color":"red"}""", result.config)
         assertEquals(42L, result.changeNumber)
+        assertEquals(setOf("set_a", "set_b"), result.flagSets)
     }
 
 

@@ -12,4 +12,6 @@ data class EvaluationResult(
     val config: String? = null,
     /** Change number associated with this result. */
     val changeNumber: Long? = null,
+    /** Flag sets this flag belongs to. */
+    val flagSets: Set<String> = emptySet(),
 )

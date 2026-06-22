@@ -21,8 +21,10 @@ import io.split.client.thin.e2e.MockSplitServer;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import io.split.client.thin.SplitCallback;
 import io.split.client.thin.SplitVoidCallback;
@@ -197,13 +199,15 @@ public class ConsumerJavaAndroidTest {
      */
     @Test
     public void evaluationResultFields() {
+        Set<String> sets = new HashSet<>(Arrays.asList("set_a", "set_b"));
         EvaluationResult result = new EvaluationResult(
-                "my-flag", "on", "{\"color\":\"red\"}", 42L
+                "my-flag", "on", "{\"color\":\"red\"}", 42L, sets
         );
         assertEquals("my-flag", result.getFlag());
         assertEquals("on", result.getTreatment());
         assertEquals("{\"color\":\"red\"}", result.getConfig());
         assertEquals(Long.valueOf(42L), result.getChangeNumber());
+        assertEquals(sets, result.getFlagSets());
     }
 
     /**

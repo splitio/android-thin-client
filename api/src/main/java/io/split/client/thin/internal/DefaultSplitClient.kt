@@ -147,13 +147,13 @@ internal class DefaultSplitClient(
 
     private fun resolveResult(flag: String, stored: StoredEvaluation?): EvaluationResult {
         if (stored != null && stored.result.treatment != CONTROL) {
-            return stored.result
+            return stored.result.copy(flagSets = stored.flagSets)
         }
         val fallback = fallbackCalculator?.resolve(flag)
         if (fallback != null && fallback.treatment != CONTROL) {
             return EvaluationResult(flag, fallback.treatment, fallback.config)
         }
-        return stored?.result ?: EvaluationResult(flag, CONTROL)
+        return stored?.result?.copy(flagSets = stored.flagSets) ?: EvaluationResult(flag, CONTROL)
     }
 
     companion object {
