@@ -104,6 +104,7 @@ class FakeHttpResponse(
 ) : HttpResponse {
     override val isSuccess: Boolean = statusCode in 200..299
     override val httpStatus: Int = statusCode
+    override val headers: Map<String, List<String>> = emptyMap()
     override fun getData(): String? = data
 }
 

@@ -1,5 +1,6 @@
 package io.split.client.thin.internal.secure
 
+import io.split.android.client.utils.logger.Logger
 import io.split.client.thin.http.HttpRequestDescriptor
 import io.split.client.thin.http.RequestCategory
 import io.split.client.thin.http.RetryableHttpClient
@@ -29,21 +30,22 @@ internal class DefaultSecureHttpClient(
         val uri = buildEvaluationsUri(changeNumber, targetChangeNumber)
         val body = buildEvaluationsBody(target, request)
         val digest = ContentDigest.compute(body)
+        val correlationId = newCorrelationId()
         val token = authProvider.credential().token
         val httpRequest = buildEvaluationsRequest(uri, body, token, digest)
-        val response = retryableHttpClient.execute(httpRequest, RequestCategory.EVALUATIONS)
+        val response = executeLogged(correlationId, httpRequest, RequestCategory.EVALUATIONS)
         if (response.httpStatus == HTTP_UNAUTHORIZED) {
             authProvider.invalidateAll()
             val freshToken = authProvider.credential().token
             val retryRequest = buildEvaluationsRequest(uri, body, freshToken, digest)
-            return retryableHttpClient.execute(retryRequest, RequestCategory.EVALUATIONS)
+            return executeLogged(correlationId, retryRequest, RequestCategory.EVALUATIONS)
         }
         return response
     }
 
     override suspend fun postEvents(payload: String): HttpResponse {
         val request = buildRequest(URI(eventsUrl), HttpMethod.POST, payload, sdkKey)
-        return retryableHttpClient.execute(request, RequestCategory.EVENTS)
+        return executeLogged(newCorrelationId(), request, RequestCategory.EVENTS)
     }
 
     override suspend fun postTelemetry(payload: String): HttpResponse {
@@ -56,15 +58,27 @@ internal class DefaultSecureHttpClient(
         body: String,
         category: RequestCategory,
     ): HttpResponse {
+        val correlationId = newCorrelationId()
         val token = authProvider.credential().token
         val request = buildRequest(uri, method, body, token)
-        val response = retryableHttpClient.execute(request, category)
+        val response = executeLogged(correlationId, request, category)
         if (response.httpStatus == HTTP_UNAUTHORIZED) {
             authProvider.invalidateAll()
             val freshToken = authProvider.credential().token
             val retryRequest = buildRequest(uri, method, body, freshToken)
-            return retryableHttpClient.execute(retryRequest, category)
+            return executeLogged(correlationId, retryRequest, category)
         }
+        return response
+    }
+
+    private suspend fun executeLogged(
+        correlationId: String,
+        request: HttpRequestDescriptor,
+        category: RequestCategory,
+    ): HttpResponse {
+        logRequest(correlationId, request)
+        val response = retryableHttpClient.execute(request, category)
+        logResponse(correlationId, response)
         return response
     }
 
@@ -145,6 +159,20 @@ internal class DefaultSecureHttpClient(
         fun build(): String = params.entries
             .sortedBy { it.key }
             .joinToString("&") { "${it.key}=${it.value}" }
+    }
+
+    private fun newCorrelationId(): String = java.util.UUID.randomUUID().toString().take(8)
+
+    private fun logRequest(correlationId: String, request: HttpRequestDescriptor) {
+        Logger.v(">>> [$correlationId] ${request.method} ${request.uri}")
+        request.headers.forEach { (k, v) -> Logger.v("  [$correlationId] $k: $v") }
+        request.body?.let { Logger.v("  [$correlationId] Body: $it") }
+    }
+
+    private fun logResponse(correlationId: String, response: HttpResponse) {
+        Logger.v("<<< [$correlationId] ${response.httpStatus}")
+        response.headers.forEach { (k, vs) -> Logger.v("  [$correlationId] $k: ${vs.joinToString()}") }
+        Logger.v("  [$correlationId] Body: ${response.getData()}")
     }
 
     private fun encode(value: String): String = URLEncoder.encode(value, "UTF-8")

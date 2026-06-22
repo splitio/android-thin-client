@@ -23,6 +23,7 @@ class FakeHttpResponse(
     override val httpStatus: Int,
     private val data: String? = null
 ) : HttpResponse {
+    override val headers: Map<String, List<String>> = emptyMap()
     override fun getData(): String? = data
 }
 

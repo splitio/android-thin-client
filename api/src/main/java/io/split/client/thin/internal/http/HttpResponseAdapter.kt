@@ -13,5 +13,8 @@ internal class HttpResponseAdapter(
     override val httpStatus: Int
         get() = delegate.httpStatus
 
+    override val headers: Map<String, List<String>>
+        get() = emptyMap()
+
     override fun getData(): String? = delegate.data
 }
