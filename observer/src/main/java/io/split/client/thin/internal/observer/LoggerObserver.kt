@@ -13,6 +13,7 @@ class LoggerObserver(
             message
         }
         when (LOG_LEVELS[event.type]) {
+            Level.VERBOSE -> logger.verbose(finalMessage)
             Level.DEBUG -> logger.debug(finalMessage)
             Level.INFO -> logger.info(message)
             Level.WARN -> logger.warn(message)
@@ -29,7 +30,7 @@ class LoggerObserver(
         return result
     }
 
-    private enum class Level { DEBUG, INFO, WARN, ERROR }
+    private enum class Level { VERBOSE, DEBUG, INFO, WARN, ERROR }
 
     companion object {
         // Map event type → log level (from spec Appendix I)
@@ -88,7 +89,7 @@ class LoggerObserver(
             ObservableEventType.STREAMING_CONNECT_STARTED to Level.DEBUG,
             ObservableEventType.STREAMING_CONNECTED to Level.DEBUG,
             ObservableEventType.STREAMING_DISCONNECTED to Level.DEBUG,
-            ObservableEventType.STREAMING_NOTIFICATION_RECEIVED to Level.DEBUG,
+            ObservableEventType.STREAMING_NOTIFICATION_RECEIVED to Level.VERBOSE,
             ObservableEventType.STREAMING_PAUSED to Level.DEBUG,
             ObservableEventType.STREAMING_RESUMED to Level.DEBUG,
         )

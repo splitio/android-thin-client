@@ -90,6 +90,7 @@ internal class FakeRetryableHttpClient(
         return object : HttpResponse {
             override val isSuccess: Boolean = code in 200..299
             override val httpStatus: Int = code
+            override val headers: Map<String, List<String>> = emptyMap()
             override fun getData(): String? = null
         }
     }
