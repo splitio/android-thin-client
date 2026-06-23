@@ -6,6 +6,10 @@ import io.split.android.client.utils.logger.Logger as AndroidLogger
  * Adapter that implements observer.Logger by delegating to the android-client Logger singleton.
  */
 internal class AndroidLoggerAdapter : Logger {
+    override fun verbose(message: String) {
+        AndroidLogger.v(message)
+    }
+
     override fun debug(message: String) {
         AndroidLogger.d(message)
     }

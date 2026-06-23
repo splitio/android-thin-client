@@ -66,6 +66,18 @@ class LoggerObserverTest {
     }
 
     @Test
+    fun `logs streaming_notification_received at VERBOSE level`() {
+        val event = ObservableEvent(
+            type = "streaming_notification_received",
+            properties = mapOf("notificationType" to "EVALUATIONS_UPDATE")
+        )
+
+        observer.notifyEvent(event)
+
+        verify(logger).verbose(contains("Streaming notification received"))
+    }
+
+    @Test
     fun `logs unknown event types using DEBUG level`() {
         val event = ObservableEvent(
             type = "unknown_event",
