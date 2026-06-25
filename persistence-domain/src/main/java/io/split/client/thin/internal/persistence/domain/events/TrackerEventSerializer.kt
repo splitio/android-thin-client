@@ -23,65 +23,51 @@ import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 
-private object AnyMapValueSerializer : KSerializer<Map<String, Any>> {
-    override val descriptor: SerialDescriptor = buildClassSerialDescriptor("AnyMap")
+private object NullableAnyMapSerializer : KSerializer<Map<String, Any?>> {
+    override val descriptor: SerialDescriptor = buildClassSerialDescriptor("NullableAnyMap")
 
-    override fun serialize(encoder: Encoder, value: Map<String, Any>) {
-        val filtered = value.filterValues { it != null }
+    override fun serialize(encoder: Encoder, value: Map<String, Any?>) {
         encoder.encodeSerializableValue(
             JsonElement.serializer(),
             buildJsonObject {
-                filtered.forEach { (k, v) -> put(k, AnyValueSerializer.toJsonElement(v)) }
+                value.forEach { (k, v) -> put(k, v.toJsonElement()) }
             }
         )
     }
 
-    override fun deserialize(decoder: Decoder): Map<String, Any> {
+    override fun deserialize(decoder: Decoder): Map<String, Any?> {
         val element = (decoder as JsonDecoder).decodeJsonElement()
         if (element !is JsonObject) return emptyMap()
-        return element.entries
-            .filter { (_, v) -> v !is JsonNull }
-            .associate { (k, v) -> k to AnyValueSerializer.fromJsonElement(v) }
+        return element.entries.associate { (k, v) -> k to v.fromJsonElement() }
     }
 }
 
-private object AnyValueSerializer : KSerializer<Any> {
-    override val descriptor: SerialDescriptor = buildClassSerialDescriptor("Any")
-
-    override fun serialize(encoder: Encoder, value: Any) {
-        encoder.encodeSerializableValue(JsonElement.serializer(), toJsonElement(value))
+private fun Any?.toJsonElement(): JsonElement = when (this) {
+    null -> JsonNull
+    is Boolean -> JsonPrimitive(this)
+    is Number -> JsonPrimitive(this)
+    is String -> JsonPrimitive(this)
+    is List<*> -> buildJsonArray {
+        forEach { item -> add(item.toJsonElement()) }
     }
-
-    override fun deserialize(decoder: Decoder): Any {
-        return fromJsonElement((decoder as JsonDecoder).decodeJsonElement())
+    is Map<*, *> -> buildJsonObject {
+        forEach { (k, v) -> if (k is String) put(k, v.toJsonElement()) }
     }
+    else -> JsonPrimitive(toString())
+}
 
-    fun toJsonElement(value: Any): JsonElement = when (value) {
-        is Boolean -> JsonPrimitive(value)
-        is Number -> JsonPrimitive(value)
-        is String -> JsonPrimitive(value)
-        is List<*> -> buildJsonArray {
-            value.forEach { item -> if (item != null) add(toJsonElement(item)) }
-        }
-        is Map<*, *> -> buildJsonObject {
-            value.forEach { (k, v) -> if (k is String && v != null) put(k, toJsonElement(v)) }
-        }
-        else -> JsonPrimitive(value.toString())
-    }
-
-    fun fromJsonElement(element: JsonElement): Any = when (element) {
-        is JsonNull -> error("unexpected JsonNull after filter")
-        is JsonArray -> element.map { fromJsonElement(it) }
-        is JsonObject -> element.entries.associate { (k, v) -> k to fromJsonElement(v) }
-        else -> {
-            val prim = element.jsonPrimitive
-            when {
-                prim.booleanOrNull != null &&
-                        (prim.content == "true" || prim.content == "false") -> prim.boolean
-                prim.longOrNull != null -> prim.longOrNull!!
-                prim.doubleOrNull != null -> prim.doubleOrNull!!
-                else -> prim.content
-            }
+private fun JsonElement.fromJsonElement(): Any? = when (this) {
+    is JsonNull -> null
+    is JsonArray -> map { it.fromJsonElement() }
+    is JsonObject -> entries.associate { (k, v) -> k to v.fromJsonElement() }
+    else -> {
+        val prim = jsonPrimitive
+        when {
+            prim.booleanOrNull != null &&
+                    (prim.content == "true" || prim.content == "false") -> prim.boolean
+            prim.longOrNull != null -> prim.longOrNull!!
+            prim.doubleOrNull != null -> prim.doubleOrNull!!
+            else -> prim.content
         }
     }
 }
@@ -91,40 +77,39 @@ private data class TrackerEventDto(
     val trafficType: String,
     val eventType: String,
     val key: String,
-    val value: Double,
+    val value: Double?,
     val timestamp: Long,
-    @Serializable(with = AnyMapValueSerializer::class)
-    val properties: Map<String, Any>? = null
+    @Serializable(with = NullableAnyMapSerializer::class)
+    val properties: Map<String, Any?>? = null
 )
 
 internal class TrackerEventSerializer(private val cipher: Any? = null) {
 
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
     fun serialize(event: TrackerEvent): String {
+        @Suppress("UNCHECKED_CAST")
         val dto = TrackerEventDto(
             trafficType = event.trafficType,
             eventType = event.eventType,
             key = event.key,
             value = event.value,
             timestamp = event.timestamp,
-            properties = event.properties
-            ?.filterValues { it != null }
-            ?.mapValues { it.value as Any }
-            ?.takeIf { it.isNotEmpty() }
+            properties = event.properties as? Map<String, Any?>
         )
         return json.encodeToString(dto)
     }
 
     fun deserialize(serialized: String): TrackerEvent {
         val dto = json.decodeFromString<TrackerEventDto>(serialized)
+        @Suppress("UNCHECKED_CAST")
         return TrackerEvent().apply {
             trafficType = dto.trafficType
             eventType = dto.eventType
             key = dto.key
             value = dto.value
             timestamp = dto.timestamp
-            properties = dto.properties
+            properties = dto.properties as? Map<String, Any>
         }
     }
 }

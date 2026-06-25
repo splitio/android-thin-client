@@ -6,6 +6,7 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
+import io.split.android.client.network.SdkTargetPath.events
 import io.split.client.thin.Key
 import io.split.client.thin.SdkKey
 import io.split.client.thin.SdkReadyMetadata
@@ -1647,6 +1648,68 @@ class SdkBehaviorAndroidTest {
             assertEquals(
                 BuildConfig.THIN_CLIENT_VERSION_HEADER,
                 server.capturedEventVersionHeaders.last(),
+            )
+        } finally {
+            runBlocking { factory.destroy() }
+            server.shutdown()
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Test 8b — track with null value sends value:null in HTTP payload; null properties are omitted
+    // -------------------------------------------------------------------------
+
+    /**
+     * Given the SDK is ready
+     * When client.track("purchase", null, mapOf("item" to "book", "discount" to null)) is called
+     * And client.flush() is called
+     * Then the events endpoint receives a POST where value is null (not 0.0)
+     * And the property "item" is present
+     * And the property "discount" appears as null in the payload
+     */
+    @Test
+    fun trackWithNullValueAndNullPropertiesAreSerializedCorrectly() {
+        val server = MockSplitServer()
+        server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_DISABLED))
+        server.enqueueEvaluations(MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1))
+
+        val factory = buildPollingFactory(server, prefix = "e2e_track_null_$RUN_ID")
+        val client = factory.getClient()
+        val listener = TestEventListener()
+        client.addEventListener(listener.asSplitEventListener)
+
+        try {
+            assertTrue("onReady did not fire", listener.awaitReady())
+
+            assertTrue(client.track("purchase", null, mapOf("item" to "book", "discount" to null)))
+            runBlocking { client.flush() }
+
+            val deadline = System.currentTimeMillis() + 5_000L
+            while (server.capturedEventBodies.isEmpty() && System.currentTimeMillis() < deadline) {
+                Thread.sleep(50)
+            }
+System.out.println("events body: ${server.capturedEventBodies.joinToString(", ")}")
+            assertTrue("no events POST received", server.capturedEventBodies.isNotEmpty())
+            val eventsBody = server.capturedEventBodies.last()
+            assertTrue(
+                "eventTypeId not found in events body",
+                eventsBody.contains("\"eventTypeId\":\"purchase\"")
+            )
+            assertTrue(
+                "value should be null in events body, got: $eventsBody",
+                eventsBody.contains("\"value\":null")
+            )
+            assertFalse(
+                "value should not be 0.0 when null was passed, got: $eventsBody",
+                eventsBody.contains("\"value\":0.0")
+            )
+            assertTrue(
+                "property 'item' not found in events body",
+                eventsBody.contains("\"item\"")
+            )
+            assertTrue(
+                "property 'discount' with null value should appear as null, got: $eventsBody",
+                eventsBody.contains("\"discount\":null")
             )
         } finally {
             runBlocking { factory.destroy() }

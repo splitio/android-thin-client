@@ -101,6 +101,7 @@ private class FakeSuccessHttpClient : RetryableHttpClient {
         return object : HttpResponse {
             override val isSuccess: Boolean = true
             override val httpStatus: Int = 200
+            override val headers: Map<String, List<String>> = emptyMap()
             override fun getData(): String? = """{"token":"header.payload.sig","pushEnabled":false}"""
         }
     }

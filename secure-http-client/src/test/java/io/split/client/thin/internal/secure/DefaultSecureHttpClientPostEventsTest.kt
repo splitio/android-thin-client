@@ -78,7 +78,7 @@ class DefaultSecureHttpClientPostEventsTest {
 
         client.postEvents("payload")
 
-        assertEquals("android-thin-1.2.3", http.lastRequest?.headers?.get("SplitSDKVersion"))
+        assertEquals("AndroidThin-1.2.3", http.lastRequest?.headers?.get("SplitSDKVersion"))
     }
 
     @Test
@@ -87,7 +87,7 @@ class DefaultSecureHttpClientPostEventsTest {
 
         client.postEvents("payload")
 
-        assertEquals("android-thin-2.0.0", http.lastRequest?.headers?.get("X-Harness-FME-SDK-Version"))
+        assertEquals("AndroidThin-2.0.0", http.lastRequest?.headers?.get("X-Harness-FME-SDK-Version"))
     }
 
 }

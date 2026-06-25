@@ -236,7 +236,7 @@ class DefaultSecureHttpClientFetchEvaluationsTest {
 
         client.fetchEvaluations(testDefaultTarget, testDefaultRequest, -1L)
 
-        assertEquals("android-thin-test-version", http.lastRequest?.headers?.get("X-Harness-FME-SDK-Version"))
+        assertEquals("AndroidThin-test-version", http.lastRequest?.headers?.get("X-Harness-FME-SDK-Version"))
     }
 
     @Test

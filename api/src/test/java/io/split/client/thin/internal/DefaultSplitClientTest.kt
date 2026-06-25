@@ -25,7 +25,6 @@ import org.junit.Before
 import org.junit.Test
 import org.mockito.ArgumentMatchers.any
 import org.mockito.ArgumentMatchers.anyBoolean
-import org.mockito.ArgumentMatchers.anyDouble
 import org.mockito.ArgumentMatchers.eq
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.never
@@ -69,7 +68,7 @@ class DefaultSplitClientTest {
             eq("user-1"),
             eq("user"),
             eq("purchase"),
-            eq(0.0),
+            eq(null),
             eq(null),
             eq(true),
         )
@@ -90,14 +89,14 @@ class DefaultSplitClientTest {
     }
 
     @Test
-    fun `track uses 0 dot 0 when value is null`() {
+    fun `track with null value passes null to tracker`() {
         client.track("purchase", null, null)
 
         verify(tracker).track(
             eq("user-1"),
             eq("user"),
             eq("purchase"),
-            eq(0.0),
+            eq(null),
             eq(null),
             eq(true),
         )
@@ -121,7 +120,7 @@ class DefaultSplitClientTest {
 
     @Test
     fun `track returns true when tracker accepts the event`() {
-        `when`(tracker.track(any(), any(), any(), anyDouble(), any(), anyBoolean())).thenReturn(true)
+        `when`(tracker.track(any(), any(), any(), any(), any(), anyBoolean())).thenReturn(true)
 
         val result = client.track("purchase")
 
@@ -130,7 +129,7 @@ class DefaultSplitClientTest {
 
     @Test
     fun `track returns false when tracker rejects the event`() {
-        `when`(tracker.track(any(), any(), any(), anyDouble(), any(), anyBoolean())).thenReturn(false)
+        `when`(tracker.track(any(), any(), any(), any(), any(), anyBoolean())).thenReturn(false)
 
         val result = client.track("purchase")
 
@@ -445,7 +444,7 @@ class DefaultSplitClientTest {
             eq("user-1"),
             eq("user"),
             eq("purchase"),
-            eq(0.0),
+            eq(null),
             eq(null),
             eq(true),
         )

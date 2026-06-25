@@ -108,6 +108,7 @@ class HttpEventsSubmitterTest {
         return object : HttpResponse {
             override val isSuccess = success
             override val httpStatus = status
+            override val headers: Map<String, List<String>> = emptyMap()
             override fun getData() = ""
         }
     }

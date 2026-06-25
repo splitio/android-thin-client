@@ -2,6 +2,7 @@ package io.split.client.thin.events
 
 import io.split.android.client.tracker.TrackerEvent
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -71,11 +72,54 @@ class EventSerializerTest {
         assertTrue(json.contains("\"properties\":{}"))
     }
 
+    @Test
+    fun `serialize event with null value produces value null`() {
+        val event = createEvent(value = null)
+
+        val json = EventSerializer.serialize(listOf(event))
+
+        assertTrue("expected value:null in $json", json.contains("\"value\":null"))
+        assertFalse("must not contain value:0 when null passed", json.contains("\"value\":0"))
+    }
+
+    @Test
+    fun `serialize event with null property values preserves them as null`() {
+        @Suppress("UNCHECKED_CAST")
+        val props = mapOf("a" to "x", "b" to null) as Map<String, Any>
+        val event = createEvent(properties = props)
+
+        val json = EventSerializer.serialize(listOf(event))
+
+        assertTrue("property 'a' must be present in $json", json.contains("\"a\""))
+        assertTrue("property 'b' with null value must be present as null in $json", json.contains("\"b\":null"))
+    }
+
+    @Test
+    fun `serialize property values of all supported types`() {
+        @Suppress("UNCHECKED_CAST")
+        val props = mapOf(
+            "str" to "hello",
+            "num" to 42,
+            "bool" to true,
+            "nil" to null,
+            "other" to StringBuilder("custom"),
+        ) as Map<String, Any>
+        val event = createEvent(properties = props)
+
+        val json = EventSerializer.serialize(listOf(event))
+
+        assertTrue(json.contains("\"str\":\"hello\""))
+        assertTrue(json.contains("\"num\":42"))
+        assertTrue(json.contains("\"bool\":true"))
+        assertTrue(json.contains("\"nil\":null"))
+        assertTrue(json.contains("\"other\":\"custom\""))
+    }
+
     private fun createEvent(
         key: String = "test-key",
         trafficType: String = "user",
         eventType: String = "test-event",
-        value: Double = 0.0,
+        value: Double? = 0.0,
         timestamp: Long = System.currentTimeMillis(),
         properties: Map<String, Any>? = emptyMap()
     ): TrackerEvent {

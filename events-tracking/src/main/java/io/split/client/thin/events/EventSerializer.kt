@@ -15,13 +15,14 @@ object EventSerializer {
     }
 
     private fun TrackerEvent.toDto(): EventDto {
+        @Suppress("UNCHECKED_CAST")
         return EventDto(
             key = this.key,
             trafficTypeName = this.trafficType,
             eventTypeId = this.eventType,
             value = this.value,
             timestamp = this.timestamp,
-            properties = this.properties
+            properties = this.properties as? Map<String, Any?>
         )
     }
 
@@ -32,6 +33,6 @@ object EventSerializer {
         val eventTypeId: String,
         val value: Double?,
         val timestamp: Long,
-        val properties: Map<String, @Serializable(with = AnySerializer::class) Any>?
+        val properties: Map<String, @Serializable(with = NullableAnySerializer::class) Any?>?
     )
 }

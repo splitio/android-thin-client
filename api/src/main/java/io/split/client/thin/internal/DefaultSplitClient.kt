@@ -116,7 +116,7 @@ internal class DefaultSplitClient(
             target.key.matchingKey,
             target.trafficType,
             eventType,
-            value ?: 0.0,
+            value,
             javaProperties,
             isSdkReady,
         )

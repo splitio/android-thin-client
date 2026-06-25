@@ -16,7 +16,7 @@ android {
         minSdk = 21
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         testInstrumentationRunnerArguments["clearPackageData"] = "true"
-        buildConfigField("String", "THIN_CLIENT_VERSION_HEADER", "\"android-thin-${thinClientProject.version}\"")
+        buildConfigField("String", "THIN_CLIENT_VERSION_HEADER", "\"AndroidThin-${thinClientProject.version}\"")
     }
 
     compileOptions {
