@@ -1,6 +1,7 @@
 package io.split.client.thin.events
 
 import io.split.android.client.tracker.TrackerEvent
+import io.split.client.thin.models.json.PlainDoubleSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -31,7 +32,7 @@ object EventSerializer {
         val key: String,
         val trafficTypeName: String,
         val eventTypeId: String,
-        val value: Double?,
+        @Serializable(with = PlainDoubleSerializer::class) val value: Double?,
         val timestamp: Long,
         val properties: Map<String, @Serializable(with = NullableAnySerializer::class) Any?>?
     )

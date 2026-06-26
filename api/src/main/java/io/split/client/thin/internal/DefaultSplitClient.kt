@@ -109,6 +109,7 @@ internal class DefaultSplitClient(
         properties: Map<String, Any?>?
     ): Boolean {
         if (destroyed) return false
+        if (!inputValidator.validateEventValue(value, properties)) return false
         @Suppress("UNCHECKED_CAST")
         val javaProperties = properties as? Map<String, Any>
         val isSdkReady = eventsManager.eventAlreadyTriggered(SplitEvent.SDK_READY)

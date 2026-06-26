@@ -36,6 +36,7 @@ dependencies {
     implementation(project(":retryable-http-client"))
     implementation(project(":auth"))
     implementation(project(":logger"))
+    implementation(project(":models"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.5.1")
 

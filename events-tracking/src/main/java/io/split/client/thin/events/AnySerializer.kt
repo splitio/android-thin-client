@@ -7,6 +7,7 @@ import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
+import io.split.client.thin.models.json.toPlainJsonElement
 
 object AnySerializer : KSerializer<Any> {
     override val descriptor: SerialDescriptor = buildClassSerialDescriptor("Any")
@@ -14,7 +15,7 @@ object AnySerializer : KSerializer<Any> {
     override fun serialize(encoder: Encoder, value: Any) {
         val jsonElement = when (value) {
             is String -> JsonPrimitive(value)
-            is Number -> JsonPrimitive(value)
+            is Number -> value.toPlainJsonElement()
             is Boolean -> JsonPrimitive(value)
             else -> JsonPrimitive(value.toString())
         }

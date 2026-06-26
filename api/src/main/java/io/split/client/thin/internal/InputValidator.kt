@@ -8,6 +8,7 @@ internal interface InputValidator {
     fun validateSdkKey(sdkKey: SdkKey): Boolean
     fun validateKey(key: Key): Boolean
     fun validateFlagName(flagName: String): Boolean
+    fun validateEventValue(value: Double?, properties: Map<String, Any?>?): Boolean
 }
 
 internal class DefaultInputValidator : InputValidator {
@@ -32,6 +33,20 @@ internal class DefaultInputValidator : InputValidator {
         val trimmed = flagName.trim()
         if (trimmed != flagName) {
             Logger.w("Flag name '$flagName' has extra whitespace, trimming")
+        }
+        return true
+    }
+
+    override fun validateEventValue(value: Double?, properties: Map<String, Any?>?): Boolean {
+        if (value != null && !value.isFinite()) {
+            Logger.w("Event value must be a finite number, got: $value")
+            return false
+        }
+        properties?.forEach { (key, v) ->
+            if (v is Number && !v.toDouble().isFinite()) {
+                Logger.w("Event property '$key' must be a finite number, got: $v")
+                return false
+            }
         }
         return true
     }

@@ -115,6 +115,43 @@ class EventSerializerTest {
         assertTrue(json.contains("\"other\":\"custom\""))
     }
 
+    @Test
+    fun `serialize small value uses plain decimal not scientific`() {
+        val event = createEvent(value = 0.0003)
+
+        val json = EventSerializer.serialize(listOf(event))
+
+        assertTrue("expected value:0.0003 in $json", json.contains("\"value\":0.0003"))
+        assertFalse("must not use scientific notation in $json", json.contains("E"))
+    }
+
+    @Test
+    fun `serialize small property uses plain decimal not scientific`() {
+        val event = createEvent(properties = mapOf("discount" to 0.0003))
+
+        val json = EventSerializer.serialize(listOf(event))
+
+        assertTrue("expected discount:0.0003 in $json", json.contains("\"discount\":0.0003"))
+    }
+
+    @Test
+    fun `serialize NaN value produces value null`() {
+        val event = createEvent(value = Double.NaN)
+
+        val json = EventSerializer.serialize(listOf(event))
+
+        assertTrue("expected value:null in $json", json.contains("\"value\":null"))
+    }
+
+    @Test
+    fun `serialize non-finite property produces null`() {
+        val event = createEvent(properties = mapOf("discount" to Double.POSITIVE_INFINITY))
+
+        val json = EventSerializer.serialize(listOf(event))
+
+        assertTrue("expected discount:null in $json", json.contains("\"discount\":null"))
+    }
+
     private fun createEvent(
         key: String = "test-key",
         trafficType: String = "user",

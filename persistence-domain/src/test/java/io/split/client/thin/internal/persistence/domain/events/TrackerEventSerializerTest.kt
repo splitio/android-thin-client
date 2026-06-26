@@ -2,6 +2,7 @@ package io.split.client.thin.internal.persistence.domain.events
 
 import io.split.android.client.tracker.TrackerEvent
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -173,6 +174,21 @@ class TrackerEventSerializerTest {
         val event = makeEvent(value = null)
         val json = serializer.serialize(event)
         assertTrue("expected value:null in $json", json.contains("\"value\":null"))
+    }
+
+    @Test
+    fun `serialize small property uses plain decimal not scientific`() {
+        val event = makeEvent(properties = mapOf("discount" to 0.0003))
+        val json = serializer.serialize(event)
+        assertTrue("expected discount:0.0003 in $json", json.contains("\"discount\":0.0003"))
+        assertFalse("must not use scientific notation in $json", json.contains("E"))
+    }
+
+    @Test
+    fun `serialize NaN property produces null`() {
+        val event = makeEvent(properties = mapOf("discount" to Double.NaN))
+        val json = serializer.serialize(event)
+        assertTrue("expected discount:null in $json", json.contains("\"discount\":null"))
     }
 
     @Test

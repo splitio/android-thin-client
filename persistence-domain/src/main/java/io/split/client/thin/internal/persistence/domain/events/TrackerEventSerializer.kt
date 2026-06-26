@@ -22,6 +22,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
+import io.split.client.thin.models.json.toPlainJsonElement
 
 private object NullableAnyMapSerializer : KSerializer<Map<String, Any?>> {
     override val descriptor: SerialDescriptor = buildClassSerialDescriptor("NullableAnyMap")
@@ -45,7 +46,7 @@ private object NullableAnyMapSerializer : KSerializer<Map<String, Any?>> {
 private fun Any?.toJsonElement(): JsonElement = when (this) {
     null -> JsonNull
     is Boolean -> JsonPrimitive(this)
-    is Number -> JsonPrimitive(this)
+    is Number -> this.toPlainJsonElement()
     is String -> JsonPrimitive(this)
     is List<*> -> buildJsonArray {
         forEach { item -> add(item.toJsonElement()) }

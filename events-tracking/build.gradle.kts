@@ -19,6 +19,7 @@ dependencies {
     api(project(":submitter"))
     api(project(":executor"))
     implementation(project(":logger"))
+    implementation(project(":models"))
     implementation(project(":retryable-http-client"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.5.1")

@@ -1642,7 +1642,9 @@ class SdkBehaviorAndroidTest {
                 "eventTypeId not found in events body",
                 eventsBody.contains("\"eventTypeId\":\"purchase\"")
             )
-            assertTrue("value not found in events body", eventsBody.contains("99.0"))
+            // 99.0 serializes as plain decimal "99" (trailing zeros stripped); both are
+            // numerically identical JSON numbers.
+            assertTrue("value not found in events body", eventsBody.contains("\"value\":99"))
             assertTrue("key not found in events body", eventsBody.contains("\"key\":\"user_a\""))
             assertTrue("property not found in events body", eventsBody.contains("\"item\""))
             assertEquals(
@@ -1710,6 +1712,350 @@ System.out.println("events body: ${server.capturedEventBodies.joinToString(", ")
             assertTrue(
                 "property 'discount' with null value should appear as null, got: $eventsBody",
                 eventsBody.contains("\"discount\":null")
+            )
+        } finally {
+            runBlocking { factory.destroy() }
+            server.shutdown()
+        }
+    }
+
+    /**
+     * Given the SDK is ready
+     * When client.track is called with value=0.0003
+     * And client.flush() is called
+     * Then the events endpoint receives a POST where value is serialized as plain decimal "0.0003"
+     */
+    @Test
+    fun trackWithSmallDoubleValueIsSerializedAsPlainDecimal() {
+        val server = MockSplitServer()
+        server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_DISABLED))
+        server.enqueueEvaluations(MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1))
+
+        val factory = buildPollingFactory(server, prefix = "e2e_track_small_$RUN_ID")
+        val client = factory.getClient()
+        val listener = TestEventListener()
+        client.addEventListener(listener.asSplitEventListener)
+
+        try {
+            assertTrue("onReady did not fire", listener.awaitReady())
+
+            assertTrue(client.track("purchase", 0.0003, mapOf("discount" to 0.0003)))
+            runBlocking { client.flush() }
+
+            val deadline = System.currentTimeMillis() + 5_000L
+            while (server.capturedEventBodies.isEmpty() && System.currentTimeMillis() < deadline) {
+                Thread.sleep(50)
+            }
+            assertTrue("no events POST received", server.capturedEventBodies.isNotEmpty())
+            val eventsBody = server.capturedEventBodies.last()
+            assertTrue(
+                "value should be serialized as 0.0003, got: $eventsBody",
+                eventsBody.contains("\"value\":0.0003")
+            )
+            assertTrue(
+                "property 'discount' should be serialized as 0.0003, got: $eventsBody",
+                eventsBody.contains("\"discount\":0.0003")
+            )
+            assertFalse(
+                "no field should be in scientific notation, got: $eventsBody",
+                eventsBody.contains("3.0E-4") || eventsBody.contains("3.0e-4")
+            )
+        } finally {
+            runBlocking { factory.destroy() }
+            server.shutdown()
+        }
+    }
+
+    /**
+     * Given a target with a numeric attribute equal to 0.0003
+     * When the SDK fires its evaluations POST
+     * Then the request body serializes the attribute as plain decimal "0.0003"
+     * (currently fails — attribute is serialized in scientific notation as "3.0E-4")
+     */
+    @Test
+    fun evaluationsRequestSerializesSmallDoubleAttributeAsPlainDecimal() {
+        val server = MockSplitServer()
+        server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_DISABLED))
+
+        var capturedBody: String? = null
+        server.evaluationsHandler = { request ->
+            capturedBody = request.body.readUtf8()
+            MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1)
+        }
+
+        val target = Target(
+            key = Key("user_small_attr"),
+            attributes = mapOf("discount" to 0.0003),
+            trafficType = "user",
+        )
+        val factory = buildPollingFactory(
+            server,
+            prefix = "e2e_eval_small_attr_$RUN_ID",
+            defaultTarget = target,
+        )
+        val client = factory.getClient()
+        val listener = TestEventListener()
+        client.addEventListener(listener.asSplitEventListener)
+
+        try {
+            assertTrue("onReady did not fire", listener.awaitReady())
+            assertNotNull("no evaluations POST captured", capturedBody)
+            val body = capturedBody!!
+            assertTrue(
+                "attribute 'discount' should be serialized as 0.0003, got: $body",
+                body.contains("\"discount\":0.0003")
+            )
+            assertFalse(
+                "attribute should not be in scientific notation, got: $body",
+                body.contains("3.0E-4") || body.contains("3.0e-4")
+            )
+        } finally {
+            runBlocking { factory.destroy() }
+            server.shutdown()
+        }
+    }
+
+    /**
+     * Given the SDK is ready
+     * When client.track is called with value=Double.NaN (and again with a non-finite property)
+     * Then track() returns false (the non-finite event is rejected at validation, not silently dropped)
+     * And a subsequent valid track still produces a clean events POST containing no "NaN"/"Infinity"
+     *
+     * Contract: non-finite event value/property is rejected upstream (track returns false). It must
+     * NOT poison the event batch — a following valid event still ships.
+     */
+    @Test
+    fun trackWithNonFiniteDoubleValueIsRejected() {
+        val server = MockSplitServer()
+        server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_DISABLED))
+        server.enqueueEvaluations(MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1))
+
+        val factory = buildPollingFactory(server, prefix = "e2e_track_nonfinite_$RUN_ID")
+        val client = factory.getClient()
+        val listener = TestEventListener()
+        client.addEventListener(listener.asSplitEventListener)
+
+        try {
+            assertTrue("onReady did not fire", listener.awaitReady())
+
+            // Non-finite value must be rejected by validation.
+            assertFalse(
+                "track with NaN value should return false",
+                client.track("purchase", Double.NaN)
+            )
+            // Non-finite property must also be rejected.
+            assertFalse(
+                "track with POSITIVE_INFINITY property should return false",
+                client.track("purchase", 1.0, mapOf("ratio" to Double.POSITIVE_INFINITY))
+            )
+
+            // A subsequent valid track must still ship — the batch is not poisoned.
+            assertTrue(
+                "valid track should return true",
+                client.track("purchase", 2.5, mapOf("ok" to 1.0))
+            )
+            runBlocking { client.flush() }
+
+            val deadline = System.currentTimeMillis() + 5_000L
+            while (server.capturedEventBodies.isEmpty() && System.currentTimeMillis() < deadline) {
+                Thread.sleep(50)
+            }
+            assertTrue("no events POST received", server.capturedEventBodies.isNotEmpty())
+            val eventsBody = server.capturedEventBodies.joinToString(" ")
+            assertFalse(
+                "no event field should contain 'NaN', got: $eventsBody",
+                eventsBody.contains("NaN")
+            )
+            assertFalse(
+                "no event field should contain 'Infinity', got: $eventsBody",
+                eventsBody.contains("Infinity")
+            )
+            // The valid event survived.
+            assertTrue(
+                "the valid event (value 2.5) should have shipped, got: $eventsBody",
+                eventsBody.contains("\"value\":2.5")
+            )
+        } finally {
+            runBlocking { factory.destroy() }
+            server.shutdown()
+        }
+    }
+
+    /**
+     * Given a target with a numeric attribute equal to Double.NEGATIVE_INFINITY
+     * When the SDK fires its evaluations POST
+     * Then the SDK still becomes ready (a single bad attribute must not brick the SDK)
+     * And the non-finite attribute is stripped from the request body entirely
+     * And the substrings "Infinity" or "NaN" do not appear
+     *
+     * Contract: non-finite attribute values are stripped like null-valued attributes, so the
+     * evaluations fetch still succeeds and SDK_READY fires.
+     */
+    @Test
+    fun evaluationsRequestStripsNonFiniteDoubleAttribute() {
+        val server = MockSplitServer()
+        server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_DISABLED))
+
+        var capturedBody: String? = null
+        server.evaluationsHandler = { request ->
+            capturedBody = request.body.readUtf8()
+            MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1)
+        }
+
+        val target = Target(
+            key = Key("user_nonfinite_attr"),
+            attributes = mapOf("ratio" to Double.NEGATIVE_INFINITY, "country" to "arg"),
+            trafficType = "user",
+        )
+        val factory = buildPollingFactory(
+            server,
+            prefix = "e2e_eval_nonfinite_attr_$RUN_ID",
+            defaultTarget = target,
+        )
+        val client = factory.getClient()
+        val listener = TestEventListener()
+        client.addEventListener(listener.asSplitEventListener)
+
+        try {
+            assertTrue("onReady did not fire", listener.awaitReady())
+            assertNotNull("no evaluations POST captured", capturedBody)
+            val body = capturedBody!!
+            // Finite attribute survives.
+            assertTrue(
+                "attribute 'country' should be present, got: $body",
+                body.contains("\"country\":\"arg\"")
+            )
+            // Non-finite attribute is stripped entirely.
+            assertFalse(
+                "non-finite attribute 'ratio' should be stripped, got: $body",
+                body.contains("ratio")
+            )
+            assertFalse(
+                "attribute should not contain 'Infinity', got: $body",
+                body.contains("Infinity")
+            )
+            assertFalse(
+                "attribute should not contain 'NaN', got: $body",
+                body.contains("NaN")
+            )
+        } finally {
+            runBlocking { factory.destroy() }
+            server.shutdown()
+        }
+    }
+
+    /**
+     * Given a target with attributes where one key has a null value
+     * When the SDK fires its evaluations POST
+     * Then the request body contains the non-null attribute
+     * And does NOT contain the null-valued attribute key (it is stripped)
+     */
+    @Test
+    fun evaluationsRequestStripsNullValuedAttributes() {
+        val server = MockSplitServer()
+        server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_DISABLED))
+
+        var capturedBody: String? = null
+        server.evaluationsHandler = { request ->
+            capturedBody = request.body.readUtf8()
+            MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1)
+        }
+
+        val target = Target(
+            key = Key("user_null_attr"),
+            attributes = mapOf("country" to "arg", "discount" to null),
+            trafficType = "user",
+        )
+        val factory = buildPollingFactory(
+            server,
+            prefix = "e2e_eval_null_attr_$RUN_ID",
+            defaultTarget = target,
+        )
+        val client = factory.getClient()
+        val listener = TestEventListener()
+        client.addEventListener(listener.asSplitEventListener)
+
+        try {
+            assertTrue("onReady did not fire", listener.awaitReady())
+            assertNotNull("no evaluations POST captured", capturedBody)
+            val body = capturedBody!!
+            assertTrue(
+                "attribute 'country' should be present, got: $body",
+                body.contains("\"country\":\"arg\"")
+            )
+            assertFalse(
+                "attribute 'discount' with null value should be stripped entirely, got: $body",
+                body.contains("\"discount\"")
+            )
+        } finally {
+            runBlocking { factory.destroy() }
+            server.shutdown()
+        }
+    }
+
+    /**
+     * Given a target with a small-magnitude double attribute (0.0003)
+     * When the SDK fires its evaluations POST with an X-Harness-FME-Content-Digest header
+     * Then the captured digest equals recomputing SHA-512 truncation over the captured body
+     * And the body contains the attribute as plain decimal "0.0003" with no scientific notation
+     * (Currently fails because the body contains "3.0E-4", invalidating the digest match)
+     */
+    @Test
+    fun evaluationsContentDigestUsesPlainDecimalForSmallDoubleAttribute() {
+        val server = MockSplitServer()
+        server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_DISABLED))
+
+        var capturedDigest: String? = null
+        var capturedBody: String? = null
+        server.evaluationsHandler = { request ->
+            capturedDigest = request.getHeader("X-Harness-FME-Content-Digest")
+            capturedBody = request.body.readUtf8()
+            MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1)
+        }
+
+        val target = Target(
+            key = Key("user_digest_small"),
+            attributes = mapOf("discount" to 0.0003),
+            trafficType = "user",
+        )
+        val factory = buildPollingFactory(
+            server,
+            prefix = "e2e_eval_digest_small_$RUN_ID",
+            defaultTarget = target,
+        )
+        val client = factory.getClient()
+        val listener = TestEventListener()
+        client.addEventListener(listener.asSplitEventListener)
+
+        try {
+            assertTrue("onReady did not fire", listener.awaitReady())
+            assertNotNull("no evaluations POST captured", capturedBody)
+            assertNotNull("no Content-Digest header captured", capturedDigest)
+
+            val body = capturedBody!!
+            val digest = capturedDigest!!
+
+            // Replicate the ContentDigest algorithm: SHA-512, truncate to first 8 bytes, Base64 encode
+            val sha512Digest = java.security.MessageDigest.getInstance("SHA-512")
+                .digest(body.toByteArray(Charsets.UTF_8))
+                .copyOf(8)
+            val recomputedDigest = android.util.Base64.encodeToString(
+                sha512Digest,
+                android.util.Base64.NO_PADDING or android.util.Base64.NO_WRAP
+            )
+
+            assertEquals(
+                "Content-Digest must match recomputed SHA-512 truncation over the request body",
+                recomputedDigest,
+                digest,
+            )
+            assertTrue(
+                "attribute 'discount' should be serialized as 0.0003, got: $body",
+                body.contains("\"discount\":0.0003")
+            )
+            assertFalse(
+                "attribute should not be in scientific notation, got: $body",
+                body.contains("E-") || body.contains("e-")
             )
         } finally {
             runBlocking { factory.destroy() }

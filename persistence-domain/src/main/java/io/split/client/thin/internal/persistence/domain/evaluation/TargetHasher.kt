@@ -7,6 +7,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import io.split.client.thin.models.json.toPlainJsonElement
 
 internal data class HashedTarget(val keyHash: String, val attrsHash: String)
 
@@ -17,7 +18,7 @@ internal class TargetHasher {
     private fun toJsonElement(value: Any?): JsonElement = when (value) {
         null -> throw IllegalArgumentException("null values should not reach here")
         is Boolean -> JsonPrimitive(value)
-        is Number -> JsonPrimitive(value)
+        is Number -> value.toPlainJsonElement()
         is String -> JsonPrimitive(value)
         is List<*> -> buildJsonArray {
             value.forEach { item -> if (item != null) add(toJsonElement(item)) }

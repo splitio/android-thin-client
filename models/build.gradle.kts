@@ -21,3 +21,8 @@ android {
         targetCompatibility = JavaVersion.VERSION_11
     }
 }
+
+dependencies {
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.5.1")
+    testImplementation("junit:junit:4.13.2")
+}

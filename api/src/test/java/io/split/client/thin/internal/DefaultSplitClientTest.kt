@@ -137,6 +137,22 @@ class DefaultSplitClientTest {
     }
 
     @Test
+    fun `track with NaN value returns false and does not call tracker`() {
+        val result = client.track("purchase", Double.NaN, null)
+
+        assertFalse(result)
+        verify(tracker, never()).track(any(), any(), any(), any(), any(), anyBoolean())
+    }
+
+    @Test
+    fun `track with non-finite property returns false and does not call tracker`() {
+        val result = client.track("purchase", 1.0, mapOf("discount" to Double.POSITIVE_INFINITY))
+
+        assertFalse(result)
+        verify(tracker, never()).track(any(), any(), any(), any(), any(), anyBoolean())
+    }
+
+    @Test
     fun `track returns false when client is destroyed`() = runTest {
         client.destroy()
 
@@ -584,6 +600,7 @@ class FakeInputValidator(private val valid: Boolean) : InputValidator {
     override fun validateSdkKey(sdkKey: io.split.client.thin.SdkKey): Boolean = valid
     override fun validateKey(key: io.split.client.thin.Key): Boolean = valid
     override fun validateFlagName(flagName: String): Boolean = valid
+    override fun validateEventValue(value: Double?, properties: Map<String, Any?>?): Boolean = valid
 }
 
 class FakeEvaluationReadStorage : EvaluationReadStorage {

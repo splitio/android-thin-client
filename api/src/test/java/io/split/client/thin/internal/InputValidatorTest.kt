@@ -102,4 +102,41 @@ class InputValidatorTest {
     fun `validateFlagName returns true for flag name with surrounding whitespace`() {
         assertTrue(DefaultInputValidator().validateFlagName("  my_flag  "))
     }
+
+    // validateEventValue
+
+    @Test
+    fun `validateEventValue returns true for finite value and props`() {
+        assertTrue(DefaultInputValidator().validateEventValue(1.5, mapOf("a" to 2.0, "b" to "x")))
+    }
+
+    @Test
+    fun `validateEventValue returns false for NaN value`() {
+        assertFalse(DefaultInputValidator().validateEventValue(Double.NaN, null))
+    }
+
+    @Test
+    fun `validateEventValue returns false for positive infinity value`() {
+        assertFalse(DefaultInputValidator().validateEventValue(Double.POSITIVE_INFINITY, null))
+    }
+
+    @Test
+    fun `validateEventValue returns false when property is Double NaN`() {
+        assertFalse(DefaultInputValidator().validateEventValue(1.0, mapOf("p" to Double.NaN)))
+    }
+
+    @Test
+    fun `validateEventValue returns false when property is Float infinity`() {
+        assertFalse(DefaultInputValidator().validateEventValue(1.0, mapOf("p" to Float.POSITIVE_INFINITY)))
+    }
+
+    @Test
+    fun `validateEventValue returns true for null value and null props`() {
+        assertTrue(DefaultInputValidator().validateEventValue(null, null))
+    }
+
+    @Test
+    fun `validateEventValue returns true for null value and finite props`() {
+        assertTrue(DefaultInputValidator().validateEventValue(null, mapOf("p" to 3.0)))
+    }
 }

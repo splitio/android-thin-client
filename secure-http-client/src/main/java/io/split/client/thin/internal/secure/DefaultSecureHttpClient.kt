@@ -7,6 +7,7 @@ import io.split.client.thin.http.RetryableHttpClient
 import io.split.client.thin.http.contracts.HttpMethod
 import io.split.client.thin.http.contracts.HttpResponse
 import io.split.client.thin.internal.auth.AuthProvider
+import io.split.client.thin.models.json.toPlainJsonElement
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -129,7 +130,9 @@ internal class DefaultSecureHttpClient(
     }
 
     private fun serializeAttributes(attributes: Map<String, Any?>?): JsonElement {
-        val nonNull = attributes?.filterValues { it != null } ?: emptyMap()
+        val nonNull = attributes?.filterValues { v ->
+            v != null && !(v is Number && !v.toDouble().isFinite())
+        } ?: emptyMap()
         if (nonNull.isEmpty()) return JsonObject(emptyMap())
         val sorted = nonNull.keys.sorted().associate { key -> key to valueToJsonElement(nonNull[key]) }
         return JsonObject(sorted)
@@ -140,7 +143,7 @@ internal class DefaultSecureHttpClient(
             null -> JsonPrimitive(null as String?)
             is String -> JsonPrimitive(value)
             is Boolean -> JsonPrimitive(value)
-            is Number -> JsonPrimitive(value)
+            is Number -> value.toPlainJsonElement()
             is List<*> -> {
                 val elements = value.filterNotNull().sortedBy { it.toString() }.map { valueToJsonElement(it) }
                 JsonArray(elements)

@@ -333,6 +333,53 @@ class DefaultSecureHttpClientFetchEvaluationsTest {
     }
 
     @Test
+    fun `small numeric attribute uses plain decimal not scientific`() = runTest {
+        val target = EvaluationTarget(
+            matchingKey = "user-1",
+            bucketingKey = null,
+            attributes = mapOf("discount" to 0.0003)
+        )
+        val (client, _, http) = makeClient()
+
+        client.fetchEvaluations(target, testDefaultRequest, -1L)
+
+        val body = http.lastRequest?.body ?: ""
+        assertTrue(body.contains("\"discount\":0.0003"))
+        assertFalse(body.contains("E-"))
+    }
+
+    @Test
+    fun `NaN attribute is stripped from body`() = runTest {
+        val target = EvaluationTarget(
+            matchingKey = "user-1",
+            bucketingKey = null,
+            attributes = mapOf("discount" to Double.NaN)
+        )
+        val (client, _, http) = makeClient()
+
+        client.fetchEvaluations(target, testDefaultRequest, -1L)
+
+        val body = http.lastRequest?.body ?: ""
+        assertFalse(body.contains("discount"))
+        assertFalse(body.contains("NaN"))
+    }
+
+    @Test
+    fun `infinite attribute is stripped from body`() = runTest {
+        val target = EvaluationTarget(
+            matchingKey = "user-1",
+            bucketingKey = null,
+            attributes = mapOf("discount" to Double.POSITIVE_INFINITY)
+        )
+        val (client, _, http) = makeClient()
+
+        client.fetchEvaluations(target, testDefaultRequest, -1L)
+
+        val body = http.lastRequest?.body ?: ""
+        assertFalse(body.contains("discount"))
+    }
+
+    @Test
     fun `attribute keys are sorted alphabetically in body`() = runTest {
         val target = EvaluationTarget(
             matchingKey = "user-1",
