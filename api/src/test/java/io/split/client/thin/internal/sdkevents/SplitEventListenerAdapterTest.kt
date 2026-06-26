@@ -1,0 +1,278 @@
+package io.split.client.thin.internal.sdkevents
+
+import io.harness.events.EventHandler
+import io.harness.events.EventsManager
+import io.split.client.thin.SdkReadyMetadata
+import io.split.client.thin.SdkUpdateMetadata
+import io.split.client.thin.SplitClient
+import io.split.client.thin.SplitEvent
+import io.split.client.thin.SplitEventListener
+import org.junit.Assert.assertEquals
+import org.junit.Before
+import org.junit.Test
+import org.mockito.ArgumentCaptor
+import org.mockito.Mockito.mock
+import org.mockito.Mockito.verify
+import org.mockito.Mockito.atLeastOnce
+
+@Suppress("UNCHECKED_CAST")
+class SplitEventListenerAdapterTest {
+
+    private lateinit var eventsManager: EventsManager<SplitEvent, SdkInternalEvent, Any?>
+    private lateinit var client: SplitClient
+    private lateinit var listener: FakeSplitEventListener
+
+    @Before
+    fun setUp() {
+        eventsManager = mock(EventsManager::class.java) as EventsManager<SplitEvent, SdkInternalEvent, Any?>
+        client = mock(SplitClient::class.java)
+        listener = FakeSplitEventListener()
+    }
+
+    @Test
+    fun `registerAll registers handler for SDK_READY`() {
+        SplitEventListenerAdapter(listener, client).registerAll(eventsManager)
+
+        verify(eventsManager).register(
+            org.mockito.ArgumentMatchers.eq(SplitEvent.SDK_READY),
+            org.mockito.ArgumentMatchers.any()
+        )
+    }
+
+    @Test
+    fun `registerAll registers handler for SDK_READY_FROM_CACHE`() {
+        SplitEventListenerAdapter(listener, client).registerAll(eventsManager)
+
+        verify(eventsManager).register(
+            org.mockito.ArgumentMatchers.eq(SplitEvent.SDK_READY_FROM_CACHE),
+            org.mockito.ArgumentMatchers.any()
+        )
+    }
+
+    @Test
+    fun `registerAll registers handler for SDK_READY_TIMEOUT`() {
+        SplitEventListenerAdapter(listener, client).registerAll(eventsManager)
+
+        verify(eventsManager).register(
+            org.mockito.ArgumentMatchers.eq(SplitEvent.SDK_READY_TIMEOUT),
+            org.mockito.ArgumentMatchers.any()
+        )
+    }
+
+    @Test
+    fun `registerAll registers handler for SDK_UPDATE`() {
+        SplitEventListenerAdapter(listener, client).registerAll(eventsManager)
+
+        verify(eventsManager).register(
+            org.mockito.ArgumentMatchers.eq(SplitEvent.SDK_UPDATE),
+            org.mockito.ArgumentMatchers.any()
+        )
+    }
+
+    @Test
+    fun `SDK_READY handler calls onReady on listener`() {
+        val handlerCaptor = ArgumentCaptor.forClass(EventHandler::class.java) as ArgumentCaptor<EventHandler<SplitEvent, Any?>>
+        SplitEventListenerAdapter(listener, client).registerAll(eventsManager)
+        verify(eventsManager, atLeastOnce()).register(
+            org.mockito.ArgumentMatchers.eq(SplitEvent.SDK_READY),
+            handlerCaptor.capture()
+        )
+
+        handlerCaptor.value.handle(SplitEvent.SDK_READY, null)
+
+        assertEquals(1, listener.onReadyCalls.size)
+        assertEquals(client, listener.onReadyCalls[0].first)
+        assertEquals(null, listener.onReadyCalls[0].second)
+    }
+
+    @Test
+    fun `SDK_UPDATE handler calls onUpdate on listener`() {
+        val handlerCaptor = ArgumentCaptor.forClass(EventHandler::class.java) as ArgumentCaptor<EventHandler<SplitEvent, Any?>>
+        SplitEventListenerAdapter(listener, client).registerAll(eventsManager)
+        verify(eventsManager, atLeastOnce()).register(
+            org.mockito.ArgumentMatchers.eq(SplitEvent.SDK_UPDATE),
+            handlerCaptor.capture()
+        )
+
+        handlerCaptor.value.handle(SplitEvent.SDK_UPDATE, null)
+
+        assertEquals(1, listener.onUpdateCalls.size)
+        assertEquals(client, listener.onUpdateCalls[0].first)
+        assertEquals(null, listener.onUpdateCalls[0].second)
+    }
+
+    @Test
+    fun `SDK_UPDATE handler passes null metadata when event metadata is null`() {
+        val handlerCaptor = ArgumentCaptor.forClass(EventHandler::class.java) as ArgumentCaptor<EventHandler<SplitEvent, Any?>>
+        SplitEventListenerAdapter(listener, client).registerAll(eventsManager)
+        verify(eventsManager, atLeastOnce()).register(
+            org.mockito.ArgumentMatchers.eq(SplitEvent.SDK_UPDATE),
+            handlerCaptor.capture()
+        )
+
+        handlerCaptor.value.handle(SplitEvent.SDK_UPDATE, null)
+
+        assertEquals(1, listener.onUpdateCalls.size)
+        assertEquals(client, listener.onUpdateCalls[0].first)
+        assertEquals(null, listener.onUpdateCalls[0].second)
+    }
+
+    @Test
+    fun `SDK_READY_FROM_CACHE handler calls onReadyFromCache on listener`() {
+        val handlerCaptor = ArgumentCaptor.forClass(EventHandler::class.java) as ArgumentCaptor<EventHandler<SplitEvent, Any?>>
+        SplitEventListenerAdapter(listener, client).registerAll(eventsManager)
+        verify(eventsManager, atLeastOnce()).register(
+            org.mockito.ArgumentMatchers.eq(SplitEvent.SDK_READY_FROM_CACHE),
+            handlerCaptor.capture()
+        )
+
+        handlerCaptor.value.handle(SplitEvent.SDK_READY_FROM_CACHE, null)
+
+        assertEquals(1, listener.onReadyFromCacheCalls.size)
+        assertEquals(client, listener.onReadyFromCacheCalls[0].first)
+        assertEquals(null, listener.onReadyFromCacheCalls[0].second)
+    }
+
+    @Test
+    fun `SDK_READY_TIMEOUT handler calls onTimeout on listener`() {
+        val handlerCaptor = ArgumentCaptor.forClass(EventHandler::class.java) as ArgumentCaptor<EventHandler<SplitEvent, Any?>>
+        SplitEventListenerAdapter(listener, client).registerAll(eventsManager)
+        verify(eventsManager, atLeastOnce()).register(
+            org.mockito.ArgumentMatchers.eq(SplitEvent.SDK_READY_TIMEOUT),
+            handlerCaptor.capture()
+        )
+
+        handlerCaptor.value.handle(SplitEvent.SDK_READY_TIMEOUT, null)
+
+        assertEquals(1, listener.onTimeoutCalls.size)
+        assertEquals(client, listener.onTimeoutCalls[0])
+    }
+
+    @Test
+    fun `SDK_READY_TIMEOUT handler calls onTimeoutView on listener`() {
+        val handlerCaptor = ArgumentCaptor.forClass(EventHandler::class.java) as ArgumentCaptor<EventHandler<SplitEvent, Any?>>
+        SplitEventListenerAdapter(listener, client).registerAll(eventsManager)
+        verify(eventsManager, atLeastOnce()).register(
+            org.mockito.ArgumentMatchers.eq(SplitEvent.SDK_READY_TIMEOUT),
+            handlerCaptor.capture()
+        )
+
+        handlerCaptor.value.handle(SplitEvent.SDK_READY_TIMEOUT, null)
+
+        assertEquals(1, listener.onTimeoutViewCalls.size)
+        assertEquals(client, listener.onTimeoutViewCalls[0])
+    }
+
+    @Test
+    fun `SDK_READY handler passes typed SdkReadyMetadata to listener`() {
+        val handlerCaptor = ArgumentCaptor.forClass(EventHandler::class.java) as ArgumentCaptor<EventHandler<SplitEvent, Any?>>
+        SplitEventListenerAdapter(listener, client).registerAll(eventsManager)
+        verify(eventsManager, atLeastOnce()).register(
+            org.mockito.ArgumentMatchers.eq(SplitEvent.SDK_READY),
+            handlerCaptor.capture()
+        )
+        val metadata = SdkReadyMetadata(isInitialCacheLoad = true, lastUpdateTimestamp = 42L)
+
+        handlerCaptor.value.handle(SplitEvent.SDK_READY, metadata)
+
+        assertEquals(metadata, listener.onReadyCalls[0].second)
+    }
+
+    @Test
+    fun `SDK_READY_FROM_CACHE handler passes typed SdkReadyMetadata to listener`() {
+        val handlerCaptor = ArgumentCaptor.forClass(EventHandler::class.java) as ArgumentCaptor<EventHandler<SplitEvent, Any?>>
+        SplitEventListenerAdapter(listener, client).registerAll(eventsManager)
+        verify(eventsManager, atLeastOnce()).register(
+            org.mockito.ArgumentMatchers.eq(SplitEvent.SDK_READY_FROM_CACHE),
+            handlerCaptor.capture()
+        )
+        val metadata = SdkReadyMetadata(isInitialCacheLoad = false, lastUpdateTimestamp = 100L)
+
+        handlerCaptor.value.handle(SplitEvent.SDK_READY_FROM_CACHE, metadata)
+
+        assertEquals(metadata, listener.onReadyFromCacheCalls[0].second)
+    }
+
+    @Test
+    fun `SDK_UPDATE handler passes typed SdkUpdateMetadata to listener`() {
+        val handlerCaptor = ArgumentCaptor.forClass(EventHandler::class.java) as ArgumentCaptor<EventHandler<SplitEvent, Any?>>
+        SplitEventListenerAdapter(listener, client).registerAll(eventsManager)
+        verify(eventsManager, atLeastOnce()).register(
+            org.mockito.ArgumentMatchers.eq(SplitEvent.SDK_UPDATE),
+            handlerCaptor.capture()
+        )
+        val metadata = SdkUpdateMetadata(type = SdkUpdateMetadata.Type.FLAGS_UPDATE, names = listOf("flag-a", "flag-b"))
+
+        handlerCaptor.value.handle(SplitEvent.SDK_UPDATE, metadata)
+
+        assertEquals(metadata, listener.onUpdateCalls[0].second)
+    }
+
+    @Test
+    fun `SDK_READY handler calls onReadyView on listener`() {
+        val handlerCaptor = ArgumentCaptor.forClass(EventHandler::class.java) as ArgumentCaptor<EventHandler<SplitEvent, Any?>>
+        SplitEventListenerAdapter(listener, client).registerAll(eventsManager)
+        verify(eventsManager, atLeastOnce()).register(
+            org.mockito.ArgumentMatchers.eq(SplitEvent.SDK_READY),
+            handlerCaptor.capture()
+        )
+        val metadata = SdkReadyMetadata(isInitialCacheLoad = true)
+
+        handlerCaptor.value.handle(SplitEvent.SDK_READY, metadata)
+
+        assertEquals(1, listener.onReadyViewCalls.size)
+        assertEquals(metadata, listener.onReadyViewCalls[0].second)
+    }
+
+    @Test
+    fun `SDK_READY_FROM_CACHE handler calls onReadyFromCacheView on listener`() {
+        val handlerCaptor = ArgumentCaptor.forClass(EventHandler::class.java) as ArgumentCaptor<EventHandler<SplitEvent, Any?>>
+        SplitEventListenerAdapter(listener, client).registerAll(eventsManager)
+        verify(eventsManager, atLeastOnce()).register(
+            org.mockito.ArgumentMatchers.eq(SplitEvent.SDK_READY_FROM_CACHE),
+            handlerCaptor.capture()
+        )
+        val metadata = SdkReadyMetadata(isInitialCacheLoad = false, lastUpdateTimestamp = 99L)
+
+        handlerCaptor.value.handle(SplitEvent.SDK_READY_FROM_CACHE, metadata)
+
+        assertEquals(1, listener.onReadyFromCacheViewCalls.size)
+        assertEquals(metadata, listener.onReadyFromCacheViewCalls[0].second)
+    }
+
+    @Test
+    fun `SDK_UPDATE handler calls onUpdateView on listener`() {
+        val handlerCaptor = ArgumentCaptor.forClass(EventHandler::class.java) as ArgumentCaptor<EventHandler<SplitEvent, Any?>>
+        SplitEventListenerAdapter(listener, client).registerAll(eventsManager)
+        verify(eventsManager, atLeastOnce()).register(
+            org.mockito.ArgumentMatchers.eq(SplitEvent.SDK_UPDATE),
+            handlerCaptor.capture()
+        )
+        val metadata = SdkUpdateMetadata(type = SdkUpdateMetadata.Type.FLAGS_UPDATE, names = listOf("flag-x"))
+
+        handlerCaptor.value.handle(SplitEvent.SDK_UPDATE, metadata)
+
+        assertEquals(1, listener.onUpdateViewCalls.size)
+        assertEquals(metadata, listener.onUpdateViewCalls[0].second)
+    }
+}
+
+private class FakeSplitEventListener : SplitEventListener() {
+    val onReadyCalls = mutableListOf<Pair<SplitClient, SdkReadyMetadata?>>()
+    val onReadyViewCalls = mutableListOf<Pair<SplitClient, SdkReadyMetadata?>>()
+    val onReadyFromCacheCalls = mutableListOf<Pair<SplitClient, SdkReadyMetadata?>>()
+    val onReadyFromCacheViewCalls = mutableListOf<Pair<SplitClient, SdkReadyMetadata?>>()
+    val onUpdateCalls = mutableListOf<Pair<SplitClient, SdkUpdateMetadata?>>()
+    val onUpdateViewCalls = mutableListOf<Pair<SplitClient, SdkUpdateMetadata?>>()
+    val onTimeoutCalls = mutableListOf<SplitClient>()
+    val onTimeoutViewCalls = mutableListOf<SplitClient>()
+
+    override fun onReady(client: SplitClient, metadata: SdkReadyMetadata?) { onReadyCalls.add(client to metadata) }
+    override fun onReadyView(client: SplitClient, metadata: SdkReadyMetadata?) { onReadyViewCalls.add(client to metadata) }
+    override fun onReadyFromCache(client: SplitClient, metadata: SdkReadyMetadata?) { onReadyFromCacheCalls.add(client to metadata) }
+    override fun onReadyFromCacheView(client: SplitClient, metadata: SdkReadyMetadata?) { onReadyFromCacheViewCalls.add(client to metadata) }
+    override fun onUpdate(client: SplitClient, metadata: SdkUpdateMetadata?) { onUpdateCalls.add(client to metadata) }
+    override fun onUpdateView(client: SplitClient, metadata: SdkUpdateMetadata?) { onUpdateViewCalls.add(client to metadata) }
+    override fun onTimeout(client: SplitClient) { onTimeoutCalls.add(client) }
+    override fun onTimeoutView(client: SplitClient) { onTimeoutViewCalls.add(client) }
+}

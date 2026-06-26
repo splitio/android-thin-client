@@ -1,0 +1,172 @@
+pipeline:
+  name: android-thin-client-test
+  identifier: androidthinclienttest
+  projectIdentifier: Harness_Split
+  orgIdentifier: PROD
+  tags: {}
+  properties:
+    ci:
+      codebase:
+        repoName: android-thin-client
+        build: <+input>
+  stages:
+    - stage:
+        name: Build
+        identifier: Build
+        description: ""
+        type: CI
+        spec:
+          cloneCodebase: true
+          caching:
+            enabled: true
+            override: true
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          variables:
+            - name: ANDROID_HOME
+              type: String
+              value: /opt/android-sdk
+          execution:
+            steps:
+              - step:
+                  type: Run
+                  name: Checkout submodules
+                  identifier: checkout_submodules
+                  spec:
+                    shell: Sh
+                    command: |
+                      set -eu
+                      # Ensure public GitHub submodules clone over HTTPS (CI doesn't have SSH keys)
+                      git config --global url."https://github.com/".insteadOf git@github.com:
+                      git config --global url."https://github.com/".insteadOf ssh://git@github.com/
+                      git submodule sync --recursive
+                      git submodule update --init --recursive
+                      git submodule status --recursive
+              - step:
+                  type: Run
+                  name: Install Dependencies
+                  identifier: install_dependencies
+                  spec:
+                    shell: Sh
+                    command: |
+                      export INSTALL_PROFILE=unit
+                      chmod +x .harness/scripts/install-deps.sh
+                      .harness/scripts/install-deps.sh
+              - step:
+                  type: RunTests
+                  name: Run unit tests
+                  identifier: run_unit_tests
+                  spec:
+                    language: Java
+                    buildTool: Gradle
+                    args: testDebugUnitTest
+                    shell: Sh
+                    preCommand: |
+                      export ANDROID_HOME="${ANDROID_HOME:-/opt/android-sdk}"
+                      # Set Android SDK environment variables to point to the same location
+                      export ANDROID_SDK_ROOT=$ANDROID_HOME
+
+                      JAVA17_BIN=$(find /usr/lib/jvm -maxdepth 3 -type f -path "*/java-17-openjdk-*/bin/java" | head -n1)
+                      if [ -n "$JAVA17_BIN" ]; then
+                        export JAVA_HOME=$(dirname $(dirname "$JAVA17_BIN"))
+                        export PATH="$JAVA_HOME/bin:$PATH"
+                      fi
+
+                      export PATH="$PATH:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$ANDROID_HOME/cmdline-tools/latest/bin"
+                      java -version
+                      echo "JAVA_HOME: $JAVA_HOME"
+                    testIntelligence:
+                      enabled: true
+                    reports:
+                      type: JUnit
+                      spec:
+                        paths:
+                          - "**/build/test-results/**/*.xml"
+              - step:
+                  type: Run
+                  name: Generate JaCoCo Coverage Report
+                  identifier: generate_jacoco_coverage_report
+                  spec:
+                    shell: Sh
+                    command: |
+                      export ANDROID_HOME="${ANDROID_HOME:-/opt/android-sdk}"
+                      export ANDROID_SDK_ROOT=$ANDROID_HOME
+
+                      JAVA17_BIN=$(find /usr/lib/jvm -maxdepth 3 -type f -path "*/java-17-openjdk-*/bin/java" | head -n1)
+                      if [ -n "$JAVA17_BIN" ]; then
+                        export JAVA_HOME=$(dirname $(dirname "$JAVA17_BIN"))
+                        export PATH="$JAVA_HOME/bin:$PATH"
+                      fi
+
+                      export PATH="$PATH:$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin"
+                      ./gradlew jacocoAggregateUnitTestReport --stacktrace
+
+                      echo "JaCoCo XML report:"
+                      ls -la build/reports/jacoco/jacocoAggregateUnitTestReport/jacocoAggregateUnitTestReport.xml || true
+                      echo "JaCoCo HTML report:"
+                      ls -la build/reports/jacoco/jacocoAggregateUnitTestReport/html/index.html || true
+                  when:
+                    stageStatus: Success
+              - step:
+                  type: Run
+                  name: Install and Run SonarQube Scanner
+                  identifier: install_sonarqube_scanner
+                  spec:
+                    connectorRef: account.harnessImage
+                    image: sonarsource/sonar-scanner-cli
+                    shell: Bash
+                    command: |
+                      set -euo pipefail
+
+                      # Run scanner from repository root if present.
+                      if [ -d "/harness/<+codebase.repoName>" ]; then
+                        cd "/harness/<+codebase.repoName>"
+                      fi
+
+                      # Build sonar.java.binaries from only the module dirs that actually exist after the build
+                      JAVA_BINARIES=""
+                      for module in api auth retryable-http-client secure-http-client evaluation events-tracking models observer persistence persistence-domain streaming-thin cdn-bypass; do
+                        for subdir in build/intermediates/javac build/intermediates/built_in_kotlinc; do
+                          if [ -d "$module/$subdir" ]; then
+                            JAVA_BINARIES="${JAVA_BINARIES:+$JAVA_BINARIES,}$module/$subdir"
+                          fi
+                        done
+                      done
+
+                      COMMON_ARGS="
+                        -Dsonar.host.url=https://sonar.harness.io
+                        -Dsonar.projectKey=android-thin-client
+                        -Dsonar.token=$SONAR_TOKEN
+                        -Dsonar.scanner.skipJreProvisioning=true
+                        -Dsonar.scanner.skipSystemTruststore=true
+                        -Dsonar.sources=api/src/main,auth/src/main,retryable-http-client/src/main,secure-http-client/src/main,evaluation/src/main,events-tracking/src/main,models/src/main,observer/src/main,persistence/src/main,persistence-domain/src/main,streaming-thin/src/main,cdn-bypass/src/main
+                        -Dsonar.tests=api/src/test,auth/src/test,retryable-http-client/src/test,secure-http-client/src/test,evaluation/src/test,events-tracking/src/test,observer/src/test,persistence/src/test,persistence-domain/src/test,streaming-thin/src/test,cdn-bypass/src/test
+                        -Dsonar.exclusions=**/build/**,android-client/**
+                        -Dsonar.java.binaries=$JAVA_BINARIES
+                        -Dsonar.coverage.exclusions=**/*Test.kt,**/*Test.java
+                        -Dsonar.coverage.jacoco.xmlReportPaths=build/reports/jacoco/jacocoAggregateUnitTestReport/jacocoAggregateUnitTestReport.xml
+                        -Dsonar.junit.reportPaths=**/build/test-results/**/*.xml
+                      "
+
+                      if [ "<+codebase.prNumber>" != "" ] && [ "<+codebase.prNumber>" != "null" ]; then
+                        echo "Pull Request Analysis"
+                        sonar-scanner \
+                          $COMMON_ARGS \
+                          -Dsonar.pullrequest.key=<+codebase.prNumber> \
+                          -Dsonar.pullrequest.branch=<+codebase.sourceBranch> \
+                          -Dsonar.pullrequest.base=<+codebase.targetBranch>
+                      else
+                        echo "Branch Analysis"
+                        sonar-scanner \
+                          $COMMON_ARGS \
+                          -Dsonar.branch.name=<+codebase.branch>
+                      fi
+                    envVariables:
+                      SONAR_TOKEN: <+secrets.getValue("sonarqube-token")>
+                  timeout: 10m
+                  when:
+                    stageStatus: Success

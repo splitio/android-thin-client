@@ -1,0 +1,97 @@
+package io.split.client.thin.internal.secure
+
+import io.split.client.thin.http.HttpRequestDescriptor
+import io.split.client.thin.http.RequestCategory
+import io.split.client.thin.http.RetryableHttpClient
+import io.split.client.thin.http.contracts.HttpResponse
+import io.split.client.thin.internal.auth.AuthProvider
+import io.split.client.thin.internal.auth.JwtCredential
+
+internal val testEvaluationsUrl = "https://api.split.io/v1/evaluations"
+internal val testEventsUrl = "https://events.split.io/v1/events"
+internal val testTelemetryUrl = "https://telemetry.split.io/v1/metrics"
+
+internal val testDefaultTarget = EvaluationTarget(
+    matchingKey = "user-1",
+    bucketingKey = null,
+    attributes = mapOf("plan" to "premium"),
+)
+internal val testDefaultRequest = EvaluationFilters(
+    sets = emptySet(),
+    configs = false,
+)
+
+internal fun makeClient(
+    authProvider: FakeAuthProvider = FakeAuthProvider(),
+    httpClient: FakeRetryableHttpClient = FakeRetryableHttpClient(),
+    sdkVersion: String = "test-version",
+    sdkKey: String = "test-sdk-key",
+): Triple<DefaultSecureHttpClient, FakeAuthProvider, FakeRetryableHttpClient> = Triple(
+    DefaultSecureHttpClient(
+        authProvider = authProvider,
+        retryableHttpClient = httpClient,
+        evaluationsUrl = testEvaluationsUrl,
+        eventsUrl = testEventsUrl,
+        telemetryUrl = testTelemetryUrl,
+        sdkKey = sdkKey,
+        sdkVersion = sdkVersion,
+    ),
+    authProvider,
+    httpClient,
+)
+
+internal class FakeAuthProvider(
+    private val credential: JwtCredential = JwtCredential("default-token", 9999999L, false),
+    private val credentialSequence: List<JwtCredential>? = null,
+    val throwOnCredential: Throwable? = null,
+) : AuthProvider {
+
+    var credentialCallCount = 0
+        private set
+    var invalidateCallCount = 0
+        private set
+    private var credentialCallIndex = 0
+
+    override fun addTarget(target: String): Boolean = false
+    override fun removeTarget(target: String): Boolean = true
+
+    override suspend fun credential(): JwtCredential = credential(emptySet())
+
+    override suspend fun credential(targets: Set<String>): JwtCredential {
+        credentialCallCount++
+        throwOnCredential?.let { throw it }
+        return credentialSequence?.getOrElse(credentialCallIndex++) { credential } ?: credential
+    }
+
+    override suspend fun invalidateAll() {
+        invalidateCallCount++
+    }
+}
+
+internal class FakeRetryableHttpClient(
+    private val statusCode: Int = 200,
+    private val statusCodeSequence: List<Int>? = null,
+    val throwOnExecute: Throwable? = null,
+) : RetryableHttpClient {
+
+    val requests = mutableListOf<HttpRequestDescriptor>()
+    var lastCategory: RequestCategory? = null
+        private set
+    private var executeIndex = 0
+
+    val lastRequest: HttpRequestDescriptor? get() = requests.lastOrNull()
+    val executeCallCount: Int get() = requests.size
+
+    override suspend fun execute(request: HttpRequestDescriptor, category: RequestCategory): HttpResponse {
+        requests.add(request)
+        lastCategory = category
+        throwOnExecute?.let { throw it }
+        val code = statusCodeSequence?.getOrElse(executeIndex++) { statusCode } ?: statusCode
+        return object : HttpResponse {
+            override val isSuccess: Boolean = code in 200..299
+            override val httpStatus: Int = code
+            override val headers: Map<String, List<String>> = emptyMap()
+            override fun getData(): String? = null
+        }
+    }
+}
