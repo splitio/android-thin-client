@@ -1,0 +1,102 @@
+pipeline:
+  name: android-thin-client-e2e
+  identifier: androidthincliente2e
+  projectIdentifier: Harness_Split
+  orgIdentifier: PROD
+  tags: {}
+  properties:
+    ci:
+      codebase:
+        repoName: android-thin-client
+        build: <+input>
+  stages:
+    - stage:
+        name: E2E
+        identifier: E2E
+        description: ""
+        type: CI
+        spec:
+          cloneCodebase: true
+          caching:
+            enabled: true
+            override: true
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec:
+              size: large
+              nestedVirtualization: true
+          variables:
+            - name: ANDROID_HOME
+              type: String
+              value: /opt/android-sdk
+          execution:
+            steps:
+              - step:
+                  type: Run
+                  name: Checkout submodules
+                  identifier: checkout_submodules
+                  spec:
+                    shell: Sh
+                    command: |
+                      set -eu
+                      git config --global url."https://github.com/".insteadOf git@github.com:
+                      git config --global url."https://github.com/".insteadOf ssh://git@github.com/
+                      git submodule sync --recursive
+                      git submodule update --init --recursive
+                      git submodule status --recursive
+              - step:
+                  type: Run
+                  name: Install Dependencies
+                  identifier: install_dependencies
+                  spec:
+                    shell: Sh
+                    command: |
+                      chmod +x .harness/scripts/install-deps.sh
+                      .harness/scripts/install-deps.sh
+              - step:
+                  type: RunTests
+                  name: Publish and run connectedCheck
+                  identifier: run_connected_check
+                  spec:
+                    language: Java
+                    buildTool: Gradle
+                    args: :e2e:connectedCheck
+                    shell: Sh
+                    preCommand: |
+                      export ANDROID_SDK_ROOT=$ANDROID_HOME
+
+                      JAVA17_BIN=$(find /usr/lib/jvm -maxdepth 3 -type f -path "*/java-17-openjdk-*/bin/java" | head -n1)
+                      export JAVA_HOME=$(dirname $(dirname "$JAVA17_BIN"))
+                      export PATH="$JAVA_HOME/bin:$PATH:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$ANDROID_HOME/cmdline-tools/latest/bin"
+
+                      ./gradlew publishToMavenLocalForE2e
+
+                      chmod +x .harness/scripts/start-emulator.sh
+                      .harness/scripts/start-emulator.sh
+                    testIntelligence:
+                      enabled: true
+                    reports:
+                      type: JUnit
+                      spec:
+                        paths:
+                          - "**/build/outputs/androidTest-results/connected/**/*.xml"
+                          - "**/build/test-results/**/*.xml"
+              - step:
+                  type: Run
+                  name: Publish Test Results
+                  identifier: publish_test_results
+                  spec:
+                    shell: Sh
+                    command: echo "Publishing test results"
+                    reports:
+                      type: JUnit
+                      spec:
+                        paths:
+                          - "**/build/outputs/androidTest-results/connected/**/*.xml"
+                          - "**/build/test-results/**/*.xml"
+                  when:
+                    stageStatus: All
+        timeout: 30m

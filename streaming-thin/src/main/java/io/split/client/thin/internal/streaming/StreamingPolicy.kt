@@ -116,7 +116,12 @@ internal object StreamingPolicy {
 
             PolicyEvent.ControlDisabled ->
                 state.copy(connState = ConnState.Stopped, reconnecting = false) to
-                    listOf(PolicyEffect.CloseCurrentSocket, PolicyEffect.EmitDisconnected)
+                    listOf(
+                        PolicyEffect.CloseCurrentSocket,
+                        PolicyEffect.EmitDisconnected,
+                        PolicyEffect.EmitSyncModeChanged("POLLING_FALLBACK", "STREAMING_DISABLED"),
+                        PolicyEffect.NotifyPushDisabled,
+                    )
 
             PolicyEvent.ControlReset ->
                 state.copy(connState = ConnState.Started, reconnecting = false) to

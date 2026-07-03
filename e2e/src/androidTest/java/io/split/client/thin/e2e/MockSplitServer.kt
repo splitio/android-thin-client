@@ -6,6 +6,7 @@ import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.RecordedRequest
 import okio.Buffer
 import java.util.Collections
+import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -74,6 +75,14 @@ class MockSplitServer {
     /** Number of SSE connections established. */
     val sseConnectionCount: AtomicInteger = AtomicInteger(0)
 
+    /**
+     * When non-null, the dispatcher blocks on this semaphore before returning the next queued
+     * SSE response, so the test can control exactly when the SSE event body is delivered.
+     * Call [holdNextSseUntilReleased] before enqueuing the SSE response, then call
+     * [releaseSse] after the test has completed any actions that must precede the event.
+     */
+    private var sseSendGate: Semaphore? = null
+
     /** Bodies of all POST requests received at the events endpoint. */
     val capturedEventBodies: List<String> get() = _capturedEventBodies.toList()
 
@@ -99,6 +108,8 @@ class MockSplitServer {
                 return when {
                     path.startsWith("/sse") -> {
                         sseConnectionCount.incrementAndGet()
+                        sseSendGate?.acquire()
+                        sseSendGate = null
                         sseQueue.removeFirstOrNull() ?: defaultSseResponse()
                     }
 
@@ -293,6 +304,27 @@ class MockSplitServer {
             .addHeader("Cache-Control", "no-cache")
             .setBody(buffer)
             .throttleBody(bytesPerSecond.toLong(), 1, TimeUnit.SECONDS)
+    }
+
+    // -------------------------------------------------------------------------
+    // SSE gate — deterministic event delivery control
+    // -------------------------------------------------------------------------
+
+    /**
+     * Arms a one-shot gate: the next SSE dispatcher call will block (after incrementing
+     * [sseConnectionCount]) until [releaseSse] is called. This lets the test interpose
+     * arbitrary actions (e.g. `client.destroy()`) between the SDK opening the SSE connection
+     * and the server actually sending the event body.
+     *
+     * Must be called before [enqueueSse].
+     */
+    fun holdNextSseUntilReleased() {
+        sseSendGate = Semaphore(0)
+    }
+
+    /** Releases the gate set by [holdNextSseUntilReleased], allowing the SSE body to be sent. */
+    fun releaseSse() {
+        sseSendGate?.release()
     }
 
     // -------------------------------------------------------------------------
