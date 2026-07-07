@@ -445,6 +445,27 @@ class InMemoryEvaluationStorageTest {
 
         assertEquals(storedTs, storageWithLoader.lastUpdateTimestamp(key1))
     }
+
+    @Test
+    fun `clear does not invoke cacheLoader`() {
+        val loadCalls = mutableListOf<EvaluationKey>()
+        val persistCalls = mutableListOf<EvaluationKey>()
+        val cacheLoader = FakeCacheLoader(
+            onLoad = { key -> loadCalls.add(key); null },
+            onPersist = { key, _, _ -> persistCalls.add(key) }
+        )
+        val storageWithLoader = InMemoryEvaluationStorage(cacheLoader)
+
+        // First, add some data so clear has something to remove
+        storageWithLoader.upsert(change(key1, 1L, storedEval("flag-a", "on")))
+        persistCalls.clear() // Clear persist calls from upsert
+
+        // Now clear and verify no loader methods are called
+        storageWithLoader.clear(key1)
+
+        assertTrue("clear should not call loadLocal", loadCalls.isEmpty())
+        assertTrue("clear should not call persistAsync", persistCalls.isEmpty())
+    }
 }
 
 private class FakeCacheLoader(

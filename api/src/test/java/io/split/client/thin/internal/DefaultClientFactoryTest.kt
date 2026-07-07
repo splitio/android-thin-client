@@ -268,6 +268,29 @@ class DefaultClientFactoryTest {
         assertEquals(newTarget, repository.setTargetCalls[0].first)
     }
 
+    @Test
+    fun `destroying client clears its evaluation key from in-memory storage`() = runTest {
+        val storage = FakeWriteStorage()
+        val coordinator = FakeFetchCoordinator()
+        val target = Target(Key("user-1"), trafficType = "user")
+        val factory = DefaultClientFactory(
+            FakeCompositeObserver(),
+            this,
+            evaluationRepository = FakeEvaluationRepository(),
+            filters = EvaluationFilters(),
+            fallbackCalculator = null,
+            fetchCoordinator = coordinator,
+            evaluationStorage = storage,
+        )
+
+        val client = factory(target)
+        advanceUntilIdle()
+
+        (client as InternalDestroyable).tearDownInternal()
+
+        assertEquals(listOf(EvaluationKey(target.key)), storage.clearedKeys)
+    }
+
 }
 
 private class FakeAuthProvider : AuthProvider {

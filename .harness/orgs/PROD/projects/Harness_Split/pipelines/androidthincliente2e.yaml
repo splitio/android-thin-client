@@ -63,7 +63,7 @@ pipeline:
                   spec:
                     language: Java
                     buildTool: Gradle
-                    args: :e2e:connectedCheck
+                    args: ":e2e:connectedCheck"
                     shell: Sh
                     preCommand: |
                       export ANDROID_SDK_ROOT=$ANDROID_HOME
@@ -84,19 +84,4 @@ pipeline:
                         paths:
                           - "**/build/outputs/androidTest-results/connected/**/*.xml"
                           - "**/build/test-results/**/*.xml"
-              - step:
-                  type: Run
-                  name: Publish Test Results
-                  identifier: publish_test_results
-                  spec:
-                    shell: Sh
-                    command: echo "Publishing test results"
-                    reports:
-                      type: JUnit
-                      spec:
-                        paths:
-                          - "**/build/outputs/androidTest-results/connected/**/*.xml"
-                          - "**/build/test-results/**/*.xml"
-                  when:
-                    stageStatus: All
         timeout: 30m

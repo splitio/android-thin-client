@@ -334,9 +334,10 @@ class SdkBehaviorAndroidTest {
             else MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_2)
         }
 
-        // Delay the SSE event 2 seconds so onReady fires from the initial fetch first
+        // Hold the SSE body until after onReady fires so the initial fetch always completes first.
+        server.holdNextSseUntilReleased()
         server.enqueueSse(
-            server.buildSseResponse(listOf(E2EFixtures.SSE_EVALUATION_UPDATE), delaySeconds = 2)
+            server.buildSseResponse(listOf(E2EFixtures.SSE_EVALUATION_UPDATE))
         )
 
         val factory = buildStreamingFactory(server, prefix = "e2e_update_streaming_$RUN_ID")
@@ -347,6 +348,8 @@ class SdkBehaviorAndroidTest {
         try {
             assertTrue("onReady did not fire", listener.awaitReady())
             assertEquals("on", client.getTreatment("flag_a").treatment)
+
+            server.releaseSse()
 
             assertTrue("onUpdate did not fire after SSE event", listener.awaitUpdate())
             assertEquals("off", client.getTreatment("flag_a").treatment)
@@ -3782,6 +3785,113 @@ System.out.println("events body: ${server.capturedEventBodies.joinToString(", ")
             )
         } finally {
             runBlocking { runCatching { factory.destroy() } }
+            server.shutdown()
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Post-destroy manager.flagNames behavior
+    // -------------------------------------------------------------------------
+
+    /**
+     * Given a polling factory with ONE default-target client has reached onReady
+     * When the client is destroyed (last/only client)
+     * Then factory.getManager().flagNames is empty
+     * (Regression: the destroyed client's evaluation key is removed from in-memory storage,
+     *  so the no-arg manager has nothing to return.)
+     */
+    @Test
+    fun allClientsDestroyedEmptiesManagerFlagNames() {
+        val server = MockSplitServer()
+        server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_DISABLED))
+        server.evaluationsHandler = { MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1) }
+
+        val factory = buildPollingFactory(
+            server,
+            prefix = "e2e_destroy_empty_manager_$RUN_ID",
+            refreshRate = 3600,
+        )
+        val client = factory.getClient()
+        val listener = TestEventListener()
+        client.addEventListener(listener.asSplitEventListener)
+
+        try {
+            assertTrue("onReady did not fire", listener.awaitReady())
+            assertTrue(
+                "manager.flagNames should be non-empty after ready (sanity)",
+                factory.getManager().flagNames.isNotEmpty()
+            )
+
+            runBlocking { client.destroy() }
+
+            assertTrue(
+                "manager.flagNames should be empty after destroying the only client",
+                factory.getManager().flagNames.isEmpty()
+            )
+        } finally {
+            runBlocking { factory.destroy() }
+            server.shutdown()
+        }
+    }
+
+    /**
+     * Given a polling factory with TWO clients on distinct targets (user_a, user_b) have reached onReady
+     * When client1 (user_a) is destroyed
+     * Then factory.getManager().flagNames is still non-empty (user_b survives)
+     * And client2 (user_b) still evaluates correctly
+     */
+    @Test
+    fun oneClientAliveKeepsManagerFlagNamesNonEmpty() {
+        val server = MockSplitServer()
+        server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_DISABLED))
+
+        val targetA = Target(key = Key("user_a"), trafficType = "user")
+        val targetB = Target(key = Key("user_b"), trafficType = "user")
+
+        server.evaluationsHandler = { request ->
+            when (request.evaluationsKey()) {
+                "user_a" -> MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1)
+                "user_b" -> MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_2)
+                else -> MockResponse().setBody("""{"till":-1,"since":-1,"evaluations":[]}""")
+            }
+        }
+
+        val factory = buildPollingFactory(
+            server,
+            prefix = "e2e_destroy_one_manager_$RUN_ID",
+            refreshRate = 3600,
+            defaultTarget = targetA,
+        )
+        val client1 = factory.getClient(targetA)
+        val client2 = factory.getClient(targetB)
+
+        val listener1 = TestEventListener()
+        val listener2 = TestEventListener()
+        client1.addEventListener(listener1.asSplitEventListener)
+        client2.addEventListener(listener2.asSplitEventListener)
+
+        try {
+            assertTrue("client1 onReady did not fire", listener1.awaitReady())
+            assertTrue("client2 onReady did not fire", listener2.awaitReady())
+            assertTrue(
+                "manager.flagNames should be non-empty with both clients ready",
+                factory.getManager().flagNames.isNotEmpty()
+            )
+
+            runBlocking { client1.destroy() }
+
+            assertTrue(
+                "manager.flagNames should still be non-empty after destroying client1 (client2 survives)",
+                factory.getManager().flagNames.isNotEmpty()
+            )
+
+            val treatment = client2.getTreatment("flag_a").treatment
+            assertFalse(
+                "client2 should still evaluate correctly (not 'control'), got: $treatment",
+                treatment == "control"
+            )
+        } finally {
+            runBlocking { factory.destroy() }
             server.shutdown()
         }
     }
