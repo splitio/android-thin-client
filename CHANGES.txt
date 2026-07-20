@@ -1,2 +1,6 @@
+1.0.1 (Jul 20, 2026)
+- Fixed issue in which manager for destroyed factory continued to serve names.
+- Improved streaming disabled notification handling.
+
 1.0.0 (Jun 26, 2026)
 - Initial release.

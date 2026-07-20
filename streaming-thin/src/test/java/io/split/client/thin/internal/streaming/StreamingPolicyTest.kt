@@ -299,7 +299,25 @@ class StreamingPolicyTest {
     fun `control disabled stops without reconnect`() {
         val (next, effects) = reduce(started, PolicyEvent.ControlDisabled)
         assertEquals(ConnState.Stopped, next.connState)
-        assertEquals(listOf(CloseCurrentSocket, EmitDisconnected), effects)
+        assertFalse(next.reconnecting)
+        assertTrue(effects.contains(CloseCurrentSocket))
+        assertTrue(effects.contains(EmitDisconnected))
+    }
+
+    @Test
+    fun `control disabled falls back to polling via NotifyPushDisabled`() {
+        val (next, effects) = reduce(started, PolicyEvent.ControlDisabled)
+        assertEquals(ConnState.Stopped, next.connState)
+        assertFalse("must not be reconnecting after STREAMING_DISABLED", next.reconnecting)
+        assertTrue(
+            "must emit NotifyPushDisabled so polling fallback starts",
+            effects.contains(NotifyPushDisabled),
+        )
+        assertTrue("must close current socket", effects.contains(CloseCurrentSocket))
+        assertTrue("must emit disconnected", effects.contains(EmitDisconnected))
+        val syncChange = effects.filterIsInstance<EmitSyncModeChanged>().singleOrNull()
+        assertEquals("POLLING_FALLBACK", syncChange?.to)
+        assertEquals("STREAMING_DISABLED", syncChange?.reason)
     }
 
     @Test

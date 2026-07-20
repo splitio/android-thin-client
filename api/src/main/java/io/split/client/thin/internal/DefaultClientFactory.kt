@@ -75,6 +75,7 @@ internal class DefaultClientFactory(
 
     private fun forgetTargetFetch(evalKey: EvaluationKey) {
         fetchCoordinator?.forget(evalKey)
+        evaluationStorage?.clear(evalKey)
     }
 
     private fun onTargetChanged(
@@ -96,7 +97,6 @@ internal class DefaultClientFactory(
                 }
             }
             forgetTargetFetch(oldEvalKey)
-            evaluationStorage?.clear(oldEvalKey)
             val isInit = !isReadyFired()
             evaluationRepository.setTarget(newTarget, filters, isInitialization = isInit)
         }

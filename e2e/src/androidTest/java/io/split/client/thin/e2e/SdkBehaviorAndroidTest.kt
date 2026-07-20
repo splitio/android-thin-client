@@ -6,7 +6,6 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
-import io.split.android.client.network.SdkTargetPath.events
 import io.split.client.thin.Key
 import io.split.client.thin.SdkKey
 import io.split.client.thin.SdkReadyMetadata
@@ -335,9 +334,10 @@ class SdkBehaviorAndroidTest {
             else MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_2)
         }
 
-        // Delay the SSE event 2 seconds so onReady fires from the initial fetch first
+        // Hold the SSE body until after onReady fires so the initial fetch always completes first.
+        server.holdNextSseUntilReleased()
         server.enqueueSse(
-            server.buildSseResponse(listOf(E2EFixtures.SSE_EVALUATION_UPDATE), delaySeconds = 2)
+            server.buildSseResponse(listOf(E2EFixtures.SSE_EVALUATION_UPDATE))
         )
 
         val factory = buildStreamingFactory(server, prefix = "e2e_update_streaming_$RUN_ID")
@@ -349,6 +349,8 @@ class SdkBehaviorAndroidTest {
             assertTrue("onReady did not fire", listener.awaitReady())
             assertEquals("on", client.getTreatment("flag_a").treatment)
 
+            server.releaseSse()
+
             assertTrue("onUpdate did not fire after SSE event", listener.awaitUpdate())
             assertEquals("off", client.getTreatment("flag_a").treatment)
         } finally {
@@ -356,10 +358,6 @@ class SdkBehaviorAndroidTest {
             server.shutdown()
         }
     }
-
-    // -------------------------------------------------------------------------
-    // Test CP1 — Control PAUSED keeps the SSE socket open and falls back to polling
-    // -------------------------------------------------------------------------
 
     /**
      * Given the SDK is in STREAMING mode with a 1-second fallback polling rate
@@ -429,10 +427,6 @@ class SdkBehaviorAndroidTest {
             server.shutdown()
         }
     }
-
-    // -------------------------------------------------------------------------
-    // Test CF1 — Repeated SSE connection failures fall back to polling, then recover
-    // -------------------------------------------------------------------------
 
     /**
      * Given the SDK is in STREAMING mode with a 1-second fallback polling rate
@@ -3611,11 +3605,11 @@ System.out.println("events body: ${server.capturedEventBodies.joinToString(", ")
         // Subsequent evaluations for any post-destroy fetch (pre-fix path) — different payload
         // so we can also assert the treatment didn't change.
         server.enqueueEvaluations(MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_2))
-        // SSE event arrives ~3s after the SSE connection is opened. We destroy immediately
-        // after onReady, so the event fires AFTER destroy. Pre-fix: streaming still alive →
-        // event triggers a re-fetch (eval count++, treatment switches). Post-fix: SSE stopped.
+        // The gate holds the SSE body until we explicitly release it after destroy(), so the
+        // ordering destroy → SSE event is enforced structurally rather than by timing.
+        server.holdNextSseUntilReleased()
         server.enqueueSse(
-            server.buildSseResponse(listOf(E2EFixtures.SSE_EVALUATION_UPDATE), delaySeconds = 3)
+            server.buildSseResponse(listOf(E2EFixtures.SSE_EVALUATION_UPDATE))
         )
 
         val factory = buildStreamingFactory(server, prefix = "e2e_destroy_streaming_$RUN_ID")
@@ -3637,7 +3631,10 @@ System.out.println("events body: ${server.capturedEventBodies.joinToString(", ")
 
             runBlocking { client.destroy() }
 
-            Thread.sleep(6_000)
+            // Release the SSE body now — guaranteed to arrive after destroy() completed.
+            server.releaseSse()
+
+            Thread.sleep(3_000)
 
             assertEquals(
                 "SSE event delivered after destroy must NOT trigger an evaluations fetch " +
@@ -3788,6 +3785,552 @@ System.out.println("events body: ${server.capturedEventBodies.joinToString(", ")
             )
         } finally {
             runBlocking { runCatching { factory.destroy() } }
+            server.shutdown()
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Post-destroy manager.flagNames behavior
+    // -------------------------------------------------------------------------
+
+    /**
+     * Given a polling factory with ONE default-target client has reached onReady
+     * When the client is destroyed (last/only client)
+     * Then factory.getManager().flagNames is empty
+     * (Regression: the destroyed client's evaluation key is removed from in-memory storage,
+     *  so the no-arg manager has nothing to return.)
+     */
+    @Test
+    fun allClientsDestroyedEmptiesManagerFlagNames() {
+        val server = MockSplitServer()
+        server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_DISABLED))
+        server.evaluationsHandler = { MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1) }
+
+        val factory = buildPollingFactory(
+            server,
+            prefix = "e2e_destroy_empty_manager_$RUN_ID",
+            refreshRate = 3600,
+        )
+        val client = factory.getClient()
+        val listener = TestEventListener()
+        client.addEventListener(listener.asSplitEventListener)
+
+        try {
+            assertTrue("onReady did not fire", listener.awaitReady())
+            assertTrue(
+                "manager.flagNames should be non-empty after ready (sanity)",
+                factory.getManager().flagNames.isNotEmpty()
+            )
+
+            runBlocking { client.destroy() }
+
+            assertTrue(
+                "manager.flagNames should be empty after destroying the only client",
+                factory.getManager().flagNames.isEmpty()
+            )
+        } finally {
+            runBlocking { factory.destroy() }
+            server.shutdown()
+        }
+    }
+
+    /**
+     * Given a polling factory with TWO clients on distinct targets (user_a, user_b) have reached onReady
+     * When client1 (user_a) is destroyed
+     * Then factory.getManager().flagNames is still non-empty (user_b survives)
+     * And client2 (user_b) still evaluates correctly
+     */
+    @Test
+    fun oneClientAliveKeepsManagerFlagNamesNonEmpty() {
+        val server = MockSplitServer()
+        server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_DISABLED))
+
+        val targetA = Target(key = Key("user_a"), trafficType = "user")
+        val targetB = Target(key = Key("user_b"), trafficType = "user")
+
+        server.evaluationsHandler = { request ->
+            when (request.evaluationsKey()) {
+                "user_a" -> MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1)
+                "user_b" -> MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_2)
+                else -> MockResponse().setBody("""{"till":-1,"since":-1,"evaluations":[]}""")
+            }
+        }
+
+        val factory = buildPollingFactory(
+            server,
+            prefix = "e2e_destroy_one_manager_$RUN_ID",
+            refreshRate = 3600,
+            defaultTarget = targetA,
+        )
+        val client1 = factory.getClient(targetA)
+        val client2 = factory.getClient(targetB)
+
+        val listener1 = TestEventListener()
+        val listener2 = TestEventListener()
+        client1.addEventListener(listener1.asSplitEventListener)
+        client2.addEventListener(listener2.asSplitEventListener)
+
+        try {
+            assertTrue("client1 onReady did not fire", listener1.awaitReady())
+            assertTrue("client2 onReady did not fire", listener2.awaitReady())
+            assertTrue(
+                "manager.flagNames should be non-empty with both clients ready",
+                factory.getManager().flagNames.isNotEmpty()
+            )
+
+            runBlocking { client1.destroy() }
+
+            assertTrue(
+                "manager.flagNames should still be non-empty after destroying client1 (client2 survives)",
+                factory.getManager().flagNames.isNotEmpty()
+            )
+
+            val treatment = client2.getTreatment("flag_a").treatment
+            assertFalse(
+                "client2 should still evaluate correctly (not 'control'), got: $treatment",
+                treatment == "control"
+            )
+        } finally {
+            runBlocking { factory.destroy() }
+            server.shutdown()
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Test ACT-001 / GAP-001 — streaming + push-disabled → polling fallback
+    // -------------------------------------------------------------------------
+
+    /**
+     * Given the SDK is configured in STREAMING mode with pollingRate=1s
+     * When the auth response returns pushEnabled=false (AUTH_PUSH_DISABLED)
+     * Then the SDK falls back to polling — no SSE connection is opened
+     * And the polling scheduler fires at the configured 1-second rate
+     * And onReady fires once evaluations are fetched
+     */
+    @Test
+    fun streamingConfigWithPushDisabledAuthFallsBackToPollingAtConfiguredRate() {
+        val server = MockSplitServer()
+        repeat(20) { server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_DISABLED)) }
+        server.enqueueEvaluations(MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1))
+
+        val factory = buildStreamingFactory(
+            server,
+            prefix = "e2e_push_disabled_fallback_$RUN_ID",
+            pollingRate = 1,
+        )
+        val client = factory.getClient()
+        val listener = TestEventListener()
+        client.addEventListener(listener.asSplitEventListener)
+
+        try {
+            assertTrue("onReady did not fire after push-disabled fallback", listener.awaitReady())
+            assertEquals("on", client.getTreatment("flag_a").treatment)
+
+            // The critical assertion: no SSE connection was ever attempted
+            assertEquals(
+                "SSE must not be opened when auth returns pushEnabled=false",
+                0,
+                server.sseConnectionCount.get(),
+            )
+
+            // Confirm polling is live: evaluation count grows within 3 poll cycles
+            val countAfterReady = server.evaluationRequestCount.get()
+            val deadline = System.currentTimeMillis() + 4_000
+            while (server.evaluationRequestCount.get() <= countAfterReady
+                && System.currentTimeMillis() < deadline) {
+                Thread.sleep(100)
+            }
+            assertTrue(
+                "polling must be live after push-disabled fallback (no new eval requests in 4s)",
+                server.evaluationRequestCount.get() > countAfterReady,
+            )
+        } finally {
+            runBlocking { factory.destroy() }
+            server.shutdown()
+        }
+    }
+
+    /**
+     * Given the SDK is in POLLING mode with pollingRate=1s
+     * And the SDK has reached ready
+     * When the next polling request returns HTTP 429 (rate-limited)
+     * Then the SDK does not crash or stop polling
+     * And subsequent polling cycles succeed and update treatments
+     */
+    @Test
+    fun pollingContinuesAndRecoverAfter429Response() {
+        val server = MockSplitServer()
+        server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_DISABLED))
+
+        var callCount = 0
+        server.evaluationsHandler = {
+            callCount++
+            when (callCount) {
+                1 -> MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1)
+                2 -> MockResponse().setResponseCode(429)
+                else -> MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_2)
+            }
+        }
+
+        val factory = buildPollingFactory(
+            server,
+            prefix = "e2e_429_backoff_$RUN_ID",
+            refreshRate = 1,
+        )
+        val client = factory.getClient()
+        val listener = TestEventListener()
+        client.addEventListener(listener.asSplitEventListener)
+
+        try {
+            assertTrue("onReady did not fire", listener.awaitReady())
+            assertEquals("on", client.getTreatment("flag_a").treatment)
+
+            // Wait for the update triggered after the 429 is absorbed and the next poll succeeds
+            assertTrue("onUpdate did not fire after 429 recovery", listener.awaitUpdate(15))
+            assertEquals("off", client.getTreatment("flag_a").treatment)
+        } finally {
+            runBlocking { factory.destroy() }
+            server.shutdown()
+        }
+    }
+
+    /**
+     * Given the SDK is in POLLING mode
+     * When the auth endpoint returns HTTP 403 (forbidden, not unauthorized)
+     * Then the SDK does not enter an infinite retry loop
+     * And onReady does not fire (credential cannot be obtained)
+     * And no evaluation requests are sent
+     */
+    @Test
+    fun auth403BlocksReadyWithoutRetryStorm() {
+        val server = MockSplitServer()
+        // 403 is non-retryable; subsequent fallback default returns empty 200
+        server.enqueueAuth(MockResponse().setResponseCode(403))
+
+        val factory = buildPollingFactory(
+            server,
+            prefix = "e2e_auth_403_$RUN_ID",
+            refreshRate = 3600,
+        )
+        val client = factory.getClient()
+        val listener = TestEventListener()
+        client.addEventListener(listener.asSplitEventListener)
+
+        try {
+            // SDK must time out waiting for ready — 403 should not trigger re-auth like 401 does
+            val readyFired = listener.awaitReady(timeoutSeconds = 3)
+            assertFalse("onReady must NOT fire after 403 auth — no credential available", readyFired)
+
+            // The SDK must not hammer the auth endpoint: only 1 attempt (non-retryable)
+            Thread.sleep(1_500)
+            assertEquals(
+                "403 must not trigger retry storm — auth must be called exactly once",
+                1,
+                server.authRequestCount.get(),
+            )
+
+            // No evaluations requested because no credential was ever obtained
+            assertEquals(
+                "no evaluation requests expected after 403 auth failure",
+                0,
+                server.evaluationRequestCount.get(),
+            )
+        } finally {
+            runBlocking { factory.destroy() }
+            server.shutdown()
+        }
+    }
+
+    /**
+     * Given the SDK ran once with flagSets={"set_a"} and cached the response
+     * When the factory is restarted with flagSets={"set_b"} (a different filter)
+     * Then the evaluations request on restart uses since=-1 (cache cleared)
+     * And the new filter is reflected in the request body ("sets":["set_b"])
+     */
+    @Test
+    fun flagSetsFilterChangeAcrossRestartClearsCacheAndRefetches() {
+        val server = MockSplitServer()
+        val prefix = "e2e_flagsets_change_$RUN_ID"
+
+        try {
+            // Phase 1: first run with flagSets={"set_a"} — populates cache
+            server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_DISABLED))
+            server.enqueueEvaluations(MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1))
+
+            val factory1 = buildPollingFactoryWithDynamicConfig(
+                server, prefix, configsEnabled = false, flagSets = setOf("set_a"),
+            )
+            val client1 = factory1.getClient()
+            val listener1 = TestEventListener()
+            client1.addEventListener(listener1.asSplitEventListener)
+
+            assertTrue("Phase 1: onReady did not fire", listener1.awaitReady())
+            runBlocking { factory1.destroy() }
+
+            // Phase 2: restart with flagSets={"set_b"} — filter change must invalidate cache
+            server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_DISABLED))
+            server.enqueueEvaluations(MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_2))
+
+            val factory2 = buildPollingFactoryWithDynamicConfig(
+                server, prefix, configsEnabled = false, flagSets = setOf("set_b"),
+            )
+            val client2 = factory2.getClient()
+            val listener2 = TestEventListener()
+            client2.addEventListener(listener2.asSplitEventListener)
+
+            assertTrue("Phase 2: onReady did not fire after flagSets change", listener2.awaitReady())
+
+            val evalQuery2 = server.lastEvaluationsRequest?.requestUrl?.query ?: ""
+            val evalBody2 = server.lastEvaluationsRequest?.body?.readUtf8() ?: ""
+            assertTrue(
+                "Phase 2 evaluations request must use since=-1 (cache cleared), got: $evalQuery2",
+                evalQuery2.contains("since=-1"),
+            )
+            assertTrue(
+                "Phase 2 evaluations request body must contain \"sets\":[\"set_b\"], got: $evalBody2",
+                evalBody2.contains("\"sets\":[\"set_b\"]"),
+            )
+
+            runBlocking { factory2.destroy() }
+        } finally {
+            server.shutdown()
+        }
+    }
+
+    /**
+     * Given the SDK is streaming and has received its initial evaluations
+     * When an occupancy notification arrives with publishers=0 on the control channel
+     * Then the SDK falls back to polling — evaluation requests increase after the notification
+     * And the SSE socket is NOT closed (occupancy fallback keeps the socket alive)
+     */
+    @Test
+    fun occupancyDropToZeroFallsBackToPolling() {
+        val server = MockSplitServer()
+        // Enqueue extra auth + evaluations for the polling fallback cycles
+        repeat(5) { server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_ENABLED)) }
+        val callCount = AtomicInteger(0)
+        server.evaluationsHandler = {
+            if (callCount.incrementAndGet() == 1) MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1)
+            else MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_2)
+        }
+
+        // SSE: emit EVALUATIONS_UPDATE (for initial push), then occupancy=0
+        val occupancyZero =
+            """{"channel":"[meta]control_pri","data":"{\"metrics\":{\"publishers\":0}}","timestamp":2000000}"""
+        val sseResponse = server.buildTimedSseResponse(
+            timedEvents = listOf(
+                1L to E2EFixtures.SSE_EVALUATION_UPDATE,
+                2L to occupancyZero,
+            ),
+            trailingOpenSeconds = 30,
+        )
+        server.enqueueSse(sseResponse)
+
+        val factory = buildStreamingFactory(
+            server, prefix = "e2e_occupancy_fallback_$RUN_ID", pollingRate = 1,
+        )
+        val client = factory.getClient()
+        val listener = TestEventListener()
+        client.addEventListener(listener.asSplitEventListener)
+
+        try {
+            assertTrue("onReady did not fire", listener.awaitReady())
+
+            // Wait for SSE evaluation update → should fire onUpdate
+            assertTrue("onUpdate did not fire after SSE EVALUATION_UPDATE", listener.awaitUpdate())
+
+            // After occupancy=0, polling must start — eval requests increase within 5s
+            val countAfterUpdate = server.evaluationRequestCount.get()
+            val deadline = System.currentTimeMillis() + 5_000
+            while (server.evaluationRequestCount.get() <= countAfterUpdate
+                && System.currentTimeMillis() < deadline) {
+                Thread.sleep(100)
+            }
+            assertTrue(
+                "polling fallback must engage after occupancy drops to zero (no new eval requests in 5s)",
+                server.evaluationRequestCount.get() > countAfterUpdate,
+            )
+        } finally {
+            runBlocking { factory.destroy() }
+            server.shutdown()
+        }
+    }
+
+    /**
+     * Given the SDK is streaming and has reached ready
+     * When a STREAMING_DISABLED control notification arrives over SSE
+     * Then the SSE socket is closed
+     * And the SDK falls back to polling — evaluation requests increase after the notification
+     * And no SSE reconnect occurs
+     *
+     * Production fix: [StreamingPolicy.kt] — ControlDisabled now emits NotifyPushDisabled,
+     * which triggers [SplitFactoryBuilder.onPushDisabled] → startPollingIfAllowed.
+     */
+    @Test
+    fun streamingDisabledControlMessageFallsBackToPolling() {
+        val server = MockSplitServer()
+        repeat(5) { server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_ENABLED)) }
+        server.evaluationsHandler = { MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1) }
+
+        // SSE: emit STREAMING_DISABLED, keep socket open so recovery must be notification-driven
+        val streamingDisabled =
+            """{"channel":"${E2EFixtures.CONTROL_CHANNEL}",""" +
+            """"data":"{\"type\":\"CONTROL\",\"controlType\":\"STREAMING_DISABLED\"}",""" +
+            """"timestamp":1000000}"""
+        server.enqueueSse(
+            server.buildRawSseResponse(
+                rawFrames = listOf("data: $streamingDisabled\n\n"),
+                delaySeconds = 1,
+                keepOpenSeconds = 10,
+            )
+        )
+
+        val factory = buildStreamingFactory(
+            server, prefix = "e2e_ctrl_disabled_$RUN_ID", pollingRate = 1,
+        )
+        val client = factory.getClient()
+        val listener = TestEventListener()
+        client.addEventListener(listener.asSplitEventListener)
+
+        try {
+            assertTrue("onReady did not fire", listener.awaitReady())
+
+            // Wait for the STREAMING_DISABLED notification to be delivered (at ~1s)
+            Thread.sleep(2_000)
+
+            // Polling must engage: eval request count grows within 4 poll cycles
+            val countAfterDisabled = server.evaluationRequestCount.get()
+            val deadline = System.currentTimeMillis() + 5_000
+            while (server.evaluationRequestCount.get() <= countAfterDisabled
+                && System.currentTimeMillis() < deadline) {
+                Thread.sleep(100)
+            }
+            assertTrue(
+                "polling must start after STREAMING_DISABLED (SCN-AZ)",
+                server.evaluationRequestCount.get() > countAfterDisabled,
+            )
+
+            // No SSE reconnect: the disabled notification is permanent
+            assertEquals(
+                "SSE must not reconnect after STREAMING_DISABLED",
+                1,
+                server.sseConnectionCount.get(),
+            )
+        } finally {
+            runBlocking { factory.destroy() }
+            server.shutdown()
+        }
+    }
+
+    /**
+     * Given the SDK is running and has reached ready
+     * When destroy() is called twice
+     * Then the second destroy() does not throw
+     * And no additional network requests are made after the first destroy()
+     */
+    @Test
+    fun destroyIsIdempotent() {
+        val server = MockSplitServer()
+        server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_DISABLED))
+        server.enqueueEvaluations(MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1))
+
+        val factory = buildPollingFactory(
+            server, prefix = "e2e_destroy_idempotent_$RUN_ID", refreshRate = 3600,
+        )
+        val client = factory.getClient()
+        val listener = TestEventListener()
+        client.addEventListener(listener.asSplitEventListener)
+
+        try {
+            assertTrue("onReady did not fire", listener.awaitReady())
+
+            val requestsAfterReady = server.evaluationRequestCount.get()
+
+            runBlocking { factory.destroy() }
+            val requestsAfterFirstDestroy = server.evaluationRequestCount.get()
+
+            // Second destroy — must not throw
+            runBlocking { factory.destroy() }
+            Thread.sleep(1_000)
+
+            val requestsAfterSecondDestroy = server.evaluationRequestCount.get()
+            assertEquals(
+                "no new requests must be made after first destroy",
+                requestsAfterFirstDestroy,
+                requestsAfterSecondDestroy,
+            )
+
+            // Request count must not have grown significantly after the first destroy
+            // (allow at most 1 in-flight that completed before destroy)
+            assertTrue(
+                "requests after first destroy ($requestsAfterFirstDestroy) should be close to requests after ready ($requestsAfterReady)",
+                requestsAfterFirstDestroy <= requestsAfterReady + 1,
+            )
+        } finally {
+            server.shutdown()
+        }
+    }
+
+    /**
+     * Verifies [SplitManager.flagNames]:
+     * - Returns the flag names from the evaluations response after ready
+     * - Updates to reflect new flag data after an SSE evaluation update
+     * - Does not contain duplicates
+     * - Is accessible from the factory (not just the client)
+     */
+    @Test
+    fun managerFlagNamesReflectsCurrentEvaluationsAndUpdatesLive() {
+        val server = MockSplitServer()
+        repeat(5) { server.enqueueAuth(MockResponse().setBody(E2EFixtures.AUTH_PUSH_ENABLED)) }
+        server.evaluationsHandler = { MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1) }
+
+        // SSE: after 1s emit EVALUATIONS_UPDATE so the SDK re-fetches with RESPONSE_2
+        var evalCallCount = 0
+        server.evaluationsHandler = {
+            evalCallCount++
+            if (evalCallCount == 1) {
+                MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_1)
+            } else {
+                MockResponse().setBody(E2EFixtures.EVALUATIONS_RESPONSE_2)
+            }
+        }
+        server.enqueueSse(
+            server.buildTimedSseResponse(
+                timedEvents = listOf(1L to E2EFixtures.SSE_EVALUATION_UPDATE),
+                trailingOpenSeconds = 30,
+            )
+        )
+
+        val factory = buildStreamingFactory(
+            server, prefix = "e2e_manager_live_$RUN_ID", pollingRate = 3600,
+        )
+        val client = factory.getClient()
+        val listener = TestEventListener()
+        client.addEventListener(listener.asSplitEventListener)
+
+        try {
+            assertTrue("onReady did not fire", listener.awaitReady())
+
+            val manager = factory.getManager()
+            val namesAfterReady = manager.flagNames
+            assertTrue("flagNames must be non-empty after ready", namesAfterReady.isNotEmpty())
+            assertTrue("flagNames must contain flag_a", namesAfterReady.contains("flag_a"))
+            assertEquals(
+                "flagNames must not contain duplicates",
+                namesAfterReady.distinct(),
+                namesAfterReady,
+            )
+
+            // After SSE update, manager.flagNames should reflect the new evaluation data
+            assertTrue("onUpdate did not fire after SSE EVALUATION_UPDATE", listener.awaitUpdate())
+            val namesAfterUpdate = manager.flagNames
+            assertTrue("flagNames must be non-empty after SSE update", namesAfterUpdate.isNotEmpty())
+            assertTrue(
+                "flagNames must contain flag_a after update",
+                namesAfterUpdate.contains("flag_a"),
+            )
+        } finally {
+            runBlocking { factory.destroy() }
             server.shutdown()
         }
     }
