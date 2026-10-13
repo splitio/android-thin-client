@@ -105,68 +105,100 @@ pipeline:
                       export PATH="$PATH:$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin"
                       ./gradlew jacocoAggregateUnitTestReport --stacktrace
 
+                      REPORT=/harness/build/reports/jacoco/jacocoAggregateUnitTestReport/jacocoAggregateUnitTestReport.xml
                       echo "JaCoCo XML report:"
-                      ls -la build/reports/jacoco/jacocoAggregateUnitTestReport/jacocoAggregateUnitTestReport.xml || true
+                      ls -la "$REPORT"
                       echo "JaCoCo HTML report:"
-                      ls -la build/reports/jacoco/jacocoAggregateUnitTestReport/html/index.html || true
+                      ls -la /harness/build/reports/jacoco/jacocoAggregateUnitTestReport/html/index.html || true
+
+                      # hcli only treats jacoco.xml as JaCoCo. analyze does not receive --file
+                      # and only searches coverage/ and build/reports/jacoco/test.
+                      mkdir -p /harness/coverage /harness/build/reports/jacoco/test
+                      cp "$REPORT" /harness/coverage/jacoco.xml
+                      cp "$REPORT" /harness/build/reports/jacoco/test/jacoco.xml
+                      ls -la /harness/coverage/jacoco.xml /harness/build/reports/jacoco/test/jacoco.xml
                   when:
                     stageStatus: Success
-              - step:
-                  type: Run
-                  name: Install and Run SonarQube Scanner
-                  identifier: install_sonarqube_scanner
-                  spec:
-                    connectorRef: account.harnessImage
-                    image: sonarsource/sonar-scanner-cli
-                    shell: Bash
-                    command: |
-                      set -euo pipefail
+              - parallel:
+                  - step:
+                      type: Run
+                      name: Install and Run SonarQube Scanner
+                      identifier: install_sonarqube_scanner
+                      spec:
+                        connectorRef: account.harnessImage
+                        image: sonarsource/sonar-scanner-cli
+                        shell: Bash
+                        command: |-
+                          set -euo pipefail
 
-                      # Run scanner from repository root if present.
-                      if [ -d "/harness/<+codebase.repoName>" ]; then
-                        cd "/harness/<+codebase.repoName>"
-                      fi
-
-                      # Build sonar.java.binaries from only the module dirs that actually exist after the build
-                      JAVA_BINARIES=""
-                      for module in api auth retryable-http-client secure-http-client evaluation events-tracking models observer persistence persistence-domain streaming-thin cdn-bypass; do
-                        for subdir in build/intermediates/javac build/intermediates/built_in_kotlinc; do
-                          if [ -d "$module/$subdir" ]; then
-                            JAVA_BINARIES="${JAVA_BINARIES:+$JAVA_BINARIES,}$module/$subdir"
+                          # Run scanner from repository root if present.
+                          if [ -d "/harness/<+codebase.repoName>" ]; then
+                            cd "/harness/<+codebase.repoName>"
                           fi
-                        done
-                      done
 
-                      COMMON_ARGS="
-                        -Dsonar.host.url=https://sonar.harness.io
-                        -Dsonar.projectKey=android-thin-client
-                        -Dsonar.token=$SONAR_TOKEN
-                        -Dsonar.scanner.skipJreProvisioning=true
-                        -Dsonar.scanner.skipSystemTruststore=true
-                        -Dsonar.sources=api/src/main,auth/src/main,retryable-http-client/src/main,secure-http-client/src/main,evaluation/src/main,events-tracking/src/main,models/src/main,observer/src/main,persistence/src/main,persistence-domain/src/main,streaming-thin/src/main,cdn-bypass/src/main
-                        -Dsonar.tests=api/src/test,auth/src/test,retryable-http-client/src/test,secure-http-client/src/test,evaluation/src/test,events-tracking/src/test,observer/src/test,persistence/src/test,persistence-domain/src/test,streaming-thin/src/test,cdn-bypass/src/test
-                        -Dsonar.exclusions=**/build/**,android-client/**
-                        -Dsonar.java.binaries=$JAVA_BINARIES
-                        -Dsonar.coverage.exclusions=**/*Test.kt,**/*Test.java
-                        -Dsonar.coverage.jacoco.xmlReportPaths=build/reports/jacoco/jacocoAggregateUnitTestReport/jacocoAggregateUnitTestReport.xml
-                        -Dsonar.junit.reportPaths=**/build/test-results/**/*.xml
-                      "
+                          # Build sonar.java.binaries from only the module dirs that actually exist after the build
+                          JAVA_BINARIES=""
+                          for module in api auth retryable-http-client secure-http-client evaluation events-tracking models observer persistence persistence-domain streaming-thin cdn-bypass; do
+                            for subdir in build/intermediates/javac build/intermediates/built_in_kotlinc; do
+                              if [ -d "$module/$subdir" ]; then
+                                JAVA_BINARIES="${JAVA_BINARIES:+$JAVA_BINARIES,}$module/$subdir"
+                              fi
+                            done
+                          done
 
-                      if [ "<+codebase.prNumber>" != "" ] && [ "<+codebase.prNumber>" != "null" ]; then
-                        echo "Pull Request Analysis"
-                        sonar-scanner \
-                          $COMMON_ARGS \
-                          -Dsonar.pullrequest.key=<+codebase.prNumber> \
-                          -Dsonar.pullrequest.branch=<+codebase.sourceBranch> \
-                          -Dsonar.pullrequest.base=<+codebase.targetBranch>
-                      else
-                        echo "Branch Analysis"
-                        sonar-scanner \
-                          $COMMON_ARGS \
-                          -Dsonar.branch.name=<+codebase.branch>
-                      fi
-                    envVariables:
-                      SONAR_TOKEN: <+secrets.getValue("sonarqube-token")>
-                  timeout: 10m
-                  when:
-                    stageStatus: Success
+                          COMMON_ARGS="
+                            -Dsonar.host.url=https://sonar.harness.io
+                            -Dsonar.projectKey=android-thin-client
+                            -Dsonar.token=$SONAR_TOKEN
+                            -Dsonar.scanner.skipJreProvisioning=true
+                            -Dsonar.scanner.skipSystemTruststore=true
+                            -Dsonar.sources=api/src/main,auth/src/main,retryable-http-client/src/main,secure-http-client/src/main,evaluation/src/main,events-tracking/src/main,models/src/main,observer/src/main,persistence/src/main,persistence-domain/src/main,streaming-thin/src/main,cdn-bypass/src/main
+                            -Dsonar.tests=api/src/test,auth/src/test,retryable-http-client/src/test,secure-http-client/src/test,evaluation/src/test,events-tracking/src/test,observer/src/test,persistence/src/test,persistence-domain/src/test,streaming-thin/src/test,cdn-bypass/src/test
+                            -Dsonar.exclusions=**/build/**,android-client/**
+                            -Dsonar.java.binaries=$JAVA_BINARIES
+                            -Dsonar.coverage.exclusions=**/*Test.kt,**/*Test.java
+                            -Dsonar.coverage.jacoco.xmlReportPaths=build/reports/jacoco/jacocoAggregateUnitTestReport/jacocoAggregateUnitTestReport.xml
+                            -Dsonar.junit.reportPaths=**/build/test-results/**/*.xml
+                          "
+
+                          if [ "<+codebase.prNumber>" != "" ] && [ "<+codebase.prNumber>" != "null" ]; then
+                            echo "Pull Request Analysis"
+                            sonar-scanner \
+                              $COMMON_ARGS \
+                              -Dsonar.pullrequest.key=<+codebase.prNumber> \
+                              -Dsonar.pullrequest.branch=<+codebase.sourceBranch> \
+                              -Dsonar.pullrequest.base=<+codebase.targetBranch>
+                          else
+                            echo "Branch Analysis"
+                            sonar-scanner \
+                              $COMMON_ARGS \
+                              -Dsonar.branch.name=<+codebase.branch>
+                          fi
+                        envVariables:
+                          SONAR_TOKEN: <+secrets.getValue("sonarqube-token")>
+                      timeout: 10m
+                      when:
+                        stageStatus: Success
+                      failureStrategies:
+                        - onFailure:
+                            errors:
+                              - AllErrors
+                            action:
+                              type: Ignore
+                  - step:
+                      name: harnessCoverage
+                      identifier: harnessCoverage
+                      when:
+                        stageStatus: Success
+                      template:
+                        templateRef: account.codeCoverage
+                        versionLabel: v1
+                        templateInputs:
+                          type: Run
+                          spec:
+                            envVariables:
+                              patch_coverage_percent: "80"
+                              file_path: /harness/coverage/jacoco.xml
+                              overall_coverage_percent: ""
+                              ignore_failure: "false"
+                              exclude: "**/build/**,**/.gradle/**,**/src/test/**,**/src/androidTest/**,**/*Test.java,**/*Tests.java,**/*Test.kt,**/*Tests.kt"
