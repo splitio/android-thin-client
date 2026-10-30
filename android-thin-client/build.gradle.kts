@@ -15,6 +15,11 @@ androidFusedLibrary {
     }
 }
 
+// CI passes -PpublishSha=<short sha> on fme-mvn publishes so each merge gets a unique version (1.0.1-<sha>)
+version = providers.gradleProperty("publishSha")
+    .map { "${project.version}-$it" }
+    .getOrElse(project.version.toString())
+
 val fusedIncludedProjects = listOf(
     project(":models"),
     project(":api"),
@@ -95,6 +100,20 @@ mavenPublishing {
             connection.set("scm:git:git@github.com:splitio/android-thin-client.git")
             developerConnection.set("scm:git@github.com:splitio/android-thin-client.git")
             url.set("https://github.com/splitio/android-thin-client")
+        }
+    }
+}
+
+// Harness Maven registry (fme-mvn). Credentials come from the CI environment; see the Harness publish pipeline.
+publishing {
+    repositories {
+        maven {
+            name = "fmeMvn"
+            url = uri("https://harness0.harness.io/pkg/l7B_kbSEQD2wjrM7PShm5w/fme-mvn/maven")
+            credentials {
+                username = System.getenv("HARNESS_MAVEN_USERNAME")
+                password = System.getenv("HARNESS_MAVEN_PASSWORD")
+            }
         }
     }
 }
